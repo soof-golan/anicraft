@@ -1,17 +1,4 @@
-//! SWF writer for `AniCraft`.
-//!
-//! Layers, bottom to top:
-//!
-//! - [`bits`], [`types`], [`tag`]: the bit-packed primitives (`RECT`, `MATRIX`, `CXFORMWITHALPHA`), twips and the tag
-//!   header.
-//! - [`style`], [`shape`]: fill and line styles and `DefineShape4` bodies, with a builder from `kurbo` paths.
-//! - [`bitmap`], [`filter`], [`place`], [`sound`]: the other tags: bitmaps, filter lists, `PlaceObject3`, sounds.
-//! - [`movie`]: [`Movie`], which owns the dictionary and the timeline and writes the file (`FWS` or zlib `CWS`).
-//! - [`export`]: frame by frame export of `anim_display::DisplayList`s.
-//! - [`edge`]: native shapes from Animate's edge shapes (`anim_shape::EdgeShape`), for symbol export.
-//! - [`morph`]: shape tweens (`DefineMorphShape2`) from two shapes with the same structure.
-//!
-//! This crate only writes SWF. Tests read the output back with Ruffle's `swf` crate.
+#![doc = include_str!("../README.md")]
 
 pub mod bitmap;
 pub mod bits;
