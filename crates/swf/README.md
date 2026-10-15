@@ -6,8 +6,8 @@ play). It has three layers:
 1. **Low level**: the header (`FWS`, or zlib `CWS`), bit-packed `RECT`, `MATRIX` and `CXFORMWITHALPHA`, tag headers,
    `DefineShape4` with solid, linear, radial and focal gradient and bitmap fills and `LINESTYLE2` lines,
    `DefineBitsLossless2`/`JPEG2`/`JPEG3`, `PlaceObject3` with filters and blend modes, `RemoveObject2`,
-   `DefineSprite`, `DefineMorphShape2`, `DefineSound`, `StartSound`, `SoundStreamHead2`/`SoundStreamBlock`,
-   labels, scenes and `ExportAssets`.
+   `DefineSprite`, `DefineMorphShape2`, `DefineButton2`, `DefineSound`, `StartSound`,
+   `SoundStreamHead2`/`SoundStreamBlock`, `DoAction`, labels, scenes, XMP metadata and `ExportAssets`.
 2. **[`Movie`]**: owns the dictionary and the timeline. Definitions and frames are appended in order; identical
    shapes and sprites are written once. Use it for *symbol mode*: sprites with their own timelines, sounds, tweens.
 3. **Producers**: [`export_display_lists`] turns one `anim_display::DisplayList` per frame into a frame by frame SWF,

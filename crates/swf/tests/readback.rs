@@ -692,6 +692,50 @@ fn options_and_reports_round_trip_through_json() {
 }
 
 #[test]
+fn buttons_read_back_with_their_states_and_scripts() {
+    use anicraft_swf::button::{ButtonAction, ButtonDef, ButtonRecord, ButtonStates, condition};
+
+    let mut movie = Movie::new(MovieSettings { compression: Compression::None, ..MovieSettings::default() }).unwrap();
+    let shape = |size: f64, color: Rgba8| {
+        let mut b = ShapeBuilder::new();
+        let fill = b.add_fill(FillStyle::Solid(color)).unwrap();
+        b.add_path(&rect_path(0.0, 0.0, size, size), PathStyle { fill1: fill, ..PathStyle::default() });
+        b.finish()
+    };
+    let up = movie.define_shape(&shape(40.0, Rgba8::opaque(255, 0, 0))).unwrap();
+    let over = movie.define_shape(&shape(40.0, Rgba8::opaque(0, 0, 255))).unwrap();
+    let hit = movie.define_shape(&shape(60.0, Rgba8::BLACK)).unwrap();
+    let button = movie
+        .define_button(&ButtonDef {
+            track_as_menu: true,
+            records: vec![
+                ButtonRecord::new(ButtonStates::UP, up, 1),
+                ButtonRecord {
+                    matrix: Matrix::from_affine(Affine::translate((2.0, 3.0))),
+                    ..ButtonRecord::new(ButtonStates { over: true, down: true, ..ButtonStates::default() }, over, 1)
+                },
+                ButtonRecord::new(ButtonStates::HIT, hit, 1),
+            ],
+            actions: vec![ButtonAction { conditions: condition::OVER_DOWN_TO_OVER_UP, bytecode: ACTION_STOP.to_vec() }],
+        })
+        .unwrap();
+    movie.add_frame(&Frame::new(vec![FrameItem::Place(Placement::new(1, button, Matrix::IDENTITY))])).unwrap();
+    let buf = parse(&movie.finish().unwrap());
+    let parsed = swf::parse_swf(&buf).unwrap();
+    let swf::Tag::DefineButton2(b) = parsed.tags.iter().find(|t| matches!(t, swf::Tag::DefineButton2(_))).unwrap() else { panic!() };
+    assert!(b.is_track_as_menu);
+    assert_eq!(b.records.len(), 3);
+    assert_eq!(b.records[0].states, swf::ButtonState::UP);
+    assert_eq!(b.records[1].states, swf::ButtonState::OVER | swf::ButtonState::DOWN);
+    assert_eq!(b.records[1].matrix.tx.get(), 40);
+    assert_eq!(b.records[2].states, swf::ButtonState::HIT_TEST);
+    assert_eq!((b.records[2].id, b.records[2].depth), (hit.0, 1));
+    assert_eq!(b.actions.len(), 1);
+    assert_eq!(b.actions[0].conditions, swf::ButtonActionCondition::OVER_DOWN_TO_OVER_UP);
+    assert_eq!(b.actions[0].action_data, &ACTION_STOP[..]);
+}
+
+#[test]
 fn exporter_streams_frames_one_at_a_time() {
     let l = list(vec![solid_fill(rect_path(0.0, 0.0, 10.0, 10.0), Rgba8::BLACK, Affine::IDENTITY)]);
     let mut exporter = DisplayListExporter::new(ExportOptions::for_list(&l, 30.0)).unwrap();

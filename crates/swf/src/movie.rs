@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::bitmap::{define_bits_jpeg2_body, define_bits_jpeg3_body, define_bits_lossless2_body, zlib};
 use crate::bits::PutBytes;
+use crate::button::ButtonDef;
 use crate::error::SwfError;
 use crate::morph::MorphShapeDef;
 use crate::place::{Placement, remove_object2_body};
@@ -28,6 +29,18 @@ pub const MIN_VERSION: u8 = 10;
 pub const ACTION_STOP: [u8; 2] = [0x07, 0x00];
 /// Bytecode for `play()` in the first script virtual machine (with the terminating zero).
 pub const ACTION_PLAY: [u8; 2] = [0x06, 0x00];
+
+/// A small XMP packet for [`MovieSettings::metadata`]: the document title, the media type and the creator tool.
+#[must_use]
+pub fn xmp_packet(title: &str) -> String {
+    let title = title.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    format!(
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+         <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\
+         <dc:format>application/x-shockwave-flash</dc:format><dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">{title}</rdf:li></rdf:Alt></dc:title>\
+         <xmp:CreatorTool>AniCraft</xmp:CreatorTool></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>"
+    )
+}
 
 /// Whether the file body is compressed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -249,6 +262,20 @@ impl Movie {
         body.extend_from_slice(&encoded);
         write_tag(&mut self.body, code::DEFINE_MORPH_SHAPE2, &body)?;
         self.morphs.insert(encoded, id);
+        Ok(id)
+    }
+
+    /// Defines a button (`DefineButton2`).
+    ///
+    /// # Errors
+    /// See [`ButtonDef::encode`] and [`SwfError::TooManyCharacters`].
+    pub fn define_button(&mut self, button: &ButtonDef) -> Result<CharacterId, SwfError> {
+        let id = self.alloc_id()?;
+        let encoded = button.encode()?;
+        let mut body = Vec::with_capacity(encoded.len().saturating_add(2));
+        body.put_u16(id.0);
+        body.extend_from_slice(&encoded);
+        write_tag(&mut self.body, code::DEFINE_BUTTON2, &body)?;
         Ok(id)
     }
 
@@ -509,6 +536,17 @@ mod tests {
         assert!(Movie::new(MovieSettings { frame_rate: 0.0, ..MovieSettings::default() }).is_err());
         assert!(Movie::new(MovieSettings { frame_rate: 300.0, ..MovieSettings::default() }).is_err());
         assert_eq!(Movie::new(MovieSettings { version: 4, ..MovieSettings::default() }).unwrap().settings().version, MIN_VERSION);
+    }
+
+    #[test]
+    fn xmp_packets_escape_the_title() {
+        let xmp = xmp_packet("Tom & <Jerry> \"1\"");
+        assert!(xmp.contains("Tom &amp; &lt;Jerry&gt; &quot;1&quot;"));
+        assert!(xmp.starts_with("<?xpacket begin="));
+        assert!(xmp.ends_with("<?xpacket end=\"w\"?>"));
+        let file = Movie::new(MovieSettings { metadata: Some(xmp), compression: Compression::None, ..MovieSettings::default() }).unwrap().finish().unwrap();
+        let codes: Vec<u16> = tags_of(&file).iter().map(|t| t.0).collect();
+        assert_eq!(&codes[..3], &[code::FILE_ATTRIBUTES, code::METADATA, code::SET_BACKGROUND_COLOR]);
     }
 
     #[test]

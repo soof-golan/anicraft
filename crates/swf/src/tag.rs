@@ -31,6 +31,7 @@ pub mod code {
     pub const DEFINE_BITS_JPEG4: u16 = 90;
     pub const EXPORT_ASSETS: u16 = 56;
     pub const DEFINE_SHAPE3: u16 = 32;
+    pub const DEFINE_BUTTON2: u16 = 34;
     pub const DEFINE_BITS: u16 = 6;
     pub const DEFINE_BITS_LOSSLESS: u16 = 20;
     pub const DEFINE_SCALING_GRID: u16 = 78;

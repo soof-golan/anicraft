@@ -2,6 +2,7 @@
 
 pub mod bitmap;
 pub mod bits;
+pub mod button;
 pub mod edge;
 pub mod error;
 pub mod export;
