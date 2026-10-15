@@ -1,0 +1,84 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR BSD-3-Clause"
+rust-version = "1.99"
+repository = "https://github.com/soof-golan/anicraft"
+
+[workspace.dependencies]
+# Engine crates from anicraft-libs (see its ARCHITECTURE.md for what each one owns). Pinned by Cargo.lock while we
+# build; switch to `rev = "..."` for releases.
+anim-core = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-display = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-archive = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-shape = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-scene = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-morph = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-text = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-timeline = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-render = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-audio = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-artwork = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-export = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-video = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-ui = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-session = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+
+# Craft crates, pinned by rev like the Craft apps do.
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
+craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "8f5a2831614e632f91ad367f7af2a6e5b61b9529" }
+craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "8f5a2831614e632f91ad367f7af2a6e5b61b9529" }
+
+# External crates (versions match anicraft-libs where they overlap).
+kurbo = { version = "0.13", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+postcard = { version = "1", features = ["alloc"] }
+thiserror = "2"
+color-eyre = "0.6"
+clap = { version = "4", features = ["derive"] }
+rayon = "1.11"
+crossbeam-channel = "0.5"
+image = { version = "0.25", default-features = false, features = ["png"] }
+png = "0.18"
+egui = "0.36.2"
+eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
+proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+# namtao.com/rust strict lints: teach Rust and prevent runtime panics.
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"
+dbg_macro = "deny"
+
+# Dev profile for everything except benchmarks (Craft convention: optimised deps, fast incremental builds).
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
