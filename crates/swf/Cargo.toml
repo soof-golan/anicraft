@@ -1,0 +1,21 @@
+[package]
+name = "anicraft-swf"
+description = "SWF writer: header, bit-packed records, shapes with gradient and bitmap fills, sprites, sounds, and an exporter from display lists"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anim-core = { workspace = true }
+anim-display = { workspace = true }
+flate2 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+swf = { workspace = true }

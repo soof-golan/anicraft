@@ -48,6 +48,9 @@ png = "0.18"
 egui = "0.36.2"
 eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
 proptest = "1"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+# Ruffle's SWF reader/writer (MIT OR Apache-2.0). Used only in tests, to read our own output back.
+swf = "0.3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
