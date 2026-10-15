@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use anim_core::{FrameRate, Rgba8, num};
 use anim_display::Image;
+use serde::{Deserialize, Serialize};
 
 use crate::bitmap::{define_bits_jpeg2_body, define_bits_jpeg3_body, define_bits_lossless2_body, zlib};
 use crate::bits::PutBytes;
@@ -28,7 +29,7 @@ pub const ACTION_STOP: [u8; 2] = [0x07, 0x00];
 pub const ACTION_PLAY: [u8; 2] = [0x06, 0x00];
 
 /// Whether the file body is compressed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Compression {
     /// `FWS`
     None,
@@ -38,7 +39,7 @@ pub enum Compression {
 }
 
 /// Movie-level settings.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MovieSettings {
     /// Stage width in pixels.
     pub width: f64,

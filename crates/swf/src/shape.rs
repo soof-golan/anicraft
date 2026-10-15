@@ -252,13 +252,19 @@ impl ShapeBuilder {
     /// Appends `path` (in pixels, converted to twips here) with `style`. Subpaths that carry a fill are closed
     /// explicitly, because SWF fills need closed outlines.
     pub fn add_path(&mut self, path: &BezPath, style: PathStyle) {
+        self.add_elements(path.elements(), style);
+    }
+
+    /// Like [`ShapeBuilder::add_path`] for loose path elements, which need not start with a `MoveTo` (the pen then
+    /// starts where the first drawing command is) and may contain non-finite coordinates (they are clamped).
+    pub fn add_elements(&mut self, elements: &[PathEl], style: PathStyle) {
         let filled = style.fill0 != 0 || style.fill1 != 0;
         // The start of the current subpath, in twips and in (sanitised) pixels, and the pixel position of the pen.
         let mut start: Option<(i32, i32)> = None;
         let mut start_px = Point::ORIGIN;
         let mut pen = Point::ORIGIN;
         let mut edges = 0_usize;
-        for element in path.elements() {
+        for element in elements {
             // A path that does not begin with a MoveTo starts where its first drawing command is.
             if start.is_none() && !matches!(element, PathEl::MoveTo(_) | PathEl::ClosePath) {
                 let first = match *element {
@@ -451,6 +457,35 @@ fn clean(p: Point) -> Point {
     let limit = f64::from(MAX_TWIPS) / TWIPS_PER_PX;
     let fix = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(-limit, limit) };
     Point::new(fix(p.x), fix(p.y))
+}
+
+/// A copy of `path` with every coordinate made finite and bounded the way [`ShapeBuilder::add_path`] does it, for
+/// callers that process the path first (dashing) and must not feed it `NaN` or infinities.
+#[must_use]
+pub fn clean_path(path: &BezPath) -> BezPath {
+    let mut elements: Vec<PathEl> = path
+        .elements()
+        .iter()
+        .map(|element| match *element {
+            PathEl::MoveTo(p) => PathEl::MoveTo(clean(p)),
+            PathEl::LineTo(p) => PathEl::LineTo(clean(p)),
+            PathEl::QuadTo(c, p) => PathEl::QuadTo(clean(c), clean(p)),
+            PathEl::CurveTo(c1, c2, p) => PathEl::CurveTo(clean(c1), clean(c2), clean(p)),
+            PathEl::ClosePath => PathEl::ClosePath,
+        })
+        .collect();
+    // A deserialised path may not start with a MoveTo, which kurbo's own routines assume: start where it draws first.
+    if !matches!(elements.first(), None | Some(PathEl::MoveTo(_))) {
+        let first = elements
+            .iter()
+            .find_map(|element| match *element {
+                PathEl::LineTo(p) | PathEl::QuadTo(p, _) | PathEl::CurveTo(p, _, _) | PathEl::MoveTo(p) => Some(p),
+                PathEl::ClosePath => None,
+            })
+            .unwrap_or(Point::ORIGIN);
+        elements.insert(0, PathEl::MoveTo(first));
+    }
+    BezPath::from_vec(elements)
 }
 
 /// Whether a path's fill belongs on the right of its edges (`fill1`) rather than the left (`fill0`).

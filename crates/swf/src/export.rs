@@ -8,15 +8,17 @@
 //! produce tags.
 
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
-use anim_core::kurbo::{self, BezPath, Point, Shape};
+use anim_core::kurbo::{self, BezPath, PathEl, Point, Shape};
 use anim_core::{Affine, BlendMode, Rgba8, num};
 use anim_display::{Bitmap, DisplayList, Fill, Gradient, Group, ImageId, ImageStore, Mesh, Node, Paint, Stroke, StrokeScale, StrokeStyle};
+use serde::{Deserialize, Serialize};
 
 use crate::error::SwfError;
 use crate::movie::{ACTION_STOP, Frame, FrameItem, Movie, MovieSettings};
 use crate::place::{Placement, blend_code};
-use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, fill_side_is_right};
+use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, clean_path, fill_side_is_right};
 use crate::style::{FillStyle, LinePaint, LineStyle};
 use crate::types::{CharacterId, CxForm, Matrix};
 
@@ -27,7 +29,7 @@ pub const MAX_NESTING: usize = 64;
 const MAX_DASHES: f64 = 100_000.0;
 
 /// Export settings.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExportOptions {
     pub movie: MovieSettings,
     /// Loop forever (the SWF default). When false the last frame carries a `stop()` action.
@@ -55,7 +57,7 @@ impl ExportOptions {
 }
 
 /// Something the exporter could not carry over exactly.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExportNote {
     /// SWF has no such blend mode; the nearest one was used.
     BlendApproximated(BlendMode),
@@ -68,7 +70,7 @@ pub enum ExportNote {
 }
 
 /// What an export produced.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportReport {
     pub frames: u32,
     /// Characters in the dictionary (shapes, bitmaps and sprites).
@@ -137,6 +139,11 @@ impl Slot {
     }
 }
 
+/// Whether a path painted with `paint` can show anything at all.
+fn is_visible(path: &BezPath, paint: &Paint) -> bool {
+    !path.elements().is_empty() && !matches!(paint, Paint::Solid(c) if c.a == 0)
+}
+
 /// The depth (1-based) of the object at `index` in a display list.
 fn depth_of(index: usize) -> Result<u16, SwfError> {
     index.checked_add(1).and_then(|d| u16::try_from(d).ok()).ok_or(SwfError::DepthOutOfRange(index))
@@ -148,6 +155,9 @@ pub struct DisplayListExporter {
     movie: Movie,
     loop_playback: bool,
     images: HashMap<ImageId, CharacterId>,
+    /// Image ids that defined a bitmap, by a hash of their pixels.
+    by_content: HashMap<u64, Vec<ImageId>>,
+    bitmaps: u32,
     previous: Vec<Slot>,
     pending: Option<Frame>,
     notes: Vec<ExportNote>,
@@ -163,6 +173,8 @@ impl DisplayListExporter {
             movie: Movie::new(options.movie)?,
             loop_playback: options.loop_playback,
             images: HashMap::new(),
+            by_content: HashMap::new(),
+            bitmaps: 0,
             previous: Vec::new(),
             pending: None,
             notes: Vec::new(),
@@ -219,12 +231,7 @@ impl DisplayListExporter {
             }
             self.movie.add_frame(&frame)?;
         }
-        let report = ExportReport {
-            frames: self.movie.frame_count(),
-            characters: self.movie.character_count(),
-            bitmaps: u32::try_from(self.images.len()).unwrap_or(u32::MAX),
-            notes: self.notes,
-        };
+        let report = ExportReport { frames: self.movie.frame_count(), characters: self.movie.character_count(), bitmaps: self.bitmaps, notes: self.notes };
         Ok(ExportOutput { swf: self.movie.finish()?, report })
     }
 
@@ -233,10 +240,15 @@ impl DisplayListExporter {
             return Err(SwfError::TooDeep(MAX_NESTING));
         }
         let mut slots = Vec::with_capacity(nodes.len());
-        for node in nodes {
+        let mut remaining = nodes.iter().peekable();
+        while let Some(node) = remaining.next() {
             let slot = match node {
-                Node::Fill(fill) => self.fill_slot(fill, images)?,
-                Node::Stroke(stroke) => self.stroke_slot(stroke, images)?,
+                // a fill immediately followed by a stroke of the same path is one SWF shape
+                Node::Fill(fill) => match remaining.next_if(|next| matches!(next, Node::Stroke(s) if s.path == fill.path && s.transform == fill.transform)) {
+                    Some(Node::Stroke(stroke)) => self.paint_slot(Some(fill), Some(stroke), images)?,
+                    _ => self.paint_slot(Some(fill), None, images)?,
+                },
+                Node::Stroke(stroke) => self.paint_slot(None, Some(stroke), images)?,
                 Node::Bitmap(bitmap) => self.bitmap_slot(bitmap, images)?,
                 Node::Group(group) => self.group_slot(group, images, nesting)?,
                 Node::Mesh(mesh) => self.mesh_slot(mesh, images, nesting)?,
@@ -246,12 +258,32 @@ impl DisplayListExporter {
         Ok(slots)
     }
 
+    /// The bitmap character for an image: one per image id, and images with identical pixels share a character.
     fn bitmap_character(&mut self, id: ImageId, images: &ImageStore) -> Result<CharacterId, SwfError> {
         if let Some(character) = self.images.get(&id) {
             return Ok(*character);
         }
         let image = images.get(id).ok_or(SwfError::MissingImage(id))?;
-        let character = self.movie.define_bitmap(image)?;
+        let mut hasher = DefaultHasher::new();
+        (image.width, image.height).hash(&mut hasher);
+        image.premultiplied_rgba.hash(&mut hasher);
+        let fingerprint = hasher.finish();
+        let twin = self
+            .by_content
+            .get(&fingerprint)
+            .into_iter()
+            .flatten()
+            .find(|other| images.get(**other) == Some(image))
+            .and_then(|other| self.images.get(other))
+            .copied();
+        let character = if let Some(character) = twin {
+            character
+        } else {
+            self.bitmaps = self.bitmaps.saturating_add(1);
+            let character = self.movie.define_bitmap(image)?;
+            self.by_content.entry(fingerprint).or_default().push(id);
+            character
+        };
         self.images.insert(id, character);
         Ok(character)
     }
@@ -292,40 +324,43 @@ impl DisplayListExporter {
         Ok(Some(Slot::plain(character, Matrix::from_affine(transform))))
     }
 
-    fn fill_slot(&mut self, fill: &Fill, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
-        if fill.path.elements().is_empty() || matches!(fill.paint, Paint::Solid(c) if c.a == 0) {
-            return Ok(None);
-        }
-        let mut builder = ShapeBuilder::new();
-        builder.set_fill_rule(fill.rule);
-        let index = builder.add_fill(self.fill_style(&fill.paint, images)?)?;
-        let style = if fill_side_is_right(&fill.path) {
-            PathStyle { fill1: index, ..PathStyle::default() }
-        } else {
-            PathStyle { fill0: index, ..PathStyle::default() }
+    /// One shape holding a fill, a stroke, or a fill with the stroke drawn over it (SWF draws strokes over fills
+    /// within a shape, which is exactly the order of a `Fill` node followed by a `Stroke` node).
+    fn paint_slot(&mut self, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
+        let fill = fill.filter(|f| is_visible(&f.path, &f.paint));
+        let stroke = stroke.filter(|s| is_visible(&s.path, &s.paint));
+        let transform = match (fill, stroke) {
+            (Some(f), _) => f.transform,
+            (None, Some(s)) => s.transform,
+            (None, None) => return Ok(None),
         };
-        builder.add_path(&fill.path, style);
-        self.define_slot(&builder.finish(), fill.transform)
+        let mut builder = ShapeBuilder::new();
+        if let Some(fill) = fill {
+            builder.set_fill_rule(fill.rule);
+            let index = builder.add_fill(self.fill_style(&fill.paint, images)?)?;
+            let path = clean_path(&fill.path);
+            let style =
+                if fill_side_is_right(&path) { PathStyle { fill1: index, ..PathStyle::default() } } else { PathStyle { fill0: index, ..PathStyle::default() } };
+            builder.add_path(&path, style);
+        }
+        if let Some(stroke) = stroke {
+            let paint = match &stroke.paint {
+                Paint::Solid(color) => LinePaint::Solid(*color),
+                other => LinePaint::Fill(self.fill_style(other, images)?),
+            };
+            let index = builder.add_line(line_style(&stroke.style, paint))?;
+            let path = clean_path(&stroke.path);
+            let style = PathStyle { line: index, ..PathStyle::default() };
+            match self.dashed(&path, &stroke.style) {
+                Some(dashes) => builder.add_elements(&dashes, style),
+                None => builder.add_path(&path, style),
+            }
+        }
+        self.define_slot(&builder.finish(), transform)
     }
 
-    fn stroke_slot(&mut self, stroke: &Stroke, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
-        if stroke.path.elements().is_empty() || matches!(stroke.paint, Paint::Solid(c) if c.a == 0) {
-            return Ok(None);
-        }
-        let paint = match &stroke.paint {
-            Paint::Solid(color) => LinePaint::Solid(*color),
-            other => LinePaint::Fill(self.fill_style(other, images)?),
-        };
-        let line = line_style(&stroke.style, paint);
-        let mut builder = ShapeBuilder::new();
-        let index = builder.add_line(line)?;
-        let path = self.dashed(&stroke.path, &stroke.style).unwrap_or_else(|| stroke.path.clone());
-        builder.add_path(&path, PathStyle { line: index, ..PathStyle::default() });
-        self.define_slot(&builder.finish(), stroke.transform)
-    }
-
-    /// SWF has no dashes; split the path into dash-long open pieces instead.
-    fn dashed(&mut self, path: &BezPath, style: &StrokeStyle) -> Option<BezPath> {
+    /// SWF has no dashes; split the (cleaned) path into dash-long open pieces instead.
+    fn dashed(&mut self, path: &BezPath, style: &StrokeStyle) -> Option<Vec<PathEl>> {
         let period: f64 = style.dashes.iter().sum();
         if style.dashes.is_empty() || !style.dashes.iter().all(|d| d.is_finite() && *d >= 0.0) || !(period.is_finite() && period > 0.0) {
             return None;
@@ -336,7 +371,8 @@ impl DisplayListExporter {
             self.note(ExportNote::DashesDropped);
             return None;
         }
-        Some(BezPath::from_vec(kurbo::dash(path.iter(), 0.0, &style.dashes).collect()))
+        // the dash iterator does not promise to start with a MoveTo, which `BezPath` insists on, so keep loose elements
+        Some(kurbo::dash(path.iter(), 0.0, &style.dashes).collect())
     }
 
     fn bitmap_slot(&mut self, bitmap: &Bitmap, images: &ImageStore) -> Result<Option<Slot>, SwfError> {

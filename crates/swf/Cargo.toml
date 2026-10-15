@@ -14,8 +14,11 @@ workspace = true
 anim-core = { workspace = true }
 anim-display = { workspace = true }
 flate2 = { workspace = true }
+serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+png = { workspace = true }
 proptest = { workspace = true }
+serde_json = { workspace = true }
 swf = { workspace = true }

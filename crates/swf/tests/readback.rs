@@ -593,6 +593,105 @@ fn sprites_with_their_own_timelines_and_names() {
 }
 
 #[test]
+fn a_fill_followed_by_a_stroke_of_the_same_path_is_one_shape() {
+    let path = rect_path(5.0, 5.0, 30.0, 30.0);
+    let stroke = Node::Stroke(Stroke {
+        transform: Affine::translate((1.0, 2.0)),
+        path: path.clone(),
+        style: StrokeStyle { width: 2.0, ..StrokeStyle::default() },
+        paint: Paint::Solid(Rgba8::BLACK),
+    });
+    let fill = solid_fill(path.clone(), Rgba8::opaque(255, 0, 0), Affine::translate((1.0, 2.0)));
+    let out = export_still(&list(vec![fill.clone(), stroke.clone()]), &ImageStore::new()).unwrap();
+    let buf = parse(&out.swf);
+    let parsed = swf::parse_swf(&buf).unwrap();
+    assert_eq!(count(&parsed.tags, "DefineShape"), 1);
+    assert_eq!(count(&parsed.tags, "PlaceObject"), 1);
+    let shape = first_shape(&parsed.tags);
+    assert_eq!((shape.styles.fill_styles.len(), shape.styles.line_styles.len()), (1, 1));
+    // the bounds include half the stroke width, the edge bounds do not
+    assert_eq!((shape.edge_bounds.x_min.get(), shape.shape_bounds.x_min.get() < shape.edge_bounds.x_min.get()), (100, true));
+
+    // a stroke before the fill, or with another transform, is a separate shape
+    let out = export_still(&list(vec![stroke, fill.clone()]), &ImageStore::new()).unwrap();
+    let buf = parse(&out.swf);
+    assert_eq!(count(&swf::parse_swf(&buf).unwrap().tags, "DefineShape"), 2);
+    let moved = Node::Stroke(Stroke { transform: Affine::IDENTITY, path, style: StrokeStyle::default(), paint: Paint::Solid(Rgba8::BLACK) });
+    let out = export_still(&list(vec![fill, moved]), &ImageStore::new()).unwrap();
+    let buf = parse(&out.swf);
+    assert_eq!(count(&swf::parse_swf(&buf).unwrap().tags, "DefineShape"), 2);
+}
+
+#[test]
+fn images_with_identical_pixels_share_one_bitmap_character() {
+    let mut images = ImageStore::new();
+    let a = images.insert(Image::new(1, 1, vec![9, 9, 9, 255]).unwrap());
+    let b = images.insert(Image::new(1, 1, vec![9, 9, 9, 255]).unwrap());
+    let c = images.insert(Image::new(1, 1, vec![9, 9, 10, 255]).unwrap());
+    let nodes = [a, b, c].into_iter().map(|image| Node::Bitmap(Bitmap { transform: Affine::IDENTITY, image, smoothing: true })).collect();
+    let out = export_still(&list(nodes), &images).unwrap();
+    assert_eq!(out.report.bitmaps, 2);
+    let buf = parse(&out.swf);
+    let parsed = swf::parse_swf(&buf).unwrap();
+    assert_eq!(count(&parsed.tags, "DefineBitsLossless"), 2);
+    // the first two bitmap nodes are the same shape character too
+    assert_eq!(count(&parsed.tags, "DefineShape"), 2);
+    assert_eq!(count(&parsed.tags, "PlaceObject"), 3);
+}
+
+#[test]
+fn deserialised_paths_that_do_not_start_with_a_move_are_repaired() {
+    // BezPath's serde implementation does not enforce kurbo's "starts with MoveTo" rule
+    let path: BezPath =
+        serde_json::from_value(serde_json::json!([{"LineTo": {"x": 10.0, "y": 0.0}}, {"LineTo": {"x": 10.0, "y": 10.0}}, "ClosePath"])).unwrap();
+    assert!(!matches!(path.elements().first(), Some(kurbo::PathEl::MoveTo(_))));
+    let dashed = StrokeStyle { width: 1.0, dashes: vec![2.0, 2.0], ..StrokeStyle::default() };
+    let nodes = vec![
+        Node::Fill(Fill { transform: Affine::IDENTITY, path: path.clone(), rule: FillRule::NonZero, paint: Paint::Solid(Rgba8::BLACK) }),
+        Node::Stroke(Stroke { transform: Affine::IDENTITY, path, style: dashed, paint: Paint::Solid(Rgba8::BLACK) }),
+    ];
+    let out = export_still(&list(nodes), &ImageStore::new()).unwrap();
+    let buf = parse(&out.swf);
+    assert!(count(&swf::parse_swf(&buf).unwrap().tags, "DefineShape") >= 1);
+}
+
+#[test]
+fn degenerate_dashed_paths_do_not_panic() {
+    // kurbo's dash iterator can yield elements that do not start with a MoveTo for degenerate input
+    let point = |x: f64, y: f64| Point::new(x, y);
+    let paths = [
+        vec![kurbo::PathEl::MoveTo(point(1.0, 1.0))],
+        vec![kurbo::PathEl::MoveTo(point(1.0, 1.0)), kurbo::PathEl::ClosePath],
+        vec![kurbo::PathEl::MoveTo(point(1.0, 1.0)), kurbo::PathEl::LineTo(point(1.0, 1.0))],
+        vec![kurbo::PathEl::MoveTo(point(0.0, 0.0)), kurbo::PathEl::LineTo(point(5.0, 0.0)), kurbo::PathEl::ClosePath],
+        vec![kurbo::PathEl::MoveTo(point(0.0, 0.0)), kurbo::PathEl::LineTo(point(5.0, 0.0)), kurbo::PathEl::MoveTo(point(7.0, 7.0))],
+    ];
+    for elements in paths {
+        for dashes in [vec![0.0, 3.0], vec![1.0], vec![3.0, 0.0, 2.0], vec![0.5, 0.5]] {
+            let stroke = Node::Stroke(Stroke {
+                transform: Affine::IDENTITY,
+                path: BezPath::from_vec(elements.clone()),
+                style: StrokeStyle { width: 1.0, dashes, ..StrokeStyle::default() },
+                paint: Paint::Solid(Rgba8::BLACK),
+            });
+            let out = export_still(&list(vec![stroke]), &ImageStore::new()).unwrap();
+            let buf = parse(&out.swf);
+            swf::parse_swf(&buf).unwrap();
+        }
+    }
+}
+
+#[test]
+fn options_and_reports_round_trip_through_json() {
+    let options = ExportOptions::for_list(&list(vec![]), 30.0);
+    let json = serde_json::to_string(&options).unwrap();
+    assert_eq!(serde_json::from_str::<ExportOptions>(&json).unwrap(), options);
+    let out = export_still(&list(vec![solid_fill(rect_path(0.0, 0.0, 1.0, 1.0), Rgba8::BLACK, Affine::IDENTITY)]), &ImageStore::new()).unwrap();
+    let json = serde_json::to_string(&out.report).unwrap();
+    assert_eq!(serde_json::from_str::<anicraft_swf::ExportReport>(&json).unwrap(), out.report);
+}
+
+#[test]
 fn exporter_streams_frames_one_at_a_time() {
     let l = list(vec![solid_fill(rect_path(0.0, 0.0, 10.0, 10.0), Rgba8::BLACK, Affine::IDENTITY)]);
     let mut exporter = DisplayListExporter::new(ExportOptions::for_list(&l, 30.0)).unwrap();
