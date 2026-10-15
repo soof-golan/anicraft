@@ -12,6 +12,13 @@ arithmetic-side-effects-allowed = [
   "kurbo::Size",
   "kurbo::Rect",
   "kurbo::TranslateScale",
+  # clippy matches the type path as rustc prints it from the crate being linted: through the dependency that is
+  # in scope there, so crates that only depend on anim-core see `anim_core::Affine`, not `kurbo::Affine`.
+  "anim_core::Point",
+  "anim_core::Vec2",
+  "anim_core::Affine",
+  "anim_core::Size",
+  "anim_core::Rect",
 ]
 
 # No shared mutable state: actors own their state and talk over channels (placement rules).
