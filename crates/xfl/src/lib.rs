@@ -30,6 +30,7 @@
     )
 )]
 
+pub mod diff;
 pub mod document;
 pub mod element;
 pub mod error;
@@ -37,6 +38,7 @@ pub mod library;
 pub mod media;
 pub mod shape;
 pub mod timeline;
+pub mod write;
 pub mod xml;
 
 use std::path::Path;
@@ -46,7 +48,8 @@ use anim_scene::{Document, MediaStore};
 use serde::{Deserialize, Serialize};
 
 pub use error::XflError;
-pub use media::{BitmapFormat, LosslessHeader, decode_bitmap, decode_bitmap_bytes, lossless_header, sniff_bitmap, sound_payload};
+pub use media::{BitmapFormat, LosslessHeader, decode_bitmap, decode_bitmap_bytes, encode_lossless_bitmap, lossless_header, sniff_bitmap, sound_payload};
+pub use write::{WriteOptions, WriteReport, write_fla, write_fla_bytes, write_loaded, write_path, write_to, write_xfl_folder};
 pub use xml::{Unknowns, Warning};
 
 /// Parser limit on XML nodes per file.
@@ -229,13 +232,27 @@ pub fn read_container(container: &Container, options: &ReadOptions) -> Result<Lo
     Ok(Loaded { document, media, warnings: sink.warnings, dropped_warnings: sink.dropped_warnings, unknowns: sink.unknowns, sidecars, source })
 }
 
+/// Original media files Animate keeps next to the symbols (`LIBRARY/song.wav`, `LIBRARY/clip.mp3`) are kept as
+/// sidecars when each is at most this large...
+const MAX_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
+/// ... and while they total at most this much.
+const MAX_SOURCES_TOTAL: u64 = 512 * 1024 * 1024;
+
 fn collect_sidecars(container: &Container, sink: &mut xml::Sink) -> Vec<Sidecar> {
     let mut out = Vec::new();
+    let mut sources_total = 0u64;
     for entry in container.files() {
         let lower = entry.name.to_ascii_lowercase();
         let marker = !lower.contains('/') && Path::new(&lower).extension().is_some_and(|e| e.eq_ignore_ascii_case("xfl"));
-        let is_sidecar = marker || matches!(lower.as_str(), "meta-inf/metadata.xml" | "mobilesettings.xml" | "bin/symdepend.cache");
-        if !is_sidecar || entry.size > MAX_SIDECAR_BYTES {
+        let is_small = marker || matches!(lower.as_str(), "meta-inf/metadata.xml" | "mobilesettings.xml" | "bin/symdepend.cache");
+        let is_source = lower.starts_with("library/") && !Path::new(&lower).extension().is_some_and(|e| e.eq_ignore_ascii_case("xml"));
+        if is_source {
+            let fits = entry.size <= MAX_SOURCE_BYTES && sources_total.saturating_add(entry.size) <= MAX_SOURCES_TOTAL;
+            if !fits {
+                continue;
+            }
+            sources_total = sources_total.saturating_add(entry.size);
+        } else if !is_small || entry.size > MAX_SIDECAR_BYTES {
             continue;
         }
         match container.read_entry(entry) {
