@@ -14,8 +14,7 @@
     clippy::missing_const_for_fn
 )]
 
-use std::path::PathBuf;
-use std::process::Command;
+mod common;
 
 use anicraft_swf::export::{ExportOptions, export_display_lists};
 use anicraft_swf::movie::Compression;
@@ -24,51 +23,18 @@ use anim_core::{Affine, ColorTransform, Rgba8, Size};
 use anim_display::{
     Bitmap, DisplayList, Fill, FillRule, Gradient, GradientStop, Group, Image, ImageStore, Interpolation, Node, Paint, Spread, Stroke, StrokeStyle,
 };
-
-struct Rendered {
-    width: usize,
-    pixels: Vec<u8>,
-}
-
-impl Rendered {
-    fn at(&self, x: usize, y: usize) -> [u8; 3] {
-        let i = (y * self.width + x) * 4;
-        [self.pixels[i], self.pixels[i + 1], self.pixels[i + 2]]
-    }
-
-    fn assert_near(&self, x: usize, y: usize, expected: [u8; 3], tolerance: i32, what: &str) {
-        let got = self.at(x, y);
-        let ok = got.iter().zip(expected).all(|(g, e)| (i32::from(*g) - i32::from(e)).abs() <= tolerance);
-        assert!(ok, "{what}: pixel ({x}, {y}) is {got:?}, expected about {expected:?}");
-    }
-}
-
-fn exporter() -> Option<PathBuf> {
-    std::env::var_os("ANICRAFT_RUFFLE_EXPORTER").map(PathBuf::from)
-}
+use common::Rendered;
 
 /// Exports one frame (white background, 100x100) and renders it. `None` when no renderer is configured.
 fn render(name: &str, nodes: Vec<Node>, images: &ImageStore) -> Option<Rendered> {
-    let exporter = exporter()?;
+    common::exporter()?;
     let list = DisplayList { size: Size::new(100.0, 100.0), background: Some(Rgba8::WHITE), nodes };
     let mut options = ExportOptions::for_list(&list, 24.0);
     options.movie.compression = Compression::None;
     let out = export_display_lists([&list], images, options).unwrap();
-    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("render_oracle");
-    std::fs::create_dir_all(&dir).unwrap();
-    let swf = dir.join(format!("{name}.swf"));
-    let png = dir.join(format!("{name}.png"));
-    std::fs::write(&swf, &out.swf).unwrap();
-    let status = Command::new(exporter).arg("-s").arg(&swf).arg(&png).status().unwrap();
-    assert!(status.success(), "exporter failed");
-    let data = std::fs::read(&png).unwrap();
-    let decoder = png::Decoder::new(std::io::Cursor::new(data));
-    let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    assert_eq!((info.width, info.height), (100, 100));
-    assert_eq!(info.color_type, png::ColorType::Rgba);
-    Some(Rendered { width: 100, pixels: buf })
+    let rendered = common::render_swf(name, &out.swf)?;
+    assert_eq!((rendered.width, rendered.height), (100, 100));
+    Some(rendered)
 }
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> BezPath {
