@@ -32,6 +32,9 @@ pub struct Editor {
     pub document: Document,
     pub state: EditorState,
     pub tools: ToolSet,
+    /// Whether the editor keeps its own undo stack. Turn it off when something else snapshots the editor (the
+    /// session framework does), so that snapshots do not carry the whole history.
+    pub keep_history: bool,
     undo: Vec<Document>,
     redo: Vec<Document>,
 }
@@ -39,7 +42,7 @@ pub struct Editor {
 impl Editor {
     #[must_use]
     pub fn new(document: Document) -> Self {
-        Self { document, state: EditorState::new(), tools: ToolSet::default(), undo: Vec::new(), redo: Vec::new() }
+        Self { document, state: EditorState::new(), tools: ToolSet::default(), keep_history: true, undo: Vec::new(), redo: Vec::new() }
     }
 
     /// Makes `tool` the active tool.
@@ -70,6 +73,34 @@ impl Editor {
         self.with_context(|ctx| self.tools.overlay(ctx))
     }
 
+    /// Applies commands as one undo step. When one fails, everything this call did is rolled back.
+    ///
+    /// # Errors
+    /// The first [`ApplyError`].
+    pub fn run_commands(&mut self, commands: &[ToolCommand]) -> Result<(), ApplyError> {
+        let edits = commands.iter().any(ToolCommand::edits_document);
+        let snapshot = edits.then(|| (self.document.clone(), self.state.clone()));
+        for command in commands {
+            if let Err(e) = apply(&mut self.document, &mut self.state, command) {
+                if let Some((document, state)) = snapshot {
+                    self.document = document;
+                    self.state = state;
+                }
+                return Err(e);
+            }
+        }
+        if let Some((document, _)) = snapshot
+            && self.keep_history
+        {
+            self.undo.push(document);
+            if self.undo.len() > MAX_UNDO {
+                self.undo.remove(0);
+            }
+            self.redo.clear();
+        }
+        Ok(())
+    }
+
     /// Feeds one event to the active tool and applies the commands it returns. When a command fails, the commands
     /// of this event are rolled back.
     ///
@@ -90,25 +121,7 @@ impl Editor {
             };
             self.tools.handle(event, &ctx)
         };
-        let edits = out.commands.iter().any(ToolCommand::edits_document);
-        let snapshot = edits.then(|| self.document.clone());
-        let state_before = snapshot.is_some().then(|| self.state.clone());
-        for command in &out.commands {
-            if let Err(e) = apply(&mut self.document, &mut self.state, command) {
-                if let (Some(doc), Some(state)) = (snapshot, state_before) {
-                    self.document = doc;
-                    self.state = state;
-                }
-                return Err(e);
-            }
-        }
-        if let Some(doc) = snapshot {
-            self.undo.push(doc);
-            if self.undo.len() > MAX_UNDO {
-                self.undo.remove(0);
-            }
-            self.redo.clear();
-        }
+        self.run_commands(&out.commands)?;
         self.state.active_tool = self.tools.active();
         Ok(StepOutput { commands: out.commands, overlay: self.overlay(), cursor: out.cursor })
     }

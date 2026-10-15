@@ -40,6 +40,7 @@ pub mod editor;
 pub mod event;
 pub mod freehand;
 pub mod hit;
+pub mod mcp;
 pub mod overlay;
 pub mod script;
 pub mod selection;
@@ -55,6 +56,7 @@ pub use context::{BoundsProvider, LibraryBounds, Resolved, ToolContext, resolve_
 pub use editor::{Editor, StepOutput};
 pub use event::{Key, KeyEvent, Modifiers, PointerEvent, PointerKind, ToolEvent};
 pub use hit::{Pick, PickPart, pick};
+pub use mcp::{ToolHost, commands as mcp_commands};
 pub use overlay::{Compass, Cursor, Marker, Node, Overlay, Role};
 pub use script::{ScriptReport, ScriptStep, ToolInfo, ToolScript, catalog, run_script};
 pub use selection::{ElementRef, Selection};

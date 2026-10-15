@@ -13,6 +13,8 @@ workspace = true
 [dependencies]
 anim-core = { workspace = true }
 anim-scene = { workspace = true }
+# The command registry the MCP tools are registered in (see `mcp`).
+anim-session = { workspace = true }
 anim-shape = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
