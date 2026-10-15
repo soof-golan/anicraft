@@ -67,6 +67,44 @@ fn a_clip_plays_its_own_timeline_alongside_the_main_one() {
     }
 }
 
+/// A movie clip built from one display list per frame (what an Animate symbol evaluates to), placed on the main
+/// timeline with an offset and a colour transform.
+#[test]
+fn clips_can_be_built_from_display_lists() {
+    use anicraft_swf::NodeConverter;
+    use anim_core::{ColorTransform, Size};
+    use anim_display::{DisplayList, Fill, FillRule, ImageStore, Node, Paint};
+
+    let list = |x: f64| DisplayList {
+        size: Size::new(100.0, 100.0),
+        background: None,
+        nodes: vec![Node::Fill(Fill {
+            transform: Affine::translate((x, 0.0)),
+            path: Rect::new(0.0, 0.0, 10.0, 10.0).to_path(0.1),
+            rule: FillRule::NonZero,
+            paint: Paint::Solid(Rgba8::opaque(255, 0, 0)),
+        })],
+    };
+    let mut movie = Movie::new(MovieSettings { width: 100.0, height: 100.0, compression: Compression::None, ..MovieSettings::default() }).unwrap();
+    let mut converter = NodeConverter::new();
+    let images = ImageStore::new();
+    let clip = converter.define_sprite(&mut movie, &[list(0.0), list(20.0), list(40.0)], &images).unwrap();
+    // the clip's three frames share one shape
+    assert_eq!(movie.character_count(), 2);
+    let mut place = Placement::new(1, clip, Matrix::from_affine(Affine::translate((10.0, 30.0))));
+    place.color = Some(anicraft_swf::types::CxForm::from_color_transform(&ColorTransform::alpha(0.5)));
+    movie.add_frame(&Frame::new(vec![FrameItem::Place(place)])).unwrap();
+    movie.add_frame(&Frame::default()).unwrap();
+    movie.add_frame(&Frame::default()).unwrap();
+    let Some(frames) = render_swf_frames("clip_from_lists", &movie.finish().unwrap(), 3) else { return };
+    for (index, frame) in frames.iter().enumerate() {
+        let x = 10 + 20 * index;
+        // half transparent red over white
+        frame.assert_near(x + 5, 35, [255, 128, 128], 4, &format!("frame {index}"));
+    }
+    frames[0].assert_near(35, 35, WHITE, 3, "the clip has not moved on yet");
+}
+
 #[test]
 fn stop_actions_hold_a_clip_on_its_frame() {
     let Some(frames) = render_swf_frames("clip_stops", &clip_movie(true), 4) else { return };

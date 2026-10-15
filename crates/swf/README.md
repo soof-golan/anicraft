@@ -11,7 +11,9 @@ play). It has three layers:
 2. **[`Movie`]**: owns the dictionary and the timeline. Definitions and frames are appended in order; identical
    shapes and sprites are written once. Use it for *symbol mode*: sprites with their own timelines, sounds, tweens.
 3. **Producers**: [`export_display_lists`] turns one `anim_display::DisplayList` per frame into a frame by frame SWF,
-   and [`edge::shape_from_edges`] turns Animate's edge shapes (`anim_shape::EdgeShape`) into native SWF shapes.
+   [`NodeConverter`] does the same per timeline so that symbols (movie clips whose frames are display lists) and the
+   main timeline share shapes and bitmaps, and [`edge::shape_from_edges`] turns Animate's edge shapes
+   (`anim_shape::EdgeShape`) into native SWF shapes.
 
 # Frame by frame export
 
@@ -85,6 +87,9 @@ assert_eq!(&swf[..3], b"CWS");
 # Ok::<(), anicraft_swf::SwfError>(())
 ```
 
+Movie clips whose frames are display lists (what evaluating an Animate symbol yields) come from
+[`NodeConverter::define_sprite`](export::NodeConverter::define_sprite).
+
 Sounds are passed through: `Movie::define_sound_mp3` for event sounds, and [`sound::split_mp3_stream`] to cut an MP3
 into per-frame `SoundStreamBlock`s for a streaming track. Shape tweens come from [`morph::MorphShapeDef`] (two
 shapes of the same structure) placed with a `ratio`.
@@ -106,6 +111,7 @@ compare them (`tests/render_oracle.rs`, `edge_shapes.rs`, `morph.rs`), and `ANIC
 the Adobe-authored sample files (`tests/samples.rs`, plus a contact sheet when `ANICRAFT_SWF_PREVIEW` names a folder).
 `cargo run -p anicraft-swf --example demo -- out.swf` writes an animated demo.
 
+[`NodeConverter`]: export::NodeConverter
 [`Movie`]: movie::Movie
 [`export_display_lists`]: export::export_display_lists
 [`ExportReport`]: export::ExportReport

@@ -17,7 +17,7 @@ pub mod tag;
 pub mod types;
 
 pub use error::SwfError;
-pub use export::{DisplayListExporter, ExportNote, ExportOptions, ExportOutput, ExportReport, export_display_lists, export_still};
+pub use export::{DisplayListExporter, ExportNote, ExportOptions, ExportOutput, ExportReport, NodeConverter, Stage, export_display_lists, export_still};
 pub use movie::{Compression, Frame, FrameItem, Movie, MovieSettings};
 pub use place::Placement;
 pub use types::CharacterId;

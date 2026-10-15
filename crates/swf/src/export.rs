@@ -151,36 +151,52 @@ fn depth_of(index: usize) -> Result<u16, SwfError> {
     index.checked_add(1).and_then(|d| u16::try_from(d).ok()).ok_or(SwfError::DepthOutOfRange(index))
 }
 
-/// Turns display lists into a SWF, one frame at a time.
-#[derive(Debug)]
-pub struct DisplayListExporter {
-    movie: Movie,
-    loop_playback: bool,
+/// The objects currently on one timeline's stage, by depth: what the next frame of that timeline is compared with,
+/// so that only the depths that changed produce tags.
+#[derive(Debug, Clone, Default)]
+pub struct Stage {
+    previous: Vec<Slot>,
+}
+
+impl Stage {
+    /// An empty stage.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { previous: Vec::new() }
+    }
+}
+
+/// Converts display-list nodes into SWF characters and placements.
+///
+/// This is the engine behind [`DisplayListExporter`], public so that symbol exports can use it too: keep one
+/// converter for a whole movie (it remembers which bitmaps are defined) and one [`Stage`] per timeline. Frames of a
+/// movie clip come out of [`NodeConverter::define_sprite`]; the frames of the main timeline from
+/// [`NodeConverter::next_frame`]. All of them share shapes, sprites and bitmaps through the [`Movie`].
+#[derive(Debug, Default)]
+pub struct NodeConverter {
     images: HashMap<ImageId, CharacterId>,
     /// Image ids that defined a bitmap, by a hash of their pixels.
     by_content: HashMap<u64, Vec<ImageId>>,
     bitmaps: u32,
-    previous: Vec<Slot>,
-    pending: Option<Frame>,
     notes: Vec<ExportNote>,
 }
 
-impl DisplayListExporter {
-    /// Starts an export.
-    ///
-    /// # Errors
-    /// Invalid movie settings, see [`Movie::new`].
-    pub fn new(options: ExportOptions) -> Result<Self, SwfError> {
-        Ok(Self {
-            movie: Movie::new(options.movie)?,
-            loop_playback: options.loop_playback,
-            images: HashMap::new(),
-            by_content: HashMap::new(),
-            bitmaps: 0,
-            previous: Vec::new(),
-            pending: None,
-            notes: Vec::new(),
-        })
+impl NodeConverter {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// What could not be carried over exactly so far.
+    #[must_use]
+    pub fn notes(&self) -> &[ExportNote] {
+        &self.notes
+    }
+
+    /// Bitmap characters defined so far.
+    #[must_use]
+    pub const fn bitmap_count(&self) -> u32 {
+        self.bitmaps
     }
 
     fn note(&mut self, note: ExportNote) {
@@ -189,21 +205,20 @@ impl DisplayListExporter {
         }
     }
 
-    /// Appends one frame.
+    /// Converts `list` and returns the frame that turns what `stage` holds into it.
+    ///
+    /// Definitions it needs are added to `movie` right away, so add the returned frame to the timeline before
+    /// converting the next one.
     ///
     /// # Errors
     /// [`SwfError::MissingImage`] for a bitmap the store does not hold, [`SwfError::TooDeep`] for runaway nesting, and
-    /// any limit of the format (65535 characters, frames or depths).
-    pub fn push_frame(&mut self, list: &DisplayList, images: &ImageStore) -> Result<(), SwfError> {
-        // Write the previous frame first, so the definitions this frame needs come after it.
-        if let Some(frame) = self.pending.take() {
-            self.movie.add_frame(&frame)?;
-        }
-        let slots = self.convert_nodes(&list.nodes, images, 0)?;
+    /// any limit of the format (65535 characters or depths).
+    pub fn next_frame(&mut self, movie: &mut Movie, stage: &mut Stage, list: &DisplayList, images: &ImageStore) -> Result<Frame, SwfError> {
+        let slots = self.convert_nodes(movie, &list.nodes, images, 0)?;
         let mut items = Vec::new();
-        for index in 0..self.previous.len().max(slots.len()) {
+        for index in 0..stage.previous.len().max(slots.len()) {
             let depth = depth_of(index)?;
-            match (self.previous.get(index), slots.get(index)) {
+            match (stage.previous.get(index), slots.get(index)) {
                 (Some(old), Some(slot)) => match slot.diff(old, depth) {
                     Diff::Same => {}
                     Diff::Move(placement) => items.push(FrameItem::Place(placement)),
@@ -217,27 +232,24 @@ impl DisplayListExporter {
                 (None, None) => {}
             }
         }
-        self.previous = slots;
-        self.pending = Some(Frame::new(items));
-        Ok(())
+        stage.previous = slots;
+        Ok(Frame::new(items))
     }
 
-    /// Finishes the file.
+    /// Defines a movie clip whose timeline is `frames`, one display list per frame.
     ///
     /// # Errors
-    /// See [`Movie::finish`].
-    pub fn finish(mut self) -> Result<ExportOutput, SwfError> {
-        if let Some(mut frame) = self.pending.take() {
-            if !self.loop_playback {
-                frame.items.push(FrameItem::DoAction(ACTION_STOP.to_vec()));
-            }
-            self.movie.add_frame(&frame)?;
+    /// See [`NodeConverter::next_frame`] and [`Movie::define_sprite`].
+    pub fn define_sprite(&mut self, movie: &mut Movie, frames: &[DisplayList], images: &ImageStore) -> Result<CharacterId, SwfError> {
+        let mut stage = Stage::new();
+        let mut timeline = Vec::with_capacity(frames.len());
+        for list in frames {
+            timeline.push(self.next_frame(movie, &mut stage, list, images)?);
         }
-        let report = ExportReport { frames: self.movie.frame_count(), characters: self.movie.character_count(), bitmaps: self.bitmaps, notes: self.notes };
-        Ok(ExportOutput { swf: self.movie.finish()?, report })
+        movie.define_sprite(&timeline)
     }
 
-    fn convert_nodes(&mut self, nodes: &[Node], images: &ImageStore, nesting: usize) -> Result<Vec<Slot>, SwfError> {
+    fn convert_nodes(&mut self, movie: &mut Movie, nodes: &[Node], images: &ImageStore, nesting: usize) -> Result<Vec<Slot>, SwfError> {
         if nesting > MAX_NESTING {
             return Err(SwfError::TooDeep(MAX_NESTING));
         }
@@ -247,13 +259,13 @@ impl DisplayListExporter {
             let slot = match node {
                 // a fill immediately followed by a stroke of the same path is one SWF shape
                 Node::Fill(fill) => match remaining.next_if(|next| matches!(next, Node::Stroke(s) if s.path == fill.path && s.transform == fill.transform)) {
-                    Some(Node::Stroke(stroke)) => self.paint_slot(Some(fill), Some(stroke), images)?,
-                    _ => self.paint_slot(Some(fill), None, images)?,
+                    Some(Node::Stroke(stroke)) => self.paint_slot(movie, Some(fill), Some(stroke), images)?,
+                    _ => self.paint_slot(movie, Some(fill), None, images)?,
                 },
-                Node::Stroke(stroke) => self.paint_slot(None, Some(stroke), images)?,
-                Node::Bitmap(bitmap) => self.bitmap_slot(bitmap, images)?,
-                Node::Group(group) => self.group_slot(group, images, nesting)?,
-                Node::Mesh(mesh) => self.mesh_slot(mesh, images, nesting)?,
+                Node::Stroke(stroke) => self.paint_slot(movie, None, Some(stroke), images)?,
+                Node::Bitmap(bitmap) => self.bitmap_slot(movie, bitmap, images)?,
+                Node::Group(group) => self.group_slot(movie, group, images, nesting)?,
+                Node::Mesh(mesh) => self.mesh_slot(movie, mesh, images, nesting)?,
             };
             slots.extend(slot);
         }
@@ -261,7 +273,7 @@ impl DisplayListExporter {
     }
 
     /// The bitmap character for an image: one per image id, and images with identical pixels share a character.
-    fn bitmap_character(&mut self, id: ImageId, images: &ImageStore) -> Result<CharacterId, SwfError> {
+    fn bitmap_character(&mut self, movie: &mut Movie, id: ImageId, images: &ImageStore) -> Result<CharacterId, SwfError> {
         if let Some(character) = self.images.get(&id) {
             return Ok(*character);
         }
@@ -282,7 +294,7 @@ impl DisplayListExporter {
             character
         } else {
             self.bitmaps = self.bitmaps.saturating_add(1);
-            let character = self.movie.define_bitmap(image)?;
+            let character = movie.define_bitmap(image)?;
             self.by_content.entry(fingerprint).or_default().push(id);
             character
         };
@@ -290,7 +302,7 @@ impl DisplayListExporter {
         Ok(character)
     }
 
-    fn fill_style(&mut self, paint: &Paint, images: &ImageStore) -> Result<FillStyle, SwfError> {
+    fn fill_style(&mut self, movie: &mut Movie, paint: &Paint, images: &ImageStore) -> Result<FillStyle, SwfError> {
         Ok(match paint {
             Paint::Solid(color) => FillStyle::Solid(*color),
             Paint::Linear(gradient) => {
@@ -307,7 +319,7 @@ impl DisplayListExporter {
                 }
             }
             Paint::Bitmap { image, transform, repeat, smoothing } => {
-                let id = self.bitmap_character(*image, images)?;
+                let id = self.bitmap_character(movie, *image, images)?;
                 FillStyle::Bitmap { id: id.0, matrix: Matrix::from_bitmap_affine(*transform), repeat: *repeat, smoothed: *smoothing }
             }
         })
@@ -321,14 +333,14 @@ impl DisplayListExporter {
         (Matrix::from_affine(gradient.transform), swf)
     }
 
-    fn define_slot(&mut self, shape: &ShapeDef, transform: Affine) -> Result<Option<Slot>, SwfError> {
-        let character = self.movie.define_shape(shape)?;
+    fn define_slot(movie: &mut Movie, shape: &ShapeDef, transform: Affine) -> Result<Option<Slot>, SwfError> {
+        let character = movie.define_shape(shape)?;
         Ok(Some(Slot::plain(character, Matrix::from_affine(transform))))
     }
 
     /// One shape holding a fill, a stroke, or a fill with the stroke drawn over it (SWF draws strokes over fills
     /// within a shape, which is exactly the order of a `Fill` node followed by a `Stroke` node).
-    fn paint_slot(&mut self, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
+    fn paint_slot(&mut self, movie: &mut Movie, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
         let fill = fill.filter(|f| is_visible(&f.path, &f.paint));
         let stroke = stroke.filter(|s| is_visible(&s.path, &s.paint));
         let transform = match (fill, stroke) {
@@ -339,7 +351,7 @@ impl DisplayListExporter {
         let mut builder = ShapeBuilder::new();
         if let Some(fill) = fill {
             builder.set_fill_rule(fill.rule);
-            let index = builder.add_fill(self.fill_style(&fill.paint, images)?)?;
+            let index = builder.add_fill(self.fill_style(movie, &fill.paint, images)?)?;
             let path = clean_path(&fill.path);
             let style =
                 if fill_side_is_right(&path) { PathStyle { fill1: index, ..PathStyle::default() } } else { PathStyle { fill0: index, ..PathStyle::default() } };
@@ -348,7 +360,7 @@ impl DisplayListExporter {
         if let Some(stroke) = stroke {
             let paint = match &stroke.paint {
                 Paint::Solid(color) => LinePaint::Solid(*color),
-                other => LinePaint::Fill(self.fill_style(other, images)?),
+                other => LinePaint::Fill(self.fill_style(movie, other, images)?),
             };
             let index = builder.add_line(line_style(&stroke.style, paint))?;
             let path = clean_path(&stroke.path);
@@ -358,7 +370,7 @@ impl DisplayListExporter {
                 None => builder.add_path(&path, style),
             }
         }
-        self.define_slot(&builder.finish(), transform)
+        Self::define_slot(movie, &builder.finish(), transform)
     }
 
     /// SWF has no dashes; split the (cleaned) path into dash-long open pieces instead.
@@ -377,8 +389,8 @@ impl DisplayListExporter {
         Some(kurbo::dash(path.iter(), 0.0, &style.dashes).collect())
     }
 
-    fn bitmap_slot(&mut self, bitmap: &Bitmap, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
-        let character = self.bitmap_character(bitmap.image, images)?;
+    fn bitmap_slot(&mut self, movie: &mut Movie, bitmap: &Bitmap, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
+        let character = self.bitmap_character(movie, bitmap.image, images)?;
         let (width, height) = images.get(bitmap.image).map_or((0, 0), |i| (i.width, i.height));
         if width == 0 || height == 0 {
             return Ok(None);
@@ -393,27 +405,27 @@ impl DisplayListExporter {
             smoothed: bitmap.smoothing,
         })?;
         builder.add_path(&rect.to_path(0.1), PathStyle { fill1: index, ..PathStyle::default() });
-        self.define_slot(&builder.finish(), bitmap.transform)
+        Self::define_slot(movie, &builder.finish(), bitmap.transform)
     }
 
-    fn group_slot(&mut self, group: &Group, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
-        let children = self.convert_nodes(&group.children, images, nesting.saturating_add(1))?;
+    fn group_slot(&mut self, movie: &mut Movie, group: &Group, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
+        let children = self.convert_nodes(movie, &group.children, images, nesting.saturating_add(1))?;
         if children.is_empty() {
             return Ok(None);
         }
         let mask = match &group.mask {
             Some(nodes) => {
-                let slots = self.convert_nodes(nodes, images, nesting.saturating_add(1))?;
+                let slots = self.convert_nodes(movie, nodes, images, nesting.saturating_add(1))?;
                 match slots.as_slice() {
                     // an empty mask hides everything
                     [] => return Ok(None),
                     [only] => Some(only.clone()),
-                    many => Some(Slot::plain(self.sprite_of(many, None)?, Matrix::IDENTITY)),
+                    many => Some(Slot::plain(sprite_of(movie, many, None)?, Matrix::IDENTITY)),
                 }
             }
             None => None,
         };
-        let character = self.sprite_of(&children, mask)?;
+        let character = sprite_of(movie, &children, mask)?;
         if !blend_code(group.blend).1 {
             self.note(ExportNote::BlendApproximated(group.blend));
         }
@@ -427,29 +439,14 @@ impl DisplayListExporter {
         }))
     }
 
-    /// A one-frame sprite showing `slots` bottom to top, with `mask` (if any) clipping all of them.
-    fn sprite_of(&mut self, slots: &[Slot], mask: Option<Slot>) -> Result<CharacterId, SwfError> {
-        let mut items = Vec::with_capacity(slots.len().saturating_add(1));
-        let first = usize::from(mask.is_some());
-        if let Some(mut mask) = mask {
-            // the mask sits at depth 1 and clips everything up to the last child's depth
-            mask.clip_depth = Some(depth_of(slots.len())?);
-            items.push(FrameItem::Place(mask.place_new(1)));
-        }
-        for (index, slot) in slots.iter().enumerate() {
-            items.push(FrameItem::Place(slot.place_new(depth_of(index.saturating_add(first))?)));
-        }
-        self.movie.define_sprite(&[Frame::new(items)])
-    }
-
     /// A mesh warps its content triangle by triangle: each triangle is a sprite with the triangle as a clip mask
     /// over a copy of the content moved by the affine map that carries the source triangle onto the target one.
-    fn mesh_slot(&mut self, mesh: &Mesh, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
-        let content = self.convert_nodes(&mesh.content, images, nesting.saturating_add(1))?;
+    fn mesh_slot(&mut self, movie: &mut Movie, mesh: &Mesh, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
+        let content = self.convert_nodes(movie, &mesh.content, images, nesting.saturating_add(1))?;
         if content.is_empty() {
             return Ok(None);
         }
-        let content_sprite = self.sprite_of(&content, None)?;
+        let content_sprite = sprite_of(movie, &content, None)?;
         let mut triangles = Vec::new();
         for &[a, b, c] in &mesh.triangles {
             let corner = |points: &[Point], i: u32| usize::try_from(i).ok().and_then(|i| points.get(i).copied());
@@ -481,20 +478,95 @@ impl DisplayListExporter {
                         PathStyle { fill0: index, ..PathStyle::default() }
                     },
                 );
-                self.movie.define_shape(&builder.finish())?
+                movie.define_shape(&builder.finish())?
             };
             let mut mask_slot = Slot::plain(mask, Matrix::IDENTITY);
             mask_slot.clip_depth = Some(2);
             let items = vec![FrameItem::Place(mask_slot.place_new(1)), FrameItem::Place(Slot::plain(content_sprite, Matrix::from_affine(map)).place_new(2))];
-            let sprite = self.movie.define_sprite(&[Frame::new(items)])?;
+            let sprite = movie.define_sprite(&[Frame::new(items)])?;
             triangles.push(Slot::plain(sprite, Matrix::IDENTITY));
         }
         if triangles.is_empty() {
             return Ok(None);
         }
         self.note(ExportNote::MeshEmulated);
-        let character = self.sprite_of(&triangles, None)?;
+        let character = sprite_of(movie, &triangles, None)?;
         Ok(Some(Slot::plain(character, Matrix::from_affine(mesh.transform))))
+    }
+}
+
+/// A one-frame sprite showing `slots` bottom to top, with `mask` (if any) clipping all of them.
+fn sprite_of(movie: &mut Movie, slots: &[Slot], mask: Option<Slot>) -> Result<CharacterId, SwfError> {
+    let mut items = Vec::with_capacity(slots.len().saturating_add(1));
+    let first = usize::from(mask.is_some());
+    if let Some(mut mask) = mask {
+        // the mask sits at depth 1 and clips everything up to the last child's depth
+        mask.clip_depth = Some(depth_of(slots.len())?);
+        items.push(FrameItem::Place(mask.place_new(1)));
+    }
+    for (index, slot) in slots.iter().enumerate() {
+        items.push(FrameItem::Place(slot.place_new(depth_of(index.saturating_add(first))?)));
+    }
+    movie.define_sprite(&[Frame::new(items)])
+}
+
+/// Turns display lists into a SWF, one frame at a time.
+#[derive(Debug)]
+pub struct DisplayListExporter {
+    movie: Movie,
+    converter: NodeConverter,
+    stage: Stage,
+    loop_playback: bool,
+    pending: Option<Frame>,
+}
+
+impl DisplayListExporter {
+    /// Starts an export.
+    ///
+    /// # Errors
+    /// Invalid movie settings, see [`Movie::new`].
+    pub fn new(options: ExportOptions) -> Result<Self, SwfError> {
+        Ok(Self {
+            movie: Movie::new(options.movie)?,
+            converter: NodeConverter::new(),
+            stage: Stage::new(),
+            loop_playback: options.loop_playback,
+            pending: None,
+        })
+    }
+
+    /// Appends one frame.
+    ///
+    /// # Errors
+    /// [`SwfError::MissingImage`] for a bitmap the store does not hold, [`SwfError::TooDeep`] for runaway nesting, and
+    /// any limit of the format (65535 characters, frames or depths).
+    pub fn push_frame(&mut self, list: &DisplayList, images: &ImageStore) -> Result<(), SwfError> {
+        // Write the previous frame first, so the definitions this frame needs come after it.
+        if let Some(frame) = self.pending.take() {
+            self.movie.add_frame(&frame)?;
+        }
+        self.pending = Some(self.converter.next_frame(&mut self.movie, &mut self.stage, list, images)?);
+        Ok(())
+    }
+
+    /// Finishes the file.
+    ///
+    /// # Errors
+    /// See [`Movie::finish`].
+    pub fn finish(mut self) -> Result<ExportOutput, SwfError> {
+        if let Some(mut frame) = self.pending.take() {
+            if !self.loop_playback {
+                frame.items.push(FrameItem::DoAction(ACTION_STOP.to_vec()));
+            }
+            self.movie.add_frame(&frame)?;
+        }
+        let report = ExportReport {
+            frames: self.movie.frame_count(),
+            characters: self.movie.character_count(),
+            bitmaps: self.converter.bitmap_count(),
+            notes: self.converter.notes.clone(),
+        };
+        Ok(ExportOutput { swf: self.movie.finish()?, report })
     }
 }
 
