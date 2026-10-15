@@ -19,9 +19,9 @@ mod common;
 use anicraft_swf::export::{ExportOptions, export_display_lists};
 use anicraft_swf::movie::Compression;
 use anim_core::kurbo::{BezPath, Circle, Rect, Shape};
-use anim_core::{Affine, ColorTransform, Rgba8, Size};
+use anim_core::{Affine, BlendMode, ColorTransform, Rgba8, Size};
 use anim_display::{
-    Bitmap, DisplayList, Fill, FillRule, Gradient, GradientStop, Group, Image, ImageStore, Interpolation, Node, Paint, Spread, Stroke, StrokeStyle,
+    Bitmap, DisplayList, Fill, FillRule, Filter, Gradient, GradientStop, Group, Image, ImageStore, Interpolation, Node, Paint, Spread, Stroke, StrokeStyle,
 };
 use common::Rendered;
 
@@ -209,4 +209,78 @@ fn fill_and_stroke_of_the_same_path_share_one_shape() {
     r.assert_near(50, 50, [255, 0, 0], 3, "fill");
     r.assert_near(20, 50, [0, 0, 255], 3, "stroke over the fill's edge");
     r.assert_near(10, 50, WHITE, 3, "outside");
+}
+
+fn group_of(child: Node, blend: BlendMode, filters: Vec<Filter>) -> Node {
+    Node::Group(Group { blend, filters, children: vec![child], ..Group::default() })
+}
+
+#[test]
+fn blend_modes_combine_with_what_is_below() {
+    let backdrop = fill(rect(0.0, 0.0, 100.0, 100.0), Rgba8::opaque(200, 100, 50), Affine::IDENTITY, FillRule::NonZero);
+    let top = |mode| group_of(fill(rect(20.0, 20.0, 60.0, 60.0), Rgba8::opaque(100, 200, 255), Affine::IDENTITY, FillRule::NonZero), mode, vec![]);
+    // multiply: channel products
+    let Some(r) = render("blend_multiply", vec![backdrop.clone(), top(BlendMode::Multiply)], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [78, 78, 50], 4, "multiply");
+    r.assert_near(5, 5, [200, 100, 50], 2, "outside the blended square");
+    // screen: 255 - (255 - a)(255 - b) / 255
+    let Some(r) = render("blend_screen", vec![backdrop.clone(), top(BlendMode::Screen)], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [222, 222, 255], 4, "screen");
+    // difference
+    let Some(r) = render("blend_difference", vec![backdrop.clone(), top(BlendMode::Difference)], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [100, 100, 205], 4, "difference");
+    // add saturates
+    let Some(r) = render("blend_add", vec![backdrop, top(BlendMode::Add)], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [255, 255, 255], 4, "add");
+}
+
+#[test]
+fn filters_use_flash_units_and_directions() {
+    let square = || fill(rect(40.0, 40.0, 20.0, 20.0), RED, Affine::IDENTITY, FillRule::NonZero);
+    // a hard shadow straight down: angle 90 degrees, 12 px away
+    let shadow = Filter::DropShadow {
+        color: Rgba8::BLACK,
+        angle_deg: 90.0,
+        distance: 12.0,
+        blur_x: 1.0,
+        blur_y: 1.0,
+        strength: 1.0,
+        inner: false,
+        knockout: false,
+        hide_object: false,
+    };
+    let Some(r) = render("filter_shadow", vec![group_of(square(), BlendMode::Normal, vec![shadow])], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [255, 0, 0], 3, "the object stays on top");
+    r.assert_near(50, 68, [0, 0, 0], 40, "the shadow is below the object");
+    r.assert_near(50, 30, WHITE, 5, "nothing above it");
+    r.assert_near(70, 50, WHITE, 5, "nothing beside it");
+
+    // a wide blur spreads colour out of the square and thins it in the middle
+    let blur = Filter::Blur { x: 20.0, y: 20.0, quality: 2 };
+    let Some(r) = render("filter_blur", vec![group_of(square(), BlendMode::Normal, vec![blur])], &ImageStore::new()) else { return };
+    let outside = (30..40).map(|x| r.at(x, 50)).min_by_key(|p| p[1]).unwrap();
+    assert!(outside[1] < 255 && outside[0] > 200, "blur reaches outside the square: {outside:?}");
+    let middle = r.at(50, 50);
+    assert!(middle[1] > 20, "the middle is no longer pure red: {middle:?}");
+    r.assert_near(5, 5, WHITE, 3, "far away is untouched");
+
+    // a colour matrix that swaps red and blue
+    let mut swap = [0.0_f32; 20];
+    swap[2] = 1.0; // r' = b
+    swap[6] = 1.0; // g' = g
+    swap[10] = 1.0; // b' = r
+    swap[18] = 1.0; // a' = a
+    let Some(r) = render("filter_matrix", vec![group_of(square(), BlendMode::Normal, vec![Filter::ColorMatrix(swap)])], &ImageStore::new()) else { return };
+    r.assert_near(50, 50, [0, 0, 255], 3, "red became blue");
+}
+
+#[test]
+fn colour_transform_offsets_and_multipliers() {
+    // brighten a dark square with an additive offset and halve the green
+    let child = fill(rect(20.0, 20.0, 60.0, 60.0), Rgba8::opaque(100, 200, 50), Affine::IDENTITY, FillRule::NonZero);
+    let group =
+        Node::Group(Group { color: ColorTransform { mul: [1.0, 0.5, 1.0, 1.0], add: [0.2, 0.0, 0.0, 0.0] }, children: vec![child], ..Group::default() });
+    let Some(r) = render("colour_transform", vec![group], &ImageStore::new()) else { return };
+    // red: 100 + 51, green: 100, blue: 50
+    r.assert_near(50, 50, [151, 100, 50], 4, "multiplied and offset");
 }
