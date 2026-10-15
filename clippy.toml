@@ -1,0 +1,24 @@
+# namtao.com/rust: prototype with unwrap/expect/panic/indexing only in tests.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+
+# Geometry and colour value types whose operators cannot overflow (they are f32/f64 underneath).
+arithmetic-side-effects-allowed = [
+  "kurbo::Point",
+  "kurbo::Vec2",
+  "kurbo::Affine",
+  "kurbo::Size",
+  "kurbo::Rect",
+  "kurbo::TranslateScale",
+]
+
+# No shared mutable state: actors own their state and talk over channels (placement rules).
+disallowed-types = [
+  { path = "std::sync::Arc", reason = "no shared ownership across threads: give the state to one actor and send it messages" },
+  { path = "std::sync::Mutex", reason = "no locks: use an actor that owns the state and a channel" },
+  { path = "std::sync::RwLock", reason = "no locks: use an actor that owns the state and a channel" },
+  { path = "std::rc::Rc", reason = "prefer plain ownership, indices or IDs into an arena" },
+  { path = "std::cell::RefCell", reason = "prefer plain ownership and &mut; no interior mutability" },
+]
