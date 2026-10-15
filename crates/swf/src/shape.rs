@@ -97,23 +97,29 @@ impl ShapeDef {
                 line.write(out);
             }
         });
-        let fill_bits = ub_bits(u32::try_from(self.fills.len()).unwrap_or(0));
-        let line_bits = ub_bits(u32::try_from(self.lines.len()).unwrap_or(0));
-        let mut w = BitWriter::new();
-        w.ub(fill_bits, 4);
-        w.ub(line_bits, 4);
-        for record in &self.records {
-            write_record(&mut w, record, fill_bits, line_bits)?;
-        }
-        // EndShapeRecord: type flag 0 and five zero flags
-        w.ub(0, 6);
-        out.extend_from_slice(&w.into_bytes());
+        out.extend_from_slice(&encode_records(&self.records, self.fills.len(), self.lines.len())?);
         Ok(out)
     }
 }
 
+/// The `SHAPE` part of a shape: the two bit counts, the records and the end record, byte aligned. Style indices in
+/// the records are written with as many bits as `fill_count` and `line_count` need.
+pub(crate) fn encode_records(records: &[ShapeRecord], fill_count: usize, line_count: usize) -> Result<Vec<u8>, SwfError> {
+    let fill_bits = ub_bits(u32::try_from(fill_count).unwrap_or(0));
+    let line_bits = ub_bits(u32::try_from(line_count).unwrap_or(0));
+    let mut w = BitWriter::new();
+    w.ub(fill_bits, 4);
+    w.ub(line_bits, 4);
+    for record in records {
+        write_record(&mut w, record, fill_bits, line_bits)?;
+    }
+    // EndShapeRecord: type flag 0 and five zero flags
+    w.ub(0, 6);
+    Ok(w.into_bytes())
+}
+
 /// `FILLSTYLEARRAY` / `LINESTYLEARRAY` count prefix, then the styles.
-fn write_style_array(out: &mut Vec<u8>, count: usize, body: impl FnOnce(&mut Vec<u8>)) {
+pub(crate) fn write_style_array(out: &mut Vec<u8>, count: usize, body: impl FnOnce(&mut Vec<u8>)) {
     match u8::try_from(count) {
         Ok(n) if n < 0xff => out.put_u8(n),
         _ => {

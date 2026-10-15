@@ -45,6 +45,9 @@ pub enum SwfError {
     /// The MP3 stream is unusable.
     #[error("invalid MP3 stream: {0}")]
     InvalidMp3(&'static str),
+    /// Two shapes cannot be the ends of one shape tween.
+    #[error("cannot morph between these shapes: {0}")]
+    MorphMismatch(&'static str),
     /// A PCM sound format SWF cannot play without resampling.
     #[error("unsupported sound: {0}")]
     UnsupportedSound(&'static str),

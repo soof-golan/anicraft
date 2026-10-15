@@ -210,6 +210,17 @@ impl LineStyle {
 
     /// Appends the `LINESTYLE2` record.
     pub fn write(&self, out: &mut Vec<u8>) {
+        out.put_u16(self.width);
+        self.write_flags(out);
+        match &self.paint {
+            LinePaint::Solid(color) => put_rgba(out, *color),
+            LinePaint::Fill(fill) => fill.write(out),
+        }
+    }
+
+    /// The two flag bytes (caps, join, scaling, hinting, close) and, for mitered joins, the miter limit: the part
+    /// of a `LINESTYLE2` between the width and the paint.
+    pub(crate) fn write_flags(&self, out: &mut Vec<u8>) {
         let cap = |c: Cap| match c {
             Cap::Round => 0_u8,
             Cap::None => 1,
@@ -221,7 +232,6 @@ impl LineStyle {
             Join::Miter => 2,
         };
         let has_fill = matches!(self.paint, LinePaint::Fill(_));
-        out.put_u16(self.width);
         out.put_u8(
             cap(self.start_cap).wrapping_shl(6)
                 | join.wrapping_shl(4)
@@ -233,10 +243,6 @@ impl LineStyle {
         out.put_u8(u8::from(self.no_close).wrapping_shl(2) | cap(self.end_cap));
         if join == 2 {
             out.put_u16(u16::try_from(num::round_f64_to_i32(self.miter_limit.max(1.0) * 256.0).clamp(256, i32::from(u16::MAX))).unwrap_or(768));
-        }
-        match &self.paint {
-            LinePaint::Solid(color) => put_rgba(out, *color),
-            LinePaint::Fill(fill) => fill.write(out),
         }
     }
 }

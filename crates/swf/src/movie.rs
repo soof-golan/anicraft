@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::bitmap::{define_bits_jpeg2_body, define_bits_jpeg3_body, define_bits_lossless2_body, zlib};
 use crate::bits::PutBytes;
 use crate::error::SwfError;
+use crate::morph::MorphShapeDef;
 use crate::place::{Placement, remove_object2_body};
 use crate::shape::ShapeDef;
 use crate::sound::{SoundInfo, define_sound_mp3_body, define_sound_pcm_body, start_sound_body};
@@ -148,6 +149,7 @@ pub struct Movie {
     next_id: u32,
     frames: u32,
     shapes: HashMap<Vec<u8>, CharacterId>,
+    morphs: HashMap<Vec<u8>, CharacterId>,
     sprites: HashMap<Vec<u8>, CharacterId>,
     scenes: Vec<(u32, String)>,
     labels: Vec<(u32, String)>,
@@ -173,6 +175,7 @@ impl Movie {
             next_id: 1,
             frames: 0,
             shapes: HashMap::new(),
+            morphs: HashMap::new(),
             sprites: HashMap::new(),
             scenes: Vec::new(),
             labels: Vec::new(),
@@ -228,6 +231,24 @@ impl Movie {
         body.extend_from_slice(&encoded);
         write_tag(&mut self.body, code::DEFINE_SHAPE4, &body)?;
         self.shapes.insert(encoded, id);
+        Ok(id)
+    }
+
+    /// Defines a shape tween (`DefineMorphShape2`); place it with a `ratio` from 0 to 65535 to show the blend.
+    ///
+    /// # Errors
+    /// See [`MorphShapeDef::encode`] and [`SwfError::TooManyCharacters`].
+    pub fn define_morph_shape(&mut self, morph: &MorphShapeDef) -> Result<CharacterId, SwfError> {
+        let encoded = morph.encode()?;
+        if let Some(id) = self.morphs.get(&encoded) {
+            return Ok(*id);
+        }
+        let id = self.alloc_id()?;
+        let mut body = Vec::with_capacity(encoded.len().saturating_add(2));
+        body.put_u16(id.0);
+        body.extend_from_slice(&encoded);
+        write_tag(&mut self.body, code::DEFINE_MORPH_SHAPE2, &body)?;
+        self.morphs.insert(encoded, id);
         Ok(id)
     }
 

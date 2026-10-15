@@ -9,6 +9,7 @@
 //! - [`movie`]: [`Movie`], which owns the dictionary and the timeline and writes the file (`FWS` or zlib `CWS`).
 //! - [`export`]: frame by frame export of `anim_display::DisplayList`s.
 //! - [`edge`]: native shapes from Animate's edge shapes (`anim_shape::EdgeShape`), for symbol export.
+//! - [`morph`]: shape tweens (`DefineMorphShape2`) from two shapes with the same structure.
 //!
 //! This crate only writes SWF. Tests read the output back with Ruffle's `swf` crate.
 
@@ -18,6 +19,7 @@ pub mod edge;
 pub mod error;
 pub mod export;
 pub mod filter;
+pub mod morph;
 pub mod movie;
 pub mod place;
 pub mod shape;
