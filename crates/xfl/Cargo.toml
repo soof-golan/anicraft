@@ -24,6 +24,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# Only the `render_frame` example uses the rasteriser, to look at what the reader produced.
+anim-render = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }

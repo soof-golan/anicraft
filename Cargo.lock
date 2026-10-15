@@ -32,6 +32,7 @@ dependencies = [
  "anim-archive",
  "anim-core",
  "anim-display",
+ "anim-render",
  "anim-scene",
  "anim-shape",
  "flate2",
@@ -48,7 +49,7 @@ dependencies = [
 [[package]]
 name = "anim-archive"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#72ba6745d452e9466529c158e5e4917c98159a07"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
 dependencies = [
  "crc32fast",
  "encoding_rs",
@@ -61,7 +62,7 @@ dependencies = [
 [[package]]
 name = "anim-core"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#72ba6745d452e9466529c158e5e4917c98159a07"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
 dependencies = [
  "filmcraft-time",
  "kurbo",
@@ -72,7 +73,7 @@ dependencies = [
 [[package]]
 name = "anim-display"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#72ba6745d452e9466529c158e5e4917c98159a07"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
 dependencies = [
  "anim-core",
  "kurbo",
@@ -81,9 +82,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "anim-render"
+version = "0.1.0"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
+dependencies = [
+ "anim-core",
+ "anim-display",
+ "rayon",
+ "serde",
+ "thiserror",
+ "tiny-skia",
+]
+
+[[package]]
 name = "anim-scene"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#72ba6745d452e9466529c158e5e4917c98159a07"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -95,13 +109,19 @@ dependencies = [
 [[package]]
 name = "anim-shape"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#72ba6745d452e9466529c158e5e4917c98159a07"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#e2dc7827efa64cf458fd519e8a4059c57adcf54f"
 dependencies = [
  "anim-core",
  "anim-display",
  "serde",
  "thiserror",
 ]
+
+[[package]]
+name = "arrayref"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
 
 [[package]]
 name = "arrayvec"
@@ -260,10 +280,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-deque"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-utils"
+version = "0.8.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+
+[[package]]
 name = "deranged"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
+
+[[package]]
+name = "either"
+version = "1.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "encoding_rs"
@@ -687,6 +738,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rayon"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -815,6 +886,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "strict-num"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
+
+[[package]]
 name = "swf"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -915,6 +992,31 @@ checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "tiny-skia"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47ffee5eaaf5527f630fb0e356b90ebdec84d5d18d937c5e440350f88c5a91ea"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "bytemuck",
+ "cfg-if",
+ "log",
+ "tiny-skia-path",
+]
+
+[[package]]
+name = "tiny-skia-path"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edca365c3faccca67d06593c5980fa6c57687de727a03131735bb85f01fdeeb9"
+dependencies = [
+ "arrayref",
+ "bytemuck",
+ "strict-num",
 ]
 
 [[package]]
