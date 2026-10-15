@@ -30,20 +30,43 @@ pub fn exporter() -> Option<PathBuf> {
     std::env::var_os("ANICRAFT_RUFFLE_EXPORTER").map(PathBuf::from)
 }
 
+fn decode(path: &std::path::Path) -> Rendered {
+    let decoder = png::Decoder::new(std::io::Cursor::new(std::fs::read(path).unwrap()));
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    assert_eq!(info.color_type, png::ColorType::Rgba);
+    Rendered { width: usize::try_from(info.width).unwrap(), height: usize::try_from(info.height).unwrap(), pixels: buf }
+}
+
+fn scratch_dir() -> PathBuf {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("render_oracle");
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 /// Renders frame 0 of `swf` and returns its pixels, or `None` when no renderer is configured.
 pub fn render_swf(name: &str, swf: &[u8]) -> Option<Rendered> {
     let exporter = exporter()?;
-    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("render_oracle");
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = scratch_dir();
     let swf_path = dir.join(format!("{name}.swf"));
     let png_path = dir.join(format!("{name}.png"));
     std::fs::write(&swf_path, swf).unwrap();
     let status = Command::new(exporter).arg("-s").arg(&swf_path).arg(&png_path).status().unwrap();
     assert!(status.success(), "exporter failed on {name}");
-    let decoder = png::Decoder::new(std::io::Cursor::new(std::fs::read(&png_path).unwrap()));
-    let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    assert_eq!(info.color_type, png::ColorType::Rgba);
-    Some(Rendered { width: usize::try_from(info.width).unwrap(), height: usize::try_from(info.height).unwrap(), pixels: buf })
+    Some(decode(&png_path))
+}
+
+/// Renders the first `frames` (at most 99) frames of `swf`.
+pub fn render_swf_frames(name: &str, swf: &[u8], frames: usize) -> Option<Vec<Rendered>> {
+    let exporter = exporter()?;
+    let dir = scratch_dir();
+    let swf_path = dir.join(format!("{name}.swf"));
+    let out_dir = dir.join(format!("{name}_frames"));
+    std::fs::write(&swf_path, swf).unwrap();
+    let status = Command::new(exporter).arg("-s").arg("-f").arg(frames.to_string()).arg(&swf_path).arg(&out_dir).status().unwrap();
+    assert!(status.success(), "exporter failed on {name}");
+    // the exporter zero-pads frame numbers to the width of the frame count, which differs between versions
+    let frame_file = |i: usize| (1..=3).map(|width| out_dir.join(format!("{i:0width$}.png"))).find(|p| p.exists()).expect("a rendered frame file");
+    Some((0..frames).map(|i| decode(&frame_file(i))).collect())
 }
