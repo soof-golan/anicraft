@@ -440,7 +440,7 @@ fn the_summary_counts_and_serialises() {
     assert_eq!(summary.layers, 8 + 1 + 1 + 1);
     assert_eq!((summary.width, summary.frame_rate), (640.0, 12.0));
     assert_eq!(summary.media_blobs, 2);
-    assert_eq!(summary.media_bytes, (bitmap_dat().len() + sound_dat().len()) as u64);
+    assert_eq!(summary.media_bytes, u64::try_from(bitmap_dat().len() + sound_dat().len()).unwrap());
     assert_eq!(summary.top_unknowns.len(), 3);
     assert!(summary.top_unknowns.windows(2).all(|w| w[0].1 >= w[1].1));
     let json = serde_json::to_string(&summary).unwrap();
