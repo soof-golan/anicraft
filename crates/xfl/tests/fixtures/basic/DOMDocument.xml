@@ -1,0 +1,285 @@
+<DOMDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" width="640" height="360" frameRate="12" backgroundColor="#112233" currentTimeline="2" xflVersion="2.9" creatorInfo="hand-written test fixture" nextSceneIdentifier="3" fixtureAttribute="kept">
+     <folders>
+          <DOMFolderItem name="shapes" itemID="f0000001-00000001" isExpanded="true"/>
+     </folders>
+     <media>
+          <DOMBitmapItem name="shapes/photo" itemID="f0000001-00000002" sourceLastImported="1700000001" allowSmoothing="true" originalCompressionType="lossless" quality="50" href="photo.png" bitmapDataHRef="M 1 1700000001.dat" frameRight="80" frameBottom="40"/>
+          <DOMSoundItem name="click.wav" itemID="f0000001-00000003" href="click.wav" soundDataHRef="M 2 1700000002.dat" format="22kHz 16bit Mono" sampleCount="4" dataLength="8"/>
+          <DOMFontItem name="Embedded Arial" itemID="f0000001-00000004" font="ArialMT" embedRanges="1|2"/>
+          <DOMCompiledClipItem name="Compiled" itemID="f0000001-00000005"/>
+     </media>
+     <symbols>
+          <Include href="Ball.xml" itemIcon="1" loadImmediate="false" itemID="f0000001-00000006" lastModified="1700000010"/>
+          <Include href="shapes/&amp;#060Weird&amp;#062.xml" loadImmediate="false" itemID="f0000001-00000007" lastModified="1700000011"/>
+          <Include href="Missing.xml" loadImmediate="false" itemID="f0000001-00000008"/>
+     </symbols>
+     <timelines>
+          <DOMTimeline name="Scene 1" currentFrame="3" layerDepthEnabled="true">
+               <layers>
+                    <DOMLayer name="Controls" color="#FF4F4F" layerType="folder" autoNamed="false">
+                         <frames>
+                              <DOMFrame index="0" duration="24" keyMode="9728">
+                                   <elements/>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Mask" color="#4FFF4F" layerType="mask" parentLayerIndex="0" locked="true" autoNamed="false">
+                         <frames>
+                              <DOMFrame index="0" duration="24" keyMode="9728">
+                                   <elements>
+                                        <DOMShape isDrawingObject="true">
+                                             <matrix>
+                                                  <Matrix a="2" d="2" tx="10" ty="20"/>
+                                             </matrix>
+                                             <transformationPoint>
+                                                  <Point x="5" y="5"/>
+                                             </transformationPoint>
+                                             <fills>
+                                                  <FillStyle index="1">
+                                                       <SolidColor color="#00FF00" alpha="0.5"/>
+                                                  </FillStyle>
+                                             </fills>
+                                             <edges>
+                                                  <Edge fillStyle1="1" edges="!0 0|200 0|200 200|0 200|0 0"/>
+                                             </edges>
+                                        </DOMShape>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Masked art" color="#9933CC" parentLayerIndex="1" autoNamed="false" visible="false" outline="true">
+                         <frames>
+                              <DOMFrame index="0" duration="24" keyMode="9728">
+                                   <elements>
+                                        <DOMBitmapInstance libraryItemName="shapes/photo" extraBitmapAttribute="x">
+                                             <matrix>
+                                                  <Matrix a="1" b="0.5" c="-0.5" d="1" tx="1.5" ty="-2.25"/>
+                                             </matrix>
+                                        </DOMBitmapInstance>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Guide" color="#FF8000" layerType="guide" autoNamed="false">
+                         <frames>
+                              <DOMFrame index="0" duration="24" keyMode="9728">
+                                   <elements/>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Tween" color="#00FFFF">
+                         <frames>
+                              <DOMFrame index="0" duration="12" tweenType="motion" motionTweenRotate="clockwise" motionTweenRotateTimes="2" motionTweenScale="false" motionTweenSnap="true" motionTweenOrientToPath="true" motionTweenSync="true" acceleration="-30" easeMethodName="cubicIn" hasCustomEase="true" keyMode="22017" name="start" labelType="anchor">
+                                   <tweens>
+                                        <Ease target="position" method="cubicIn"/>
+                                        <CustomEase target="rotation">
+                                             <Point/>
+                                             <Point x="0.25" y="0.1"/>
+                                             <Point x="0.75" y="0.9"/>
+                                             <Point x="1" y="1"/>
+                                        </CustomEase>
+                                   </tweens>
+                                   <elements>
+                                        <DOMSymbolInstance libraryItemName="Ball" symbolType="graphic" loop="play once" firstFrame="2" lastFrame="5" name="ball1" blendMode="screen" isVisible="false" cacheAsBitmap="true" centerPoint3DX="1.5">
+                                             <matrix>
+                                                  <Matrix a="0.5" d="0.5" tx="100" ty="50"/>
+                                             </matrix>
+                                             <transformationPoint>
+                                                  <Point x="0.5" y="0.5"/>
+                                             </transformationPoint>
+                                             <color>
+                                                  <Color tintMultiplier="0.4" tintColor="#FF8800"/>
+                                             </color>
+                                             <filters>
+                                                  <BlurFilter blurX="8" blurY="4" quality="2"/>
+                                                  <DropShadowFilter blurX="3" blurY="3" angle="90" distance="6" strength="1.5" color="#102030" alpha="0.75" quality="1" inner="true" hideObject="true"/>
+                                                  <GlowFilter blurX="2" blurY="2" color="#FFFF00" alpha="1" strength="2" knockout="true"/>
+                                                  <BevelFilter blurX="1" blurY="1"/>
+                                             </filters>
+                                        </DOMSymbolInstance>
+                                   </elements>
+                              </DOMFrame>
+                              <DOMFrame index="12" duration="12" keyMode="9728">
+                                   <elements>
+                                        <DOMSymbolInstance libraryItemName="Ball" symbolType="graphic" loop="loop">
+                                             <matrix>
+                                                  <Matrix a="0.5" d="0.5" tx="400" ty="50"/>
+                                             </matrix>
+                                             <color>
+                                                  <Color alphaMultiplier="0.25" redOffset="51"/>
+                                             </color>
+                                        </DOMSymbolInstance>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Morph" color="#FF00FF">
+                         <frames>
+                              <DOMFrame index="0" duration="6" tweenType="shape" keyMode="17922">
+                                   <MorphShape>
+                                        <morphSegments>
+                                             <MorphSegment startPointA="1, 2" startPointB="3, 4" strokeIndex1="0" strokeIndex2="0"/>
+                                        </morphSegments>
+                                        <morphHintsList/>
+                                   </MorphShape>
+                                   <elements>
+                                        <DOMShape>
+                                             <fills>
+                                                  <FillStyle index="1">
+                                                       <SolidColor color="#FF0000"/>
+                                                  </FillStyle>
+                                             </fills>
+                                             <edges>
+                                                  <Edge fillStyle1="1" edges="!0 0|100 0|100 100|0 0"/>
+                                             </edges>
+                                        </DOMShape>
+                                   </elements>
+                              </DOMFrame>
+                              <DOMFrame index="6" duration="6" keyMode="9728">
+                                   <elements>
+                                        <DOMShape>
+                                             <fills>
+                                                  <FillStyle index="1">
+                                                       <SolidColor color="#0000FF"/>
+                                                  </FillStyle>
+                                             </fills>
+                                             <edges>
+                                                  <Edge fillStyle1="1" edges="!0 0|300 0|300 300|0 0"/>
+                                             </edges>
+                                        </DOMShape>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Text" color="#FFFF00" current="true" isSelected="true">
+                         <frames>
+                              <DOMFrame index="0" duration="24" keyMode="9728">
+                                   <elements>
+                                        <DOMStaticText width="120" height="30" autoExpand="true" isSelectable="false">
+                                             <matrix>
+                                                  <Matrix tx="20" ty="300"/>
+                                             </matrix>
+                                             <textRuns>
+                                                  <DOMTextRun>
+                                                       <characters>שלום עולם hello مرحبا</characters>
+                                                       <textAttrs>
+                                                            <DOMTextAttrs aliasText="false" size="24" face="ArialMT" fillColor="#0066CC" alignment="right" bold="true" italic="true" letterSpacing="2"/>
+                                                       </textAttrs>
+                                                  </DOMTextRun>
+                                                  <DOMTextRun>
+                                                       <characters>second&#13;line</characters>
+                                                       <textAttrs>
+                                                            <DOMTextAttrs size="12" face="ArialMT" fillColor="#000000" alpha="0.5"/>
+                                                       </textAttrs>
+                                                  </DOMTextRun>
+                                             </textRuns>
+                                        </DOMStaticText>
+                                        <DOMDynamicText name="score" width="80" height="20" isSelectable="true" lineType="multiline" instanceName="score">
+                                             <matrix>
+                                                  <Matrix tx="300" ty="300"/>
+                                             </matrix>
+                                             <textRuns>
+                                                  <DOMTextRun>
+                                                       <characters>0</characters>
+                                                       <textAttrs>
+                                                            <DOMTextAttrs size="18" face="ArialMT" fillColor="#FFFFFF"/>
+                                                       </textAttrs>
+                                                  </DOMTextRun>
+                                             </textRuns>
+                                        </DOMDynamicText>
+                                        <DOMInputText width="80" height="20" border="true" orientation="vertical">
+                                             <matrix>
+                                                  <Matrix tx="400" ty="300"/>
+                                             </matrix>
+                                             <textRuns>
+                                                  <DOMTextRun>
+                                                       <characters>type here</characters>
+                                                       <textAttrs>
+                                                            <DOMTextAttrs size="14" face="ArialMT" fillColor="#333333"/>
+                                                       </textAttrs>
+                                                  </DOMTextRun>
+                                             </textRuns>
+                                        </DOMInputText>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Sound and code" color="#00FF00" customLayerAttribute="7">
+                         <frames>
+                              <DOMFrame index="0" duration="4" keyMode="9728" soundName="click.wav" soundSync="start" soundLoopMode="repeat" repeatCount="3" soundEffect="fade in" inPoint44="10" outPoint44="20" soundZoomLevel="2">
+                                   <SoundEnvelope>
+                                        <SoundEnvelopePoint mark44="0" level0="0" level1="0"/>
+                                        <SoundEnvelopePoint mark44="1000" level0="32768" level1="32768"/>
+                                   </SoundEnvelope>
+                                   <Actionscript>
+                                        <script><![CDATA[stop();
+trace("a < b && c");]]></script>
+                                   </Actionscript>
+                                   <elements/>
+                              </DOMFrame>
+                              <DOMFrame index="4" duration="2" keyMode="9728" name="done" labelType="comment">
+                                   <elements>
+                                        <DOMGroup selected="true">
+                                             <matrix>
+                                                  <Matrix tx="7" ty="8"/>
+                                             </matrix>
+                                             <transformationPoint>
+                                                  <Point x="1" y="2"/>
+                                             </transformationPoint>
+                                             <members>
+                                                  <DOMShape>
+                                                       <strokes>
+                                                            <StrokeStyle index="1">
+                                                                 <SolidStroke scaleMode="none" weight="3" caps="square" joints="bevel" miterLimit="8" pixelHinting="true">
+                                                                      <fill>
+                                                                           <SolidColor color="#123456"/>
+                                                                      </fill>
+                                                                 </SolidStroke>
+                                                            </StrokeStyle>
+                                                            <StrokeStyle index="2">
+                                                                 <DottedStroke scaleMode="normal" weight="2" dotSpace="3" sharpness="4">
+                                                                      <fill>
+                                                                           <SolidColor color="#654321"/>
+                                                                      </fill>
+                                                                 </DottedStroke>
+                                                            </StrokeStyle>
+                                                       </strokes>
+                                                       <edges>
+                                                            <Edge strokeStyle="1" edges="!0 0|100 0"/>
+                                                            <Edge strokeStyle="2" edges="!0 50|100 50"/>
+                                                       </edges>
+                                                  </DOMShape>
+                                                  <DOMGroup>
+                                                       <members>
+                                                            <DOMVideoInstance libraryItemName="clip.flv"/>
+                                                       </members>
+                                                  </DOMGroup>
+                                             </members>
+                                        </DOMGroup>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+               </layers>
+          </DOMTimeline>
+          <DOMTimeline name="Scene 2">
+               <layers>
+                    <DOMLayer name="Layer 1" color="#4F80FF">
+                         <frames>
+                              <DOMFrame index="0" keyMode="9728">
+                                   <elements>
+                                        <DOMSymbolInstance libraryItemName="shapes/&amp;#060Weird&amp;#062">
+                                             <matrix>
+                                                  <Matrix/>
+                                             </matrix>
+                                        </DOMSymbolInstance>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+               </layers>
+          </DOMTimeline>
+     </timelines>
+     <scripts/>
+     <PrinterSettings/>
+</DOMDocument>

@@ -1,0 +1,8 @@
+<flash_profiles>
+<flash_profile version="1.0" name="Default" current="true">
+<PublishFormatProperties enabled="true">
+<flash>1</flash>
+<html>0</html>
+</PublishFormatProperties>
+</flash_profile>
+</flash_profiles>

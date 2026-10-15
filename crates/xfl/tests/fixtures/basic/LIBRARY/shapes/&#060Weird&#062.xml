@@ -1,0 +1,24 @@
+<DOMSymbolItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" name="shapes/&amp;#060Weird&amp;#062" itemID="f0000001-00000007" symbolType="button" lastModified="1700000011" scaleGridLeft="-10" scaleGridRight="10.5" scaleGridTop="-5" scaleGridBottom="5.25">
+  <timeline>
+    <DOMTimeline name="shapes/&amp;#060Weird&amp;#062" layerDepthEnabled="false">
+      <layers>
+        <DOMLayer name="States" color="#00FFFF" autoNamed="false">
+          <frames>
+            <DOMFrame index="0" keyMode="9728">
+              <elements/>
+            </DOMFrame>
+            <DOMFrame index="1" keyMode="9728">
+              <elements/>
+            </DOMFrame>
+            <DOMFrame index="2" keyMode="9728">
+              <elements/>
+            </DOMFrame>
+            <DOMFrame index="3" keyMode="9728">
+              <elements/>
+            </DOMFrame>
+          </frames>
+        </DOMLayer>
+      </layers>
+    </DOMTimeline>
+  </timeline>
+</DOMSymbolItem>

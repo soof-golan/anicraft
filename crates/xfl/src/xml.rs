@@ -214,6 +214,95 @@ impl<'a, 'i> Attrs<'a, 'i> {
     }
 }
 
+/// Deepest element nesting accepted. The XML parser recurses per level, so hostile input would overflow its stack;
+/// real documents nest less than 200 levels (the model itself stops at 64 nested groups).
+pub const MAX_XML_DEPTH: usize = 1024;
+
+/// Why an XML text was not parsed.
+#[derive(Debug)]
+pub enum ParseFailure {
+    Xml(roxmltree::Error),
+    TooDeep,
+}
+
+impl std::fmt::Display for ParseFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Xml(e) => write!(f, "invalid XML: {e}"),
+            Self::TooDeep => write!(f, "elements are nested more than {MAX_XML_DEPTH} levels deep"),
+        }
+    }
+}
+
+/// Parses `text` with a node limit, no DTD and the nesting limit.
+///
+/// # Errors
+/// [`ParseFailure`] when the text is not well-formed XML or nests too deeply.
+pub fn parse(text: &str) -> Result<roxmltree::Document<'_>, ParseFailure> {
+    if nesting_exceeds(text, MAX_XML_DEPTH) {
+        return Err(ParseFailure::TooDeep);
+    }
+    let options = roxmltree::ParsingOptions { allow_dtd: false, nodes_limit: crate::MAX_XML_NODES, ..roxmltree::ParsingOptions::default() };
+    roxmltree::Document::parse_with_options(text, options).map_err(ParseFailure::Xml)
+}
+
+/// A lexical scan for element nesting deeper than `limit`.
+///
+/// It skips comments, CDATA, processing instructions and quoted attribute values, and counts start tags against end
+/// tags. Malformed input gives some answer; the parser that follows reports the actual error.
+#[must_use]
+pub fn nesting_exceeds(text: &str, limit: usize) -> bool {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    let mut at = 0usize;
+    while let Some(offset) = bytes.get(at..).and_then(|rest| rest.iter().position(|b| *b == b'<')) {
+        at = at.saturating_add(offset);
+        let rest = bytes.get(at..).unwrap_or_default();
+        let skip_to = |marker: &[u8]| -> usize {
+            rest.windows(marker.len()).position(|w| w == marker).map_or(bytes.len(), |p| at.saturating_add(p).saturating_add(marker.len()))
+        };
+        if rest.starts_with(b"<!--") {
+            at = skip_to(b"-->");
+        } else if rest.starts_with(b"<![CDATA[") {
+            at = skip_to(b"]]>");
+        } else if rest.starts_with(b"<?") {
+            at = skip_to(b"?>");
+        } else if rest.starts_with(b"<!") {
+            at = skip_to(b">");
+        } else if rest.starts_with(b"</") {
+            depth = depth.saturating_sub(1);
+            at = skip_to(b">");
+        } else {
+            // A start tag: find its closing `>` outside quotes.
+            let mut quote: Option<u8> = None;
+            let mut end = bytes.len();
+            let mut previous = 0u8;
+            for (i, &b) in rest.iter().enumerate().skip(1) {
+                if let Some(q) = quote {
+                    if b == q {
+                        quote = None;
+                    }
+                } else if b == b'"' || b == b'\'' {
+                    quote = Some(b);
+                } else if b == b'>' {
+                    // The tag ends at the first `>` outside quotes.
+                    end = at.saturating_add(i).saturating_add(1);
+                    if previous != b'/' {
+                        depth = depth.saturating_add(1);
+                    }
+                    break;
+                }
+                previous = b;
+            }
+            if depth > limit {
+                return true;
+            }
+            at = end;
+        }
+    }
+    false
+}
+
 /// Parses a finite number.
 #[must_use]
 pub fn parse_f64(text: &str) -> Option<f64> {
@@ -324,6 +413,30 @@ mod tests {
         assert_eq!(sink.unknowns.ui_state, 1);
         assert_eq!(sink.unknowns.attrs.get("A@two"), Some(&1));
         assert!(!sink.warnings.is_empty());
+    }
+
+    #[test]
+    fn nesting_scan_skips_comments_cdata_and_quotes() {
+        let deep = "<a>".repeat(10);
+        assert!(nesting_exceeds(&deep, 5));
+        assert!(!nesting_exceeds(&deep, 10));
+        // Self-closing tags, comments, CDATA and `<` inside attribute values do not count.
+        let calm = format!("<r a=\"<<<<<\"><!-- <x><x><x> --><![CDATA[<y><y><y><y>]]><?pi <z><z> ?><s/><s a='>'/>{}</r>", "<q/>".repeat(100));
+        assert!(!nesting_exceeds(&calm, 2));
+        assert!(nesting_exceeds("<a><b><c>", 2));
+        assert!(!nesting_exceeds("<a><b></b></a><a><b></b></a>", 2));
+        // Unterminated constructs terminate the scan instead of looping.
+        for broken in ["<", "<a", "<a b=\"", "<!--", "<![CDATA[", "</", "<?x"] {
+            let _ = nesting_exceeds(broken, 3);
+        }
+    }
+
+    #[test]
+    fn deeply_nested_text_is_refused_before_parsing() {
+        let text = format!("{}{}", "<g>".repeat(5000), "</g>".repeat(5000));
+        assert!(matches!(parse(&text), Err(ParseFailure::TooDeep)));
+        assert!(parse("<g><g/></g>").is_ok());
+        assert!(matches!(parse("<g"), Err(ParseFailure::Xml(_))));
     }
 
     #[test]

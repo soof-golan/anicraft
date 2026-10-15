@@ -41,6 +41,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for w in loaded.warnings.iter().take(20) {
         println!("  {w}");
     }
+    let problems = loaded.document.validate();
+    println!("validate: {} problems", problems.len());
+    for p in problems.iter().take(15) {
+        println!("  {p}");
+    }
     println!("unknowns: {} total, {} ui-state", loaded.unknowns.total(), loaded.unknowns.ui_state);
     for (k, n) in loaded.unknowns.top(25) {
         println!("  {n:8}  {k}");

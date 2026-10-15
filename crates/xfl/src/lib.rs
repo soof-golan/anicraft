@@ -140,8 +140,10 @@ pub fn read_container(container: &Container, options: &ReadOptions) -> Result<Lo
     }
     let main = container.find("DOMDocument.xml").ok_or(XflError::MissingDocument)?.name.clone();
     let text = container.read_text(&main)?;
-    let parse_options = roxmltree::ParsingOptions { allow_dtd: false, nodes_limit: MAX_XML_NODES, ..roxmltree::ParsingOptions::default() };
-    let xml = roxmltree::Document::parse_with_options(&text, parse_options).map_err(|source| XflError::Xml { file: main.clone(), source })?;
+    let xml = xml::parse(&text).map_err(|failure| match failure {
+        xml::ParseFailure::Xml(source) => XflError::Xml { file: main.clone(), source },
+        xml::ParseFailure::TooDeep => XflError::TooDeep(main.clone()),
+    })?;
     let root = xml.root_element();
     if root.tag_name().name() != "DOMDocument" {
         return Err(XflError::NotXfl(root.tag_name().name().to_owned()));

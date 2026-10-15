@@ -203,11 +203,10 @@ fn read_symbol_file(
             return None;
         }
     };
-    let options = roxmltree::ParsingOptions { allow_dtd: false, nodes_limit: crate::MAX_XML_NODES, ..roxmltree::ParsingOptions::default() };
-    let xml = match roxmltree::Document::parse_with_options(&text, options) {
+    let xml = match crate::xml::parse(&text) {
         Ok(xml) => xml,
-        Err(error) => {
-            sink.warn(&file, format!("invalid XML: {error}"));
+        Err(failure) => {
+            sink.warn(&file, failure.to_string());
             return None;
         }
     };

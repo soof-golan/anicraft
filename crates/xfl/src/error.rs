@@ -17,6 +17,8 @@ pub enum XflError {
         #[source]
         source: roxmltree::Error,
     },
+    #[error("{0}: elements are nested too deeply")]
+    TooDeep(String),
     #[error("DOMDocument.xml starts with <{0}>, not <DOMDocument>")]
     NotXfl(String),
     #[error(transparent)]
