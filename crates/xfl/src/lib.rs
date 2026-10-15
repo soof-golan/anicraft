@@ -17,6 +17,10 @@
 //! 3. loads the `bin/*.dat` blobs of bitmaps, sounds and videos into a [`MediaStore`];
 //! 4. keeps `PublishSettings.xml` in the document and the other archive entries as [`Sidecar`]s.
 //!
+//! The [`write`] module goes the other way: [`write_fla`] and [`write_xfl_folder`] turn a document, its media and the
+//! sidecars back into a zipped `.fla` or an XFL folder, deterministically and with everything the reader parked in
+//! `extra`. [`diff`] compares two documents or archives semantically, which is how the round trips are checked.
+//!
 //! [`decode_bitmap`] turns a stored bitmap (Animate's lossless `.dat` format, or JPEG/PNG) into an
 //! [`anim_display::Image`].
 
