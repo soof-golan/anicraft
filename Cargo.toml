@@ -27,6 +27,11 @@ anim-export = { git = "https://github.com/soof-golan/anicraft-libs", branch = "m
 anim-video = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
 anim-ui = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
 anim-session = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+anim-mcp = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main" }
+
+# Crates of this repository.
+anicraft-xfl = { path = "crates/xfl" }
+anicraft-swf = { path = "crates/swf" }
 
 # Craft crates, pinned by rev like the Craft apps do.
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
