@@ -183,6 +183,66 @@ fn decode_with_image_crate(bytes: &[u8]) -> Result<Image, XflError> {
     Ok(Image::new(width, height, out)?)
 }
 
+/// Largest chunk payload Animate writes; the length field would allow more but readers expect this.
+const LOSSLESS_CHUNK: usize = 2048;
+
+/// Encodes an image as Animate's lossless `.dat` bitmap (the format documented at the top of this module).
+///
+/// The pixels are un-premultiplied (the format holds straight alpha as `A R G B`) and deflated. The transparency
+/// flag is set when any pixel is not opaque. The frame rectangle is `0, width * 20, 0, height * 20` twips.
+///
+/// # Errors
+/// [`XflError::Bitmap`] for an empty image, a buffer of the wrong size, or a width above 16383 or height above
+/// 65535 (the header stores them in 16 bits, and the row stride too).
+pub fn encode_lossless_bitmap(image: &Image) -> Result<Vec<u8>, XflError> {
+    use std::io::Write;
+
+    let bad = |what: &str| XflError::Bitmap(format!("cannot encode lossless bitmap: {what}"));
+    let width = u16::try_from(image.width).map_err(|_| bad("too wide"))?;
+    let height = u16::try_from(image.height).map_err(|_| bad("too tall"))?;
+    let stride = width.checked_mul(4).ok_or_else(|| bad("rows are longer than 65535 bytes"))?;
+    if width == 0 || height == 0 {
+        return Err(bad("empty image"));
+    }
+    let expected = anim_core::num::u32_to_usize(image.width).checked_mul(anim_core::num::u32_to_usize(image.height)).and_then(|n| n.checked_mul(4));
+    if expected != Some(image.premultiplied_rgba.len()) {
+        return Err(bad("pixel buffer does not match the size"));
+    }
+    let mut argb = Vec::with_capacity(image.premultiplied_rgba.len());
+    let mut transparent = false;
+    let (pixels, _) = image.premultiplied_rgba.as_chunks::<4>();
+    for &[red, green, blue, alpha] in pixels {
+        transparent |= alpha != 255;
+        let straight = |c: u8| -> u8 {
+            if alpha == 0 {
+                return 0;
+            }
+            let v = u32::from(c).saturating_mul(255).saturating_add(u32::from(alpha) / 2).checked_div(u32::from(alpha)).unwrap_or(0);
+            u8::try_from(v.min(255)).unwrap_or(255)
+        };
+        argb.extend_from_slice(&[alpha, straight(red), straight(green), straight(blue)]);
+    }
+    let mut out = Vec::with_capacity(LOSSLESS_HEADER.saturating_add(argb.len() / 2));
+    out.extend_from_slice(&[0x03, 0x05]);
+    out.extend_from_slice(&stride.to_le_bytes());
+    out.extend_from_slice(&width.to_le_bytes());
+    out.extend_from_slice(&height.to_le_bytes());
+    for twips in [0, image.width.saturating_mul(20), 0, image.height.saturating_mul(20)] {
+        out.extend_from_slice(&u32::to_le_bytes(twips));
+    }
+    out.extend_from_slice(&[0, u8::from(transparent)]);
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&argb).map_err(|e| bad(&e.to_string()))?;
+    let packed = encoder.finish().map_err(|e| bad(&e.to_string()))?;
+    for chunk in packed.chunks(LOSSLESS_CHUNK) {
+        let length = u16::try_from(chunk.len()).map_err(|_| bad("chunk too long"))?;
+        out.extend_from_slice(&length.to_le_bytes());
+        out.extend_from_slice(chunk);
+    }
+    out.extend_from_slice(&[0, 0]);
+    Ok(out)
+}
+
 /// The sound bytes proper of a sound item's `.dat`: Animate appends a low-quality preview cache after the
 /// `dataLength` bytes of the real data.
 #[must_use]
@@ -231,6 +291,31 @@ mod tests {
         // Straight (100,100,100) at alpha 128 premultiplies to 50.
         assert_eq!(&image.premultiplied_rgba[4..8], &[50, 50, 50, 128]);
         assert_eq!(&image.premultiplied_rgba[8..12], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn encoder_output_decodes_to_the_same_pixels() {
+        // Opaque gradient: exact.
+        let mut rgba = Vec::new();
+        for i in 0..(37u32 * 5) {
+            let v = u8::try_from(i % 251).unwrap();
+            rgba.extend_from_slice(&[v, v.wrapping_mul(3), v.wrapping_add(9), 255]);
+        }
+        let image = Image::new(37, 5, rgba).unwrap();
+        let blob = encode_lossless_bitmap(&image).unwrap();
+        assert_eq!(sniff_bitmap(&blob), BitmapFormat::Lossless);
+        let header = lossless_header(&blob).unwrap();
+        assert_eq!((header.width, header.height, header.has_transparency), (37, 5, false));
+        assert_eq!(decode_bitmap_bytes(&blob).unwrap(), image);
+        // Transparent pixels survive within rounding of the un-premultiply.
+        let image = Image::new(2, 1, vec![50, 50, 50, 128, 0, 0, 0, 0]).unwrap();
+        let blob = encode_lossless_bitmap(&image).unwrap();
+        assert!(lossless_header(&blob).unwrap().has_transparency);
+        assert_eq!(decode_bitmap_bytes(&blob).unwrap(), image);
+        // Bad input is an error.
+        assert!(encode_lossless_bitmap(&Image { width: 0, height: 3, premultiplied_rgba: Vec::new() }).is_err());
+        assert!(encode_lossless_bitmap(&Image { width: 70_000, height: 1, premultiplied_rgba: Vec::new() }).is_err());
+        assert!(encode_lossless_bitmap(&Image { width: 2, height: 2, premultiplied_rgba: vec![0; 3] }).is_err());
     }
 
     #[test]
