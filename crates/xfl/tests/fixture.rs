@@ -433,6 +433,21 @@ fn the_document_round_trips_through_json() {
 }
 
 #[test]
+fn the_summary_counts_and_serialises() {
+    let loaded = load();
+    let summary = loaded.summary(3);
+    assert_eq!((summary.scenes, summary.symbols, summary.bitmaps, summary.sounds, summary.fonts, summary.folders), (2, 2, 1, 1, 1, 1));
+    assert_eq!(summary.layers, 8 + 1 + 1 + 1);
+    assert_eq!((summary.width, summary.frame_rate), (640.0, 12.0));
+    assert_eq!(summary.media_blobs, 2);
+    assert_eq!(summary.media_bytes, (bitmap_dat().len() + sound_dat().len()) as u64);
+    assert_eq!(summary.top_unknowns.len(), 3);
+    assert!(summary.top_unknowns.windows(2).all(|w| w[0].1 >= w[1].1));
+    let json = serde_json::to_string(&summary).unwrap();
+    assert_eq!(serde_json::from_str::<anicraft_xfl::LoadSummary>(&json).unwrap(), summary);
+}
+
+#[test]
 fn missing_document_and_wrong_root_are_errors() {
     let mut writer = ZipWriter::in_memory();
     writer.add_file("something.txt", b"x").unwrap();

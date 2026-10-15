@@ -98,6 +98,67 @@ pub struct Loaded {
     pub source: SourceInfo,
 }
 
+/// A JSON-friendly digest of a loaded document, for command-line tools and tool servers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoadSummary {
+    pub width: f64,
+    pub height: f64,
+    pub frame_rate: f64,
+    pub scenes: u32,
+    pub total_frames: u32,
+    pub layers: u32,
+    pub keyframes: u32,
+    pub elements: u32,
+    pub symbols: u32,
+    pub bitmaps: u32,
+    pub sounds: u32,
+    pub fonts: u32,
+    pub videos: u32,
+    pub folders: u32,
+    /// Number of distinct blobs in the media store and their total size.
+    pub media_blobs: usize,
+    pub media_bytes: u64,
+    pub warnings: usize,
+    pub dropped_warnings: u64,
+    /// Unknown attributes and elements kept in `extra`, and the most frequent ones.
+    pub unknown_total: u64,
+    pub top_unknowns: Vec<(String, u64)>,
+    pub folder: bool,
+    pub recovered_index: bool,
+}
+
+impl Loaded {
+    /// Counts and the `top` most frequent unknowns, as plain serialisable data.
+    #[must_use]
+    pub fn summary(&self, top: usize) -> LoadSummary {
+        let stats = self.document.stats();
+        LoadSummary {
+            width: self.document.width,
+            height: self.document.height,
+            frame_rate: self.document.frame_rate,
+            scenes: stats.scenes,
+            total_frames: stats.total_frames,
+            layers: stats.layers,
+            keyframes: stats.keyframes,
+            elements: stats.elements,
+            symbols: stats.symbols,
+            bitmaps: stats.bitmaps,
+            sounds: stats.sounds,
+            fonts: stats.fonts,
+            videos: stats.videos,
+            folders: stats.folders,
+            media_blobs: self.media.len(),
+            media_bytes: self.media.total_bytes(),
+            warnings: self.warnings.len(),
+            dropped_warnings: self.dropped_warnings,
+            unknown_total: self.unknowns.total(),
+            top_unknowns: self.unknowns.top(top),
+            folder: self.source.folder,
+            recovered_index: self.source.recovered_index,
+        }
+    }
+}
+
 /// Entries kept as sidecars when they are at most this large.
 const MAX_SIDECAR_BYTES: u64 = 4 * 1024 * 1024;
 
