@@ -162,6 +162,57 @@ pub fn define_sound_mp3_body(id: u16, data: &[u8]) -> Result<Vec<u8>, SwfError> 
     Ok(body)
 }
 
+/// The SWF PCM rate (5512, 11025, 22050 or 44100 Hz) to resample a sound at `rate` Hz to: the nearest one that
+/// does not discard more than a quarter of the bandwidth.
+#[must_use]
+pub const fn swf_pcm_rate(rate: u32) -> u32 {
+    if rate >= 33_075 {
+        44_100
+    } else if rate >= 16_537 {
+        22_050
+    } else if rate >= 8_268 {
+        11_025
+    } else {
+        5_512
+    }
+}
+
+/// Resamples interleaved 16-bit PCM from `from` to `to` Hz by linear interpolation.
+///
+/// That is good enough for the rates SWF plays; for hi-fi work resample with `anim-audio` first and pass the exact
+/// rate to `define_sound_pcm`.
+///
+/// # Errors
+/// [`SwfError::UnsupportedSound`] for a zero rate or channel count, or for more than 2^28 output samples.
+pub fn resample_pcm(samples: &[i16], channels: u8, from: u32, to: u32) -> Result<Vec<i16>, SwfError> {
+    if from == 0 || to == 0 || channels == 0 {
+        return Err(SwfError::UnsupportedSound("sample rate and channel count must be positive"));
+    }
+    let channels = usize::from(channels);
+    let frames_in = samples.len().checked_div(channels).unwrap_or(0);
+    let frames_in_u64 = u64::try_from(frames_in).unwrap_or(u64::MAX);
+    let frames_out = frames_in_u64.saturating_mul(u64::from(to)).div_ceil(u64::from(from));
+    if frames_out.saturating_mul(u64::try_from(channels).unwrap_or(2)) > 1 << 28 {
+        return Err(SwfError::UnsupportedSound("the resampled sound would be too long"));
+    }
+    let mut out = Vec::with_capacity(usize::try_from(frames_out).unwrap_or(0).saturating_mul(channels));
+    for j in 0..frames_out {
+        let position = j.saturating_mul(u64::from(from));
+        let (index, remainder) = (position.checked_div(u64::from(to)).unwrap_or(0), position.checked_rem(u64::from(to)).unwrap_or(0));
+        let first = usize::try_from(index).unwrap_or(usize::MAX);
+        let weight = f64::from(u32::try_from(remainder).unwrap_or(0)) / f64::from(to);
+        for channel in 0..channels {
+            let at = |frame: usize| samples.get(frame.saturating_mul(channels).saturating_add(channel)).copied();
+            // past the end the signal holds its last value
+            let a = at(first).or_else(|| at(frames_in.saturating_sub(1))).unwrap_or(0);
+            let b = at(first.saturating_add(1)).unwrap_or(a);
+            let value = (f64::from(b) - f64::from(a)).mul_add(weight, f64::from(a));
+            out.push(i16::try_from(anim_core::num::round_f64_to_i32(value).clamp(i32::from(i16::MIN), i32::from(i16::MAX))).unwrap_or(0));
+        }
+    }
+    Ok(out)
+}
+
 /// The body of a `DefineSound` tag holding uncompressed 16-bit PCM.
 ///
 /// `samples` are interleaved when `channels` is 2. SWF only plays 5512, 11025, 22050 and 44100 Hz PCM.
@@ -386,6 +437,31 @@ mod tests {
         assert_eq!(body.len(), 7 + 8);
         assert!(define_sound_pcm_body(1, &[0], 1, 48_000).is_err());
         assert!(define_sound_pcm_body(1, &[0], 3, 44_100).is_err());
+    }
+
+    #[test]
+    fn resampling_keeps_length_ratio_and_interpolates() {
+        // 48 kHz to 44.1 kHz: 480 frames become ceil(480 * 44100 / 48000) = 441
+        let mono: Vec<i16> = (0..480).map(|i| i16::try_from(i * 10).unwrap()).collect();
+        let out = resample_pcm(&mono, 1, 48_000, 44_100).unwrap();
+        assert_eq!(out.len(), 441);
+        assert_eq!(out[0], 0);
+        // a ramp stays a ramp: sample j sits at input position j * 48000 / 44100
+        let expected = 10.0 * 100.0 * 48_000.0 / 44_100.0;
+        assert!((f64::from(out[100]) - expected).abs() < 1.0, "{} vs {expected}", out[100]);
+        // stereo channels stay separate
+        let stereo: Vec<i16> = (0..100).flat_map(|_| [1000_i16, -1000]).collect();
+        let out = resample_pcm(&stereo, 2, 22_050, 44_100).unwrap();
+        assert_eq!(out.len(), 400);
+        assert!(out.chunks(2).all(|f| f == [1000, -1000]));
+        // degenerate inputs
+        assert!(resample_pcm(&[1, 2], 1, 0, 44_100).is_err());
+        assert!(resample_pcm(&[1, 2], 0, 8_000, 44_100).is_err());
+        assert_eq!(resample_pcm(&[], 1, 8_000, 44_100).unwrap(), Vec::<i16>::new());
+        assert_eq!(swf_pcm_rate(48_000), 44_100);
+        assert_eq!(swf_pcm_rate(32_000), 22_050);
+        assert_eq!(swf_pcm_rate(16_000), 11_025);
+        assert_eq!(swf_pcm_rate(8_000), 5_512);
     }
 
     #[test]

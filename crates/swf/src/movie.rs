@@ -15,7 +15,7 @@ use crate::error::SwfError;
 use crate::morph::MorphShapeDef;
 use crate::place::{Placement, remove_object2_body};
 use crate::shape::ShapeDef;
-use crate::sound::{SoundInfo, define_sound_mp3_body, define_sound_pcm_body, start_sound_body};
+use crate::sound::{SoundInfo, define_sound_mp3_body, define_sound_pcm_body, resample_pcm, start_sound_body, swf_pcm_rate};
 use crate::tag::{code, write_tag};
 use crate::types::{CharacterId, Rect, put_rgb, to_twips};
 
@@ -293,6 +293,20 @@ impl Movie {
         let id = self.alloc_id()?;
         write_tag(&mut self.body, code::DEFINE_SOUND, &define_sound_pcm_body(id.0, samples, channels, sample_rate)?)?;
         Ok(id)
+    }
+
+    /// Like [`Movie::define_sound_pcm`] for any sample rate: sounds at other rates are resampled to the nearest rate
+    /// SWF plays (see [`swf_pcm_rate`]).
+    ///
+    /// # Errors
+    /// [`SwfError::UnsupportedSound`] for zero rates or channel counts, or a mono/stereo mismatch.
+    pub fn define_sound_pcm_any_rate(&mut self, samples: &[i16], channels: u8, sample_rate: u32) -> Result<CharacterId, SwfError> {
+        let target = swf_pcm_rate(sample_rate);
+        if matches!(sample_rate, 5_512 | 5_500 | 11_025 | 22_050 | 44_100) {
+            return self.define_sound_pcm(samples, channels, sample_rate);
+        }
+        let resampled = resample_pcm(samples, channels, sample_rate, target)?;
+        self.define_sound_pcm(&resampled, channels, target)
     }
 
     /// Defines a sprite (movie clip) with its own timeline; an identical sprite returns the earlier id.
