@@ -51,6 +51,8 @@ proptest = "1"
 flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
 # Ruffle's SWF reader/writer (MIT OR Apache-2.0). Used only in tests, to read our own output back.
 swf = "0.3"
+# Read-only XML tree (no unsafe, no DTD, node limit); gives byte ranges so unknown elements are kept verbatim.
+roxmltree = "0.21"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
