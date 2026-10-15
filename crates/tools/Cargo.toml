@@ -28,5 +28,7 @@ vectorcraft-pathops = { workspace = true }
 # The demo example renders tool results to a PNG.
 anim-display = { workspace = true }
 anim-render = { workspace = true }
+anim-text = { workspace = true }
+anim-timeline = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }
