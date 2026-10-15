@@ -48,12 +48,8 @@ pub struct Soundtrack {
 /// Every sound cue of a scene, in frame order.
 #[must_use]
 pub fn cues(scene: &Timeline) -> Vec<Cue> {
-    let mut cues: Vec<Cue> = scene
-        .layers
-        .iter()
-        .flat_map(|layer| layer.frames.iter())
-        .filter_map(|frame| frame.sound.as_ref().map(|sound| cue_of(frame.index, sound)))
-        .collect();
+    let mut cues: Vec<Cue> =
+        scene.layers.iter().flat_map(|layer| layer.frames.iter()).filter_map(|frame| frame.sound.as_ref().map(|sound| cue_of(frame.index, sound))).collect();
     cues.sort_by_key(|c| c.frame);
     cues
 }
@@ -84,7 +80,8 @@ pub fn soundtrack(doc: &Document, media: &MediaStore, scene: usize, span: &Range
         let Some(buffer) = buffer.as_ref().filter(|b| !b.is_empty()) else { continue };
         let start_frame = i64::from(cue.frame).saturating_sub(i64::from(span.start));
         // The sound stops at the next Stop cue for it, or at the end of the span.
-        let stop_frame = all.iter().find(|c| c.sync == SoundSync::Stop && c.name == cue.name && c.frame > cue.frame).map_or(span.end, |c| c.frame.min(span.end));
+        let stop_frame =
+            all.iter().find(|c| c.sync == SoundSync::Stop && c.name == cue.name && c.frame > cue.frame).map_or(span.end, |c| c.frame.min(span.end));
         let limit_frames = frames_between(doc, start_frame, i64::from(stop_frame).saturating_sub(i64::from(span.start)), buffer.sample_rate);
         let mut sound = repeat(buffer, cue.looping, limit_frames);
         sound.samples.truncate(limit_frames.saturating_mul(usize::from(sound.channels)));

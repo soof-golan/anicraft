@@ -1,0 +1,60 @@
+<DOMDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" width="120" height="80" frameRate="12" backgroundColor="#FFFFFF" currentTimeline="1" xflVersion="2.9" creatorInfo="hand-written test fixture">
+     <symbols>
+          <Include href="Box.xml" loadImmediate="false" itemID="f0000002-00000001"/>
+     </symbols>
+     <timelines>
+          <DOMTimeline name="Scene 1">
+               <layers>
+                    <DOMLayer name="Mover" color="#4F80FF" autoNamed="false">
+                         <frames>
+                              <DOMFrame index="0" duration="6" tweenType="motion" keyMode="22017">
+                                   <elements>
+                                        <DOMSymbolInstance libraryItemName="Box" symbolType="graphic" loop="loop">
+                                             <matrix>
+                                                  <Matrix tx="10" ty="30"/>
+                                             </matrix>
+                                             <transformationPoint>
+                                                  <Point/>
+                                             </transformationPoint>
+                                        </DOMSymbolInstance>
+                                   </elements>
+                              </DOMFrame>
+                              <DOMFrame index="6" duration="6" keyMode="9728">
+                                   <elements>
+                                        <DOMSymbolInstance libraryItemName="Box" symbolType="graphic" loop="loop">
+                                             <matrix>
+                                                  <Matrix tx="90" ty="30"/>
+                                             </matrix>
+                                             <transformationPoint>
+                                                  <Point/>
+                                             </transformationPoint>
+                                        </DOMSymbolInstance>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+                    <DOMLayer name="Label" color="#FF4F4F" autoNamed="false">
+                         <frames>
+                              <DOMFrame index="0" duration="12" keyMode="9728">
+                                   <elements>
+                                        <DOMStaticText width="100" height="24" autoExpand="true" isSelectable="false">
+                                             <matrix>
+                                                  <Matrix tx="10" ty="5"/>
+                                             </matrix>
+                                             <textRuns>
+                                                  <DOMTextRun>
+                                                       <characters>שלום hello</characters>
+                                                       <textAttrs>
+                                                            <DOMTextAttrs size="16" face="ArialMT" fillColor="#0000FF" alignment="left"/>
+                                                       </textAttrs>
+                                                  </DOMTextRun>
+                                             </textRuns>
+                                        </DOMStaticText>
+                                   </elements>
+                              </DOMFrame>
+                         </frames>
+                    </DOMLayer>
+               </layers>
+          </DOMTimeline>
+     </timelines>
+</DOMDocument>

@@ -7,7 +7,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-use anim_core::{FrameRate, Size};
+use anim_core::{Affine, FrameRate, Size, num};
 use anim_display::Image;
 use anim_export::{AnimatedSvgOptions, ExportBackground, GifOptions, PngSequenceOptions, Progress, RasterOptions, SheetOptions, SvgOptions, VecFrameSource};
 use anim_render::{Background, RenderOptions, Renderer};
@@ -182,6 +182,23 @@ pub fn render_frame(ev: &mut Evaluator<'_>, scene: usize, frame: u32, spec: Rend
     Ok(anim_render::render(&list, ev.images(), &options)?)
 }
 
+/// Renders one frame (0-based) of a library symbol, cropped to the symbol's own bounds plus a margin.
+///
+/// # Errors
+/// [`CliError::Usage`] for an unknown symbol or a bad scale, [`CliError::Render`] when rasterising fails.
+pub fn render_symbol(ev: &mut Evaluator<'_>, name: &str, frame: u32, spec: RenderSpec) -> Result<Image> {
+    const MARGIN: f64 = 8.0;
+    checked_scale(spec.scale)?;
+    let bounds =
+        ev.symbol_bounds(name, frame).ok_or_else(|| CliError::usage(format!("no symbol named {name:?}, or it is empty at frame {}", one_based(frame))))?;
+    let list = ev.frame_of_symbol(name, frame);
+    let pixels = |extent: f64| u32::try_from(num::ceil_f64_to_i32((2.0_f64.mul_add(MARGIN, extent) * spec.scale).max(1.0))).unwrap_or(1).max(1);
+    let view = Affine::scale(spec.scale) * Affine::translate((MARGIN - bounds.x0, MARGIN - bounds.y0));
+    let background = if spec.transparent { Background::Transparent } else { Background::Solid(anim_core::Rgba8::WHITE) };
+    let options = RenderOptions::new(pixels(bounds.width()), pixels(bounds.height())).with_view(view).with_background(background);
+    Ok(anim_render::render(&list, ev.images(), &options)?)
+}
+
 /// Renders one frame (0-based) of a scene to PNG bytes.
 ///
 /// # Errors
@@ -281,7 +298,14 @@ fn raster(spec: RenderSpec) -> RasterOptions {
     RasterOptions::new().with_scale(spec.scale).with_background(background)
 }
 
-fn from_source(job: &ExportJob<'_>, source: &VecFrameSource, out_fps: f64, spec: RenderSpec, mut notes: Vec<String>, progress: ProgressCb<'_>) -> Result<ExportOutcome> {
+fn from_source(
+    job: &ExportJob<'_>,
+    source: &VecFrameSource,
+    out_fps: f64,
+    spec: RenderSpec,
+    mut notes: Vec<String>,
+    progress: ProgressCb<'_>,
+) -> Result<ExportOutcome> {
     use anim_export::FrameSource as _;
     if let Some(parent) = job.out.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|e| CliError::io(parent, e))?;

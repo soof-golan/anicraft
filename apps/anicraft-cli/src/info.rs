@@ -142,11 +142,17 @@ pub fn timeline_info(timeline: &Timeline) -> TimelineInfo {
 /// Describes the library of a document.
 #[must_use]
 pub fn library_info(doc: &Document) -> LibraryInfo {
-    let mut info = LibraryInfo { symbols: Vec::new(), symbols_not_listed: 0, bitmaps: Vec::new(), sounds: Vec::new(), fonts: Vec::new(), videos: Vec::new(), folders: 0 };
+    let mut info =
+        LibraryInfo { symbols: Vec::new(), symbols_not_listed: 0, bitmaps: Vec::new(), sounds: Vec::new(), fonts: Vec::new(), videos: Vec::new(), folders: 0 };
     for item in &doc.library.items {
         match item {
             LibraryItem::Symbol(s) if info.symbols.len() < MAX_LISTED_SYMBOLS => {
-                info.symbols.push(SymbolInfo { name: s.name.clone(), kind: format!("{:?}", s.kind), frames: s.timeline.frame_count(), layers: s.timeline.layers.len() });
+                info.symbols.push(SymbolInfo {
+                    name: s.name.clone(),
+                    kind: format!("{:?}", s.kind),
+                    frames: s.timeline.frame_count(),
+                    layers: s.timeline.layers.len(),
+                });
             }
             LibraryItem::Symbol(_) => info.symbols_not_listed = info.symbols_not_listed.saturating_add(1),
             LibraryItem::Bitmap(b) => info.bitmaps.push(b.name.clone()),
@@ -182,7 +188,12 @@ pub fn to_text(report: &InfoReport, layers: bool) -> String {
     let sum = &report.summary;
     writeln!(out, "{}", report.file).ok();
     writeln!(out, "stage {}x{} px at {} fps, background {}", s.width, s.height, s.fps, s.background).ok();
-    writeln!(out, "{} scene(s), {} frame(s) in total, {} layer(s), {} keyframe(s), {} element(s)", sum.scenes, sum.total_frames, sum.layers, sum.keyframes, sum.elements).ok();
+    writeln!(
+        out,
+        "{} scene(s), {} frame(s) in total, {} layer(s), {} keyframe(s), {} element(s)",
+        sum.scenes, sum.total_frames, sum.layers, sum.keyframes, sum.elements
+    )
+    .ok();
     for (i, scene) in report.scenes.iter().enumerate() {
         writeln!(out, "  scene {} {:?}: {} frame(s), {} layer(s)", i.saturating_add(1), scene.name, scene.frames, scene.layers.len()).ok();
         if layers {
@@ -194,7 +205,16 @@ pub fn to_text(report: &InfoReport, layers: bool) -> String {
     }
     let lib = &report.library;
     let listed = lib.symbols.len().saturating_add(lib.symbols_not_listed);
-    writeln!(out, "library: {listed} symbol(s), {} bitmap(s), {} sound(s), {} font(s), {} video(s), {} folder(s)", lib.bitmaps.len(), lib.sounds.len(), lib.fonts.len(), lib.videos.len(), lib.folders).ok();
+    writeln!(
+        out,
+        "library: {listed} symbol(s), {} bitmap(s), {} sound(s), {} font(s), {} video(s), {} folder(s)",
+        lib.bitmaps.len(),
+        lib.sounds.len(),
+        lib.fonts.len(),
+        lib.videos.len(),
+        lib.folders
+    )
+    .ok();
     for name in lib.bitmaps.iter().chain(&lib.sounds).chain(&lib.videos) {
         writeln!(out, "  media {name:?}").ok();
     }

@@ -59,6 +59,9 @@ pub struct RenderArgs {
     /// Scene name (default: the scene the document had open).
     #[arg(long)]
     pub scene: Option<String>,
+    /// Render this library symbol (cropped to its bounds) instead of a scene; `--frame` then counts in the symbol.
+    #[arg(long, conflicts_with = "scene")]
+    pub symbol: Option<String>,
     /// Output pixels per stage pixel.
     #[arg(long, default_value_t = 1.0)]
     pub scale: f64,
@@ -154,14 +157,22 @@ fn info_command(args: &InfoArgs) -> Result<()> {
 
 fn render_command(args: &RenderArgs) -> Result<()> {
     let project = open(&args.file)?;
-    let scene = project.scene_index(args.scene.as_deref())?;
     let mut ev = project.evaluator(false);
-    let total = ev.scene_frames(scene);
-    let span = resolve_span(total, Some(args.frame), Some(args.frame))?;
-    let image = export::render_frame(&mut ev, scene, span.start, RenderSpec { scale: args.scale, transparent: args.transparent })?;
+    let spec = RenderSpec { scale: args.scale, transparent: args.transparent };
+    let (image, what) = if let Some(symbol) = &args.symbol {
+        let frames = project.document().library.find_symbol(symbol).map_or(1, |s| s.timeline.frame_count());
+        let span = resolve_span(frames, Some(args.frame), Some(args.frame))?;
+        (export::render_symbol(&mut ev, symbol, span.start, spec)?, format!("symbol {symbol:?} frame {} of {frames}", args.frame))
+    } else {
+        let scene = project.scene_index(args.scene.as_deref())?;
+        let total = ev.scene_frames(scene);
+        let span = resolve_span(total, Some(args.frame), Some(args.frame))?;
+        let name = project.document().scenes.get(scene).map_or("", |s| s.name.as_str());
+        (export::render_frame(&mut ev, scene, span.start, spec)?, format!("scene {name:?} frame {} of {total}", args.frame))
+    };
     let png = anim_export::encode_png(image.width, image.height, &anim_render::straight_rgba(&image))?;
     write_file(&args.output, &png)?;
-    println!("{}: scene {:?} frame {} of {total}, {}x{} px", args.output.display(), project.document().scenes.get(scene).map_or("", |s| s.name.as_str()), args.frame, image.width, image.height);
+    println!("{}: {what}, {}x{} px", args.output.display(), image.width, image.height);
     Ok(())
 }
 
@@ -206,7 +217,14 @@ fn export_command(args: &ExportArgs) -> Result<()> {
 
 fn convert_command(args: &ConvertArgs) -> Result<()> {
     let report = convert::convert(&args.input, &args.output).wrap_err_with(|| format!("could not convert {}", args.input.display()))?;
-    println!("{}: {} entries, {} symbol(s), {} media file(s), {} byte(s)", args.output.display(), report.entries, report.symbols, report.media_entries, report.bytes);
+    println!(
+        "{}: {} entries, {} symbol(s), {} media file(s), {} byte(s)",
+        args.output.display(),
+        report.entries,
+        report.symbols,
+        report.media_entries,
+        report.bytes
+    );
     for w in &report.warnings {
         eprintln!("warning: {w}");
     }

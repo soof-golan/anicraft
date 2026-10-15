@@ -10,7 +10,7 @@ use anicraft_xfl::{Loaded, ReadOptions};
 use anim_core::num;
 use anim_display::Image;
 use anim_scene::{Document, MediaStore};
-use anim_timeline::{Evaluator, EvalOptions, ImageProvider};
+use anim_timeline::{EvalOptions, Evaluator, ImageProvider};
 
 use crate::error::{CliError, Result};
 
@@ -78,10 +78,7 @@ impl Project {
 /// An evaluator over a document and its media, decoding Animate bitmaps.
 #[must_use]
 pub fn evaluator_for<'a>(doc: &'a Document, media: &'a MediaStore, playing: bool) -> Evaluator<'a> {
-    Evaluator::new(doc)
-        .with_media(media)
-        .with_provider(XflBitmaps)
-        .with_options(EvalOptions { advance_movie_clips: playing, ..EvalOptions::default() })
+    Evaluator::new(doc).with_media(media).with_provider(XflBitmaps).with_options(EvalOptions { advance_movie_clips: playing, ..EvalOptions::default() })
 }
 
 /// Picks a scene by name (`None` = the document's current scene, clamped to the available ones).

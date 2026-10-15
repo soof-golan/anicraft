@@ -37,5 +37,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+base64 = "0.22"
 png = { workspace = true }
 tempfile = "3"

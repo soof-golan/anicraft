@@ -64,6 +64,7 @@ dependencies = [
  "anim-session",
  "anim-timeline",
  "anim-video",
+ "base64 0.22.1",
  "clap",
  "color-eyre",
  "png",

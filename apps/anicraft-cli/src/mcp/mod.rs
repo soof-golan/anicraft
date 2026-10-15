@@ -18,7 +18,10 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 
 use anicraft_xfl::WriteOptions;
-use anim_mcp::{AppHooks, Confinement, ControlError, ErrorKind, ExportFormat, ExportRequest, HookOutcome, HookResult, HostInfo, QuerySpec, RenderRequest, Reply, SessionHost, Ticket, props, run_job};
+use anim_mcp::{
+    AppHooks, Confinement, ControlError, ErrorKind, ExportFormat, ExportRequest, HookOutcome, HookResult, HostInfo, QuerySpec, RenderRequest, Reply,
+    SessionHost, Ticket, props, run_job,
+};
 use anim_scene::{Document, TimelineId};
 use anim_session::{CommandRegistry, Session};
 use serde::{Deserialize, Serialize};
@@ -93,7 +96,14 @@ fn props_view(doc: &Document) -> PropsView {
 
 fn apply_props(doc: &mut Document, view: PropsView) -> Result<(), ControlError> {
     let s = &view.stage;
-    if !(s.width.is_finite() && s.width > 0.0 && s.height.is_finite() && s.height > 0.0 && s.frame_rate.is_finite() && s.frame_rate > 0.0 && s.frame_rate <= 1000.0) {
+    if !(s.width.is_finite()
+        && s.width > 0.0
+        && s.height.is_finite()
+        && s.height > 0.0
+        && s.frame_rate.is_finite()
+        && s.frame_rate > 0.0
+        && s.frame_rate <= 1000.0)
+    {
         return Err(ControlError::invalid("stage width, height and frame_rate must be positive numbers"));
     }
     if view.scenes.len() != doc.scenes.len() {
@@ -121,6 +131,8 @@ fn apply_props(doc: &mut Document, view: PropsView) -> Result<(), ControlError> 
 #[serde(default, deny_unknown_fields)]
 struct RenderOpts {
     scene: Option<usize>,
+    /// Render this library symbol instead of a scene.
+    symbol: Option<String>,
     transparent: bool,
 }
 
@@ -158,12 +170,25 @@ fn scene_of(doc: &Document, scene: Option<usize>) -> Result<usize, ControlError>
     }
 }
 
+/// What an element is, in a few words an agent can act on (the index is its position in the keyframe).
+fn element_json(index: usize, element: &anim_scene::Element) -> Value {
+    use anim_scene::Element;
+    match element {
+        Element::Shape(_) => json!({ "index": index, "kind": "shape" }),
+        Element::SymbolInstance(i) => json!({ "index": index, "kind": "symbol", "item": i.library_item_name, "name": i.name }),
+        Element::Bitmap(b) => json!({ "index": index, "kind": "bitmap", "item": b.library_item_name }),
+        Element::Text(t) => json!({ "index": index, "kind": "text", "name": t.instance_name }),
+        Element::Group(g) => json!({ "index": index, "kind": "group", "members": g.members.len() }),
+        Element::Unknown(_) => json!({ "index": index, "kind": "unknown" }),
+    }
+}
+
 fn keyframe_json(frame: &anim_scene::Frame) -> Value {
     json!({
         "frame": frame.index.saturating_add(1),
         "duration": frame.duration,
         "tween": format!("{:?}", frame.tween_type),
-        "elements": frame.elements.len(),
+        "elements": frame.elements.iter().enumerate().map(|(i, e)| element_json(i, e)).collect::<Vec<_>>(),
         "label": frame.label,
         "sound": frame.sound.as_ref().map(|s| s.name.as_str()),
     })
@@ -205,7 +230,12 @@ impl AppHooks<AniDoc> for AniHooks {
             }
             "validate" => json!({ "problems": doc.validate().iter().map(ToString::to_string).collect::<Vec<_>>() }),
             "keyframes" => {
-                let frame = params.get("frame").and_then(Value::as_u64).and_then(|f| u32::try_from(f).ok()).filter(|f| *f >= 1).ok_or_else(|| ControlError::invalid("`frame` must be an integer from 1"))?;
+                let frame = params
+                    .get("frame")
+                    .and_then(Value::as_u64)
+                    .and_then(|f| u32::try_from(f).ok())
+                    .filter(|f| *f >= 1)
+                    .ok_or_else(|| ControlError::invalid("`frame` must be an integer from 1"))?;
                 let scene = scene_of(doc, params.get("scene").and_then(Value::as_u64).and_then(|s| usize::try_from(s).ok()))?;
                 let timeline = doc.scenes.get(scene).ok_or_else(|| ControlError::invalid("no such scene"))?;
                 let rows: Vec<Value> = timeline
@@ -239,7 +269,14 @@ impl AppHooks<AniDoc> for AniHooks {
             }
             "sound_cues" => {
                 let scene = scene_of(doc, params.get("scene").and_then(Value::as_u64).and_then(|s| usize::try_from(s).ok()))?;
-                let cues: Vec<Value> = doc.scenes.get(scene).map(crate::audio::cues).unwrap_or_default().iter().map(|c| json!({ "sound": c.name, "frame": c.frame.saturating_add(1), "sync": c.sync.xfl_name(), "loop": format!("{:?}", c.looping) })).collect();
+                let cues: Vec<Value> = doc
+                    .scenes
+                    .get(scene)
+                    .map(crate::audio::cues)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|c| json!({ "sound": c.name, "frame": c.frame.saturating_add(1), "sync": c.sync.xfl_name(), "loop": format!("{:?}", c.looping) }))
+                    .collect();
                 json!({ "scene": scene, "cues": cues })
             }
             other => return Err(ControlError::new(ErrorKind::NotFound, format!("no query named {other:?}"))),
@@ -304,14 +341,20 @@ impl AppHooks<AniDoc> for AniHooks {
 
     fn render(&mut self, doc: &AniDoc, request: &RenderRequest, _ticket: &Ticket) -> HookResult {
         let opts: RenderOpts = options(&request.options)?;
-        let scene = scene_of(&doc.document, opts.scene)?;
         let mut ev = evaluator_for(&doc.document, &doc.media, false);
-        let total = ev.scene_frames(scene);
         let frame = request.frame.map_or(Ok(1), u32::try_from).map_err(|_| ControlError::invalid("frame numbers start at 1"))?;
-        let span = resolve_span(total, Some(frame), Some(frame)).map_err(|e| cli_error(&e))?;
         let spec = RenderSpec { scale: f64::from(request.scale), transparent: opts.transparent };
-        let image = export::render_frame(&mut ev, scene, span.start, spec).map_err(|e| cli_error(&e))?;
-        let reply = Reply::value(json!({ "scene": scene, "frame": frame, "of": total, "width": image.width, "height": image.height }));
+        let (image, what) = if let Some(symbol) = &opts.symbol {
+            let frames = doc.document.library.find_symbol(symbol).map_or(1, |s| s.timeline.frame_count());
+            let span = resolve_span(frames, Some(frame), Some(frame)).map_err(|e| cli_error(&e))?;
+            (export::render_symbol(&mut ev, symbol, span.start, spec).map_err(|e| cli_error(&e))?, json!({ "symbol": symbol, "frame": frame, "of": frames }))
+        } else {
+            let scene = scene_of(&doc.document, opts.scene)?;
+            let total = ev.scene_frames(scene);
+            let span = resolve_span(total, Some(frame), Some(frame)).map_err(|e| cli_error(&e))?;
+            (export::render_frame(&mut ev, scene, span.start, spec).map_err(|e| cli_error(&e))?, json!({ "scene": scene, "frame": frame, "of": total }))
+        };
+        let reply = Reply::value(json!({ "rendered": what, "width": image.width, "height": image.height }));
         Ok(HookOutcome::Ready(reply.with_png_rgba(image.width, image.height, &anim_render::straight_rgba(&image))?))
     }
 

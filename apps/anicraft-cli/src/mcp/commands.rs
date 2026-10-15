@@ -107,7 +107,11 @@ const LAYER_FRAME_COUNT: &str = r#"{"type":"object","additionalProperties":false
 fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandError> {
     let last = doc.document.scenes.len().saturating_sub(1);
     let index = scene.unwrap_or_else(|| doc.document.current_timeline.min(last));
-    if index < doc.document.scenes.len() { Ok(TimelineId::Scene(index)) } else { Err(CommandError::failed(format!("no scene {index}; the document has {}", doc.document.scenes.len()))) }
+    if index < doc.document.scenes.len() {
+        Ok(TimelineId::Scene(index))
+    } else {
+        Err(CommandError::failed(format!("no scene {index}; the document has {}", doc.document.scenes.len())))
+    }
 }
 
 /// 1-based frame to 0-based.
@@ -119,8 +123,18 @@ fn parse_color(text: &str) -> Result<Rgba8, CommandError> {
     let digits = text.strip_prefix('#').unwrap_or(text);
     let byte = |i: usize| digits.get(i..i.saturating_add(2)).and_then(|s| u8::from_str_radix(s, 16).ok());
     match digits.len() {
-        6 => Ok(Rgba8 { r: byte(0).ok_or_else(|| bad_color(text))?, g: byte(2).ok_or_else(|| bad_color(text))?, b: byte(4).ok_or_else(|| bad_color(text))?, a: 255 }),
-        8 => Ok(Rgba8 { r: byte(0).ok_or_else(|| bad_color(text))?, g: byte(2).ok_or_else(|| bad_color(text))?, b: byte(4).ok_or_else(|| bad_color(text))?, a: byte(6).ok_or_else(|| bad_color(text))? }),
+        6 => Ok(Rgba8 {
+            r: byte(0).ok_or_else(|| bad_color(text))?,
+            g: byte(2).ok_or_else(|| bad_color(text))?,
+            b: byte(4).ok_or_else(|| bad_color(text))?,
+            a: 255,
+        }),
+        8 => Ok(Rgba8 {
+            r: byte(0).ok_or_else(|| bad_color(text))?,
+            g: byte(2).ok_or_else(|| bad_color(text))?,
+            b: byte(4).ok_or_else(|| bad_color(text))?,
+            a: byte(6).ok_or_else(|| bad_color(text))?,
+        }),
         _ => Err(bad_color(text)),
     }
 }
@@ -146,7 +160,9 @@ struct StageParams {
 
 fn set_stage(doc: &mut AniDoc, params: &Value) -> Out {
     let p: StageParams = parse_params(params)?;
-    let positive = |v: f64, what: &str| if v.is_finite() && v > 0.0 && v <= 16384.0 { Ok(v) } else { Err(CommandError::invalid_params(format!("{what} {v} is out of range"))) };
+    let positive = |v: f64, what: &str| {
+        if v.is_finite() && v > 0.0 && v <= 16384.0 { Ok(v) } else { Err(CommandError::invalid_params(format!("{what} {v} is out of range"))) }
+    };
     if let Some(w) = p.width {
         doc.document.width = positive(w, "width")?;
     }
