@@ -14,6 +14,7 @@ version = "0.1.0"
 dependencies = [
  "anim-core",
  "anim-display",
+ "anim-shape",
  "flate2",
  "png",
  "proptest",
@@ -26,7 +27,7 @@ dependencies = [
 [[package]]
 name = "anim-core"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#d3eb752e729f7c22c6774b9883be5383354b9b12"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#81de5d80e910cb7c9a6980ebaeb95950ee738cb7"
 dependencies = [
  "filmcraft-time",
  "kurbo",
@@ -37,10 +38,21 @@ dependencies = [
 [[package]]
 name = "anim-display"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#d3eb752e729f7c22c6774b9883be5383354b9b12"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#81de5d80e910cb7c9a6980ebaeb95950ee738cb7"
 dependencies = [
  "anim-core",
  "kurbo",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "anim-shape"
+version = "0.1.0"
+source = "git+https://github.com/soof-golan/anicraft-libs?branch=main#81de5d80e910cb7c9a6980ebaeb95950ee738cb7"
+dependencies = [
+ "anim-core",
+ "anim-display",
  "serde",
  "thiserror",
 ]

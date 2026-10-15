@@ -8,11 +8,13 @@
 //! - [`bitmap`], [`filter`], [`place`], [`sound`]: the other tags: bitmaps, filter lists, `PlaceObject3`, sounds.
 //! - [`movie`]: [`Movie`], which owns the dictionary and the timeline and writes the file (`FWS` or zlib `CWS`).
 //! - [`export`]: frame by frame export of `anim_display::DisplayList`s.
+//! - [`edge`]: native shapes from Animate's edge shapes (`anim_shape::EdgeShape`), for symbol export.
 //!
 //! This crate only writes SWF. Tests read the output back with Ruffle's `swf` crate.
 
 pub mod bitmap;
 pub mod bits;
+pub mod edge;
 pub mod error;
 pub mod export;
 pub mod filter;

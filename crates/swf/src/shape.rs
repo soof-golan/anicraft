@@ -258,7 +258,19 @@ impl ShapeBuilder {
     /// Like [`ShapeBuilder::add_path`] for loose path elements, which need not start with a `MoveTo` (the pen then
     /// starts where the first drawing command is) and may contain non-finite coordinates (they are clamped).
     pub fn add_elements(&mut self, elements: &[PathEl], style: PathStyle) {
-        let filled = style.fill0 != 0 || style.fill1 != 0;
+        let close_fills = style.fill0 != 0 || style.fill1 != 0;
+        self.add_elements_with(elements, style, close_fills);
+    }
+
+    /// Appends the runs of an *edge shape*: the fill styles name the regions on either side of each run, so the runs
+    /// are left exactly as they are, open or closed (the regions come from how runs join up), and a run that carries
+    /// a line style keeps even a zero-length edge (a dot).
+    pub fn add_edge_elements(&mut self, elements: &[PathEl], style: PathStyle) {
+        self.add_elements_with(elements, style, false);
+    }
+
+    fn add_elements_with(&mut self, elements: &[PathEl], style: PathStyle, close_fills: bool) {
+        let filled = close_fills;
         // The start of the current subpath, in twips and in (sanitised) pixels, and the pixel position of the pen.
         let mut start: Option<(i32, i32)> = None;
         let mut start_px = Point::ORIGIN;
@@ -290,7 +302,7 @@ impl ShapeBuilder {
                 }
                 PathEl::LineTo(p) => {
                     let p = clean(p);
-                    edges = edges.saturating_add(self.line_to(twip_point(p), !filled && edges == 0));
+                    edges = edges.saturating_add(self.line_to(twip_point(p), style.line != 0 && edges == 0));
                     pen = p;
                 }
                 PathEl::QuadTo(c, p) => {

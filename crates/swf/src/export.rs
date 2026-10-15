@@ -67,6 +67,8 @@ pub enum ExportNote {
     DashesDropped,
     /// A mesh was emulated with one masked, transformed copy of its content per triangle.
     MeshEmulated,
+    /// A bitmap fill named a bitmap that was not available and was painted grey.
+    MissingBitmap,
 }
 
 /// What an export produced.
@@ -497,7 +499,7 @@ impl DisplayListExporter {
 }
 
 /// The `LINESTYLE2` for a display-list stroke.
-fn line_style(style: &StrokeStyle, paint: LinePaint) -> LineStyle {
+pub(crate) fn line_style(style: &StrokeStyle, paint: LinePaint) -> LineStyle {
     let width = u16::try_from(num::round_f64_to_i32(style.width.max(0.0) * crate::types::TWIPS_PER_PX).clamp(0, i32::from(u16::MAX))).unwrap_or(u16::MAX);
     // (thickness stays fixed horizontally, thickness stays fixed vertically)
     let (fixed_x, fixed_y) = match style.scale {
