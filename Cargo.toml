@@ -32,6 +32,9 @@ anim-session = { git = "https://github.com/soof-golan/anicraft-libs", branch = "
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
 craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "8f5a2831614e632f91ad367f7af2a6e5b61b9529" }
 craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "8f5a2831614e632f91ad367f7af2a6e5b61b9529" }
+# VectorCraft's path booleans, planar faces (Live Paint) and curve fitting, used by the drawing tools.
+vectorcraft-geom = { git = "https://github.com/storytold/vectorcraft", rev = "ed96a1219620b5b6ab13e25369f7b55cddd664f6" }
+vectorcraft-pathops = { git = "https://github.com/storytold/vectorcraft", rev = "ed96a1219620b5b6ab13e25369f7b55cddd664f6" }
 
 # External crates (versions match anicraft-libs where they overlap).
 kurbo = { version = "0.13", features = ["serde"] }
