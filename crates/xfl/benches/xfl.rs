@@ -66,11 +66,7 @@ fn instance(name: &str, k: usize) -> String {
 fn layer(name: &str, frames: usize, body: &dyn Fn(usize) -> String) -> String {
     let mut out = format!("<DOMLayer name=\"{name}\" color=\"#4F80FF\"><frames>");
     for f in 0..frames {
-        let _ = write!(
-            out,
-            "<DOMFrame index=\"{f}\" duration=\"1\" keyMode=\"9728\"><elements>{}</elements></DOMFrame>",
-            body(f)
-        );
+        let _ = write!(out, "<DOMFrame index=\"{f}\" duration=\"1\" keyMode=\"9728\"><elements>{}</elements></DOMFrame>", body(f));
     }
     out.push_str("</frames></DOMLayer>");
     out
@@ -102,9 +98,7 @@ fn synthetic(symbols: usize, layers: usize, frames: usize, edges: usize) -> Vec<
         ));
         let _ = write!(includes, "<Include href=\"{name}.xml\" loadImmediate=\"false\" itemID=\"f0000001-{s:08x}\"/>");
     }
-    let scene_layers: String = (0..layers)
-        .map(|l| layer(&format!("S{l}"), frames, &|f| instance(&format!("Sym{}", (l + f) % symbols), f)))
-        .collect();
+    let scene_layers: String = (0..layers).map(|l| layer(&format!("S{l}"), frames, &|f| instance(&format!("Sym{}", (l + f) % symbols), f))).collect();
     files.push((
         "DOMDocument.xml".to_owned(),
         format!(
