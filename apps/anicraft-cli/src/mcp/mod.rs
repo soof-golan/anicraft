@@ -15,6 +15,7 @@ pub mod doc;
 pub mod docfile;
 pub mod editing;
 pub mod find;
+pub mod motion;
 mod script;
 pub mod timeline_ops;
 
@@ -54,6 +55,7 @@ pub fn registry() -> CommandRegistry<AniDoc> {
     timeline_ops::register(&mut registry);
     docfile::register(&mut registry);
     find::register(&mut registry);
+    motion::register(&mut registry);
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(anicraft_tools::mcp_commands::<AniDoc>()).expect("tool command ids are unique");
     registry
@@ -291,6 +293,14 @@ impl AppHooks<AniDoc> for AniHooks {
                 "properties": { "steps": { "type": "array", "maxItems": 1000, "items": { "type": "object" } } }
             })),
             QuerySpec::new(
+                "motion_tween",
+                "The motion tween that starts at the keyframe covering `frame` of `layer`: its span, every property track with its keys (`offset` frames into the span, stored `value`, `ease`, custom `curve`), the motion path points, and the preset names. Also lists the shape hints and custom eases of that keyframe.",
+            )
+            .with_schema(json!({
+                "type": "object", "required": ["layer", "frame"], "additionalProperties": false,
+                "properties": { "scene": scene, "layer": { "type": "integer", "minimum": 0 }, "frame": { "type": "integer", "minimum": 1 } }
+            })),
+            QuerySpec::new(
                 "element",
                 "All properties of one object, addressed by path: the timeline (`scene` or `symbol`), `layer`, 1-based `frame`, `index` in the keyframe and, for members of groups, `members` (indices going down). Returns the object as the model stores it.",
             )
@@ -385,6 +395,7 @@ impl AppHooks<AniDoc> for AniHooks {
             }
             "frame_script" => script::frame_script(doc, params)?,
             "test_movie" => script::test_movie(doc, params)?,
+            "motion_tween" => motion::query(doc, params)?,
             "element" => {
                 let (_, timeline) = timeline_of(doc, params)?;
                 let layer = uint(params, "layer")?;

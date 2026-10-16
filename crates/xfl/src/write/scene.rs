@@ -140,7 +140,16 @@ fn write_frame(out: &mut XmlOut, frame: &Frame) {
     if let Some(xml) = &frame.morph_shape_xml {
         out.raw("MorphShape", xml);
     } else if !frame.shape_hints.is_empty() {
-        out.warnings.push(format!("frame {}: shape hints are not written without a MorphShape element", frame.index));
+        // Edits drop the cached morph data; the hints are written on their own and the data is rebuilt on open.
+        let mut xml = String::from("<MorphShape><morphSegments/><morphHintsList>");
+        for h in &frame.shape_hints {
+            let _ = std::fmt::Write::write_fmt(
+                &mut xml,
+                format_args!("<MorphHint hintId=\"{}\" startX=\"{}\" startY=\"{}\" endX=\"{}\" endY=\"{}\"/>", h.id, h.start.x, h.start.y, h.end.x, h.end.y),
+            );
+        }
+        xml.push_str("</morphHintsList></MorphShape>");
+        out.raw("MorphShape", &xml);
     }
     if !frame.eases.is_empty() {
         write_tweens(out, frame);

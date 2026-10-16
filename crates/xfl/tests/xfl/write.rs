@@ -313,6 +313,35 @@ fn component_instances_round_trip_with_their_parameters() {
 }
 
 #[test]
+fn motion_tweens_hints_and_custom_eases_round_trip() {
+    use anim_scene::motion::{self, MotionProp};
+    use anim_scene::timeline::{EaseTarget, TweenType};
+    use anim_scene::{Frame as F, TimelineId};
+    let mut doc = Document::new(100.0, 100.0, 24.0);
+    let instance = SymbolInstance::new("Ball", Affine::translate((10.0, 20.0)));
+    doc.scenes.first_mut().unwrap().layers.first_mut().unwrap().frames = vec![F::new(0, 11, vec![Element::SymbolInstance(Box::new(instance))])];
+    let id = TimelineId::Scene(0);
+    motion::create_motion_tween(&mut doc, &id, 0, 0).unwrap();
+    motion::set_motion_key(&mut doc, &id, 0, 0, MotionProp::X, 10, 90.0).unwrap();
+    motion::set_motion_key_ease(&mut doc, &id, 0, 0, MotionProp::X, 10, motion::KeyEase { acceleration: -30, curve: None }).unwrap();
+    let mut shape_start = F::new(11, 5, vec![]);
+    shape_start.tween_type = TweenType::Shape;
+    let layer = &mut doc.scenes[0].layers[0];
+    layer.frames.push(shape_start);
+    layer.frames.push(F::new(16, 1, vec![]));
+    anim_scene::hints::add_shape_hint(&mut doc, &id, 0, 11).unwrap();
+    anim_scene::hints::set_custom_ease(&mut doc, &id, 0, 11, EaseTarget::All, Some(vec![[0.0, 0.0], [0.2, 0.0], [0.8, 1.0], [1.0, 1.0]])).unwrap();
+    let (bytes, _) = write_fla_bytes(&doc, &MediaStore::new(), &[], &WriteOptions::default()).unwrap();
+    let back = read_bytes(bytes, &ReadOptions::default()).unwrap();
+    let frames = &back.document.scenes[0].layers[0].frames;
+    assert_eq!(frames[0].motion_object_xml, doc.scenes[0].layers[0].frames[0].motion_object_xml);
+    let object = motion::motion_object(&frames[0]).unwrap();
+    assert_eq!(object.track(MotionProp::X).unwrap().keys[1].ease, -30);
+    assert_eq!(frames[1].shape_hints, doc.scenes[0].layers[0].frames[1].shape_hints);
+    assert_eq!(frames[1].eases, doc.scenes[0].layers[0].frames[1].eases);
+}
+
+#[test]
 fn unusable_kept_xml_is_left_out_with_a_warning() {
     let mut doc = Document::default();
     doc.extra.children.push("<ok a=\"1\"/>".to_owned());

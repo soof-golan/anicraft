@@ -1,8 +1,9 @@
 //! `<DOMTimeline>`, `<DOMLayer>` and `<DOMFrame>`.
 
+use anim_core::Point;
 use anim_scene::{
-    EaseCurve, EaseTarget, EnvelopePoint, Extra, Frame, FrameSound, KEY_MODE_NORMAL, LAYER_COLORS, LabelType, Layer, LayerKind, SoundLoop, SoundSync, Timeline,
-    TweenEase, TweenRotate, TweenType,
+    EaseCurve, EaseTarget, EnvelopePoint, Extra, Frame, FrameSound, KEY_MODE_NORMAL, LAYER_COLORS, LabelType, Layer, LayerKind, ShapeHint, SoundLoop,
+    SoundSync, Timeline, TweenEase, TweenRotate, TweenType,
 };
 use roxmltree::Node;
 
@@ -14,6 +15,23 @@ use crate::xml::{Attrs, Ctx, child, element_children, read_point_element, text_o
 pub const MAX_LAYERS: usize = 10_000;
 /// Most keyframes read from one layer.
 pub const MAX_FRAMES: usize = 100_000;
+
+/// Most shape hints read from one `<MorphShape>` (the letters a to z).
+const MAX_HINTS: usize = 26;
+
+/// The shape hints of a `<MorphShape>`: `<morphHintsList><MorphHint hintId startX startY endX endY/>`, in pixels.
+fn read_morph_hints(xml: &str) -> Vec<ShapeHint> {
+    let Ok(doc) = roxmltree::Document::parse(xml) else { return Vec::new() };
+    let num = |n: Node<'_, '_>, name: &str| n.attribute(name).and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite());
+    doc.descendants()
+        .filter(|n| n.has_tag_name("MorphHint"))
+        .filter_map(|n| {
+            let id = n.attribute("hintId")?.trim().parse::<u32>().ok()?;
+            Some(ShapeHint { id, start: Point::new(num(n, "startX")?, num(n, "startY")?), end: Point::new(num(n, "endX")?, num(n, "endY")?) })
+        })
+        .take(MAX_HINTS)
+        .collect()
+}
 
 /// Reads a `<DOMTimeline>`.
 pub fn read_timeline(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> Timeline {
@@ -141,6 +159,9 @@ fn read_frame(ctx: &mut Ctx<'_>, node: Node<'_, '_>, default_index: u32) -> Fram
             "Actionscript" => read_actionscript(ctx, c, &mut frame),
             _ => ctx.keep_child(&mut frame.extra, "DOMFrame", c),
         }
+    }
+    if let Some(xml) = &frame.morph_shape_xml {
+        frame.shape_hints = read_morph_hints(xml);
     }
     if let Some(name) = sound_name {
         let loop_mode = match (sound_loop_mode.as_deref(), repeat_count) {
