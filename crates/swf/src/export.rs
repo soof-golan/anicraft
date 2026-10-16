@@ -343,7 +343,14 @@ impl NodeConverter {
 
     /// One shape holding a fill, a stroke, or a fill with the stroke drawn over it (SWF draws strokes over fills
     /// within a shape, which is exactly the order of a `Fill` node followed by a `Stroke` node).
-    fn paint_slot(&mut self, movie: &mut Movie, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore, reveal: bool) -> Result<Option<Slot>, SwfError> {
+    fn paint_slot(
+        &mut self,
+        movie: &mut Movie,
+        fill: Option<&Fill>,
+        stroke: Option<&Stroke>,
+        images: &ImageStore,
+        reveal: bool,
+    ) -> Result<Option<Slot>, SwfError> {
         let fill = fill.filter(|f| is_visible(&f.path, &f.paint, reveal));
         let stroke = stroke.filter(|s| is_visible(&s.path, &s.paint, reveal));
         let transform = match (fill, stroke) {

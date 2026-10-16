@@ -185,9 +185,7 @@ impl Probes {
 fn differing_share(a: &Rendered, b: &Rendered, tolerance: i32) -> f64 {
     assert_eq!((a.width, a.height), (b.width, b.height));
     let total = a.width * a.height;
-    let bad = (0..total)
-        .filter(|i| (0..3).any(|c| (i32::from(a.pixels[i * 4 + c]) - i32::from(b.pixels[i * 4 + c])).abs() > tolerance))
-        .count();
+    let bad = (0..total).filter(|i| (0..3).any(|c| (i32::from(a.pixels[i * 4 + c]) - i32::from(b.pixels[i * 4 + c])).abs() > tolerance)).count();
     bad as f64 / total as f64
 }
 
@@ -421,10 +419,7 @@ fn stroke_scale_list() -> DisplayList {
         cross.line_to((90.0, 12.5));
         cross.move_to((50.0, 3.0));
         cross.line_to((50.0, 22.0));
-        nodes.push(Node::Group(Group {
-            transform: Affine::translate((cx, 100.0)) * Affine::scale_non_uniform(1.0, 4.0),
-            ..group(vec![stroke(cross, scale)])
-        }));
+        nodes.push(Node::Group(Group { transform: Affine::translate((cx, 100.0)) * Affine::scale_non_uniform(1.0, 4.0), ..group(vec![stroke(cross, scale)]) }));
     }
     list(400.0, 200.0, nodes)
 }
@@ -462,7 +457,12 @@ fn stroke_scale_modes_under_non_uniform_scale() {
             // is above the vertical bar (it spans y 112..188), so it crosses it
             let got_vw2 = run_x(image, 130, cx, cx + 100);
             let got_hh2 = run_y(image, cx + 20, 100, 200);
-            for (what, got, want) in [("row 1 vertical bar width", got_vw, vw), ("row 1 horizontal bar height", got_hh, hh), ("row 2 vertical bar width", got_vw2, vw2), ("row 2 horizontal bar height", got_hh2, hh2)] {
+            for (what, got, want) in [
+                ("row 1 vertical bar width", got_vw, vw),
+                ("row 1 horizontal bar height", got_hh, hh),
+                ("row 2 vertical bar width", got_vw2, vw2),
+                ("row 2 horizontal bar height", got_hh2, hh2),
+            ] {
                 p.require(got.abs_diff(want) <= 1, format!("[{who}] {name}: {what} is {got}, expected {want}"));
             }
         }
@@ -478,7 +478,10 @@ fn stroke_scale_modes_under_non_uniform_scale() {
     for (i, (&(ax, ay), name)) in allow.iter().zip(names).enumerate() {
         for shape in shapes.iter().skip(i * 2).take(2) {
             let line = &shape.styles.line_styles[0];
-            p.require((line.allow_scale_x(), line.allow_scale_y()) == (ax, ay), format!("[bits] {name}: allow_scale (x, y) is ({}, {}), expected ({ax}, {ay})", line.allow_scale_x(), line.allow_scale_y()));
+            p.require(
+                (line.allow_scale_x(), line.allow_scale_y()) == (ax, ay),
+                format!("[bits] {name}: allow_scale (x, y) is ({}, {}), expected ({ax}, {ay})", line.allow_scale_x(), line.allow_scale_y()),
+            );
         }
     }
     p.done("stroke_scale");
@@ -494,11 +497,8 @@ fn ct(mul: [f32; 4], add: [f32; 4]) -> ColorTransform {
 fn nested_cx_list() -> DisplayList {
     // cell 1
     let inner = Group { color: ct([0.5, 1.0, 1.0, 1.0], [0.0, 51.0 / 255.0, 0.0, 0.0]), ..group(vec![solid_fill(rect(0.0, 0.0, 40.0, 40.0), 255, 0, 0)]) };
-    let outer = Group {
-        transform: Affine::new([1.0, 0.0, 0.5, 1.0, 20.0, 20.0]),
-        color: ct([1.0, 1.0, 1.0, 0.5], [0.0; 4]),
-        ..group(vec![Node::Group(inner)])
-    };
+    let outer =
+        Group { transform: Affine::new([1.0, 0.0, 0.5, 1.0, 20.0, 20.0]), color: ct([1.0, 1.0, 1.0, 0.5], [0.0; 4]), ..group(vec![Node::Group(inner)]) };
     // cell 2
     let inner2 = Group { color: ct([1.0, 1.0, 1.0, 0.5], [0.0; 4]), ..group(vec![solid_fill(rect(-30.0, -30.0, 30.0, 30.0), 0, 0, 255)]) };
     let middle2 = Group { transform: Affine::rotate(FRAC_PI_4), color: ct([1.0, 1.0, 1.0, 0.5], [0.0, 0.0, 0.0, 0.5]), ..group(vec![Node::Group(inner2)]) };
@@ -553,10 +553,8 @@ fn masks_list() -> DisplayList {
     let faint = fill(rect(110.0, 10.0, 190.0, 90.0), Paint::Solid(Rgba8::new(0, 0, 0, 77)), FillRule::NonZero);
     let b = Group { mask: Some(vec![faint]), ..group(vec![solid_fill(rect(100.0, 0.0, 200.0, 100.0), 0, 0, 255)]) };
     // cell C
-    let inner = Group {
-        mask: Some(vec![solid_fill(rect(0.0, 100.0, 50.0, 200.0), 0, 0, 0)]),
-        ..group(vec![solid_fill(rect(0.0, 100.0, 100.0, 200.0), 255, 255, 0)])
-    };
+    let inner =
+        Group { mask: Some(vec![solid_fill(rect(0.0, 100.0, 50.0, 200.0), 0, 0, 0)]), ..group(vec![solid_fill(rect(0.0, 100.0, 100.0, 200.0), 255, 255, 0)]) };
     let c = Group {
         mask: Some(vec![solid_fill(Circle::new((50.0, 150.0), 40.0).to_path(0.05), 0, 0, 0)]),
         ..group(vec![Node::Group(inner), solid_fill(rect(60.0, 140.0, 80.0, 160.0), 255, 0, 255)])
@@ -566,11 +564,7 @@ fn masks_list() -> DisplayList {
         mask: Some(vec![solid_fill(rect(110.0, 110.0, 130.0, 130.0), 0, 0, 0), solid_fill(rect(150.0, 150.0, 170.0, 170.0), 0, 0, 0)]),
         ..group(vec![solid_fill(rect(100.0, 100.0, 200.0, 200.0), 0, 255, 255)])
     };
-    list(
-        200.0,
-        200.0,
-        vec![Node::Group(a), Node::Group(b), Node::Group(c), Node::Group(d), solid_fill(rect(172.0, 112.0, 192.0, 132.0), 255, 0, 0)],
-    )
+    list(200.0, 200.0, vec![Node::Group(a), Node::Group(b), Node::Group(c), Node::Group(d), solid_fill(rect(172.0, 112.0, 192.0, 132.0), 255, 0, 0)])
 }
 
 #[test]
@@ -611,10 +605,7 @@ fn masks_holes_alpha_nesting_and_siblings() {
 // filters and blends
 
 fn filters_blend_list() -> DisplayList {
-    let blur = Group {
-        filters: vec![Filter::Blur { x: 8.0, y: 0.0, quality: 3 }],
-        ..group(vec![solid_fill(rect(30.0, 30.0, 70.0, 70.0), 255, 0, 0)])
-    };
+    let blur = Group { filters: vec![Filter::Blur { x: 8.0, y: 0.0, quality: 3 }], ..group(vec![solid_fill(rect(30.0, 30.0, 70.0, 70.0), 255, 0, 0)]) };
     let shadow = Group {
         filters: vec![Filter::DropShadow {
             color: Rgba8::BLACK,
@@ -723,7 +714,13 @@ fn joins_caps_and_dashes() {
     let shots = shoot("joins_caps_dashes", &joins_list(), &ImageStore::new());
     shots.crops(
         "joins_caps_dashes",
-        &[("chevrons", 0, 0, 100, 100, 6), ("caps", 100, 0, 100, 100, 6), ("dashes_top_left", 0, 100, 50, 50, 12), ("dashes_corner", 60, 100, 40, 40, 12), ("hairpins", 140, 100, 60, 100, 6)],
+        &[
+            ("chevrons", 0, 0, 100, 100, 6),
+            ("caps", 100, 0, 100, 100, 6),
+            ("dashes_top_left", 0, 100, 50, 50, 12),
+            ("dashes_corner", 60, 100, 40, 40, 12),
+            ("hairpins", 140, 100, 60, 100, 6),
+        ],
     );
     let mut p = Probes::default();
     p.both(&shots, "miter tip kept", 25, 12, DARK, 40);
@@ -774,11 +771,7 @@ fn multiframe_lists() -> Vec<DisplayList> {
     };
     let frame = |nodes| list(100.0, 100.0, nodes);
     vec![
-        frame(vec![
-            yellow(),
-            g(20.0, BlendMode::Multiply, ct([1.0, 1.0, 1.0, 0.5], [0.0; 4]), vec![Filter::Blur { x: 4.0, y: 4.0, quality: 1 }], None),
-            red(),
-        ]),
+        frame(vec![yellow(), g(20.0, BlendMode::Multiply, ct([1.0, 1.0, 1.0, 0.5], [0.0; 4]), vec![Filter::Blur { x: 4.0, y: 4.0, quality: 1 }], None), red()]),
         frame(vec![yellow(), g(20.0, BlendMode::Normal, ColorTransform::IDENTITY, vec![], None), red()]),
         frame(vec![yellow(), g(50.0, BlendMode::Subtract, ColorTransform::IDENTITY, vec![], None), red()]),
         frame(vec![yellow(), g(20.0, BlendMode::Normal, ColorTransform::IDENTITY, vec![], None), solid_fill(rect(10.0, 70.0, 30.0, 90.0), 0, 200, 0)]),
@@ -875,7 +868,9 @@ fn button_swf() -> Vec<u8> {
             actions: vec![],
         })
         .unwrap();
-    movie.add_frame(&Frame::new(vec![FrameItem::Place(Placement::new(1, button, Matrix::from_affine(Affine::translate((10.0, 10.0)) * Affine::scale(2.0))))])).unwrap();
+    movie
+        .add_frame(&Frame::new(vec![FrameItem::Place(Placement::new(1, button, Matrix::from_affine(Affine::translate((10.0, 10.0)) * Affine::scale(2.0))))]))
+        .unwrap();
     movie.finish().unwrap()
 }
 
