@@ -143,6 +143,7 @@ pub fn describe(doc: &AniDoc) -> Vec<Property> {
         [] => {
             document_rows(document, &mut out);
             timeline::describe(document, &editor.state.timeline, editor.state.layer, editor.state.frame, &mut out);
+            describe_armature(editor, &mut out);
         }
         [one] => describe_element(document, &editor.state.timeline, one, &mut out),
         many => {
@@ -193,6 +194,60 @@ fn document_rows(document: &Document, out: &mut Vec<Property>) {
             .in_section("Document")
             .read_only(),
     );
+}
+
+/// The bones of the current layer's armature: a name and the joint limits of each, in degrees. A limit of
+/// -180 .. 180 is no limit.
+fn describe_armature(editor: &anicraft_tools::Editor, out: &mut Vec<Property>) {
+    let Some(armature) = editor
+        .document
+        .timeline(&editor.state.timeline)
+        .and_then(|t| t.layers.get(editor.state.layer))
+        .and_then(|l| l.armature.as_ref())
+    else {
+        return;
+    };
+    let section = format!("Armature {}", armature.name);
+    for (i, bone) in armature.bones.iter().enumerate() {
+        let (lo, hi) = bone.limits.map_or((-180.0, 180.0), |(lo, hi)| (lo.to_degrees(), hi.to_degrees()));
+        out.push(Property::new(format!("bone.{i}.name"), format!("Bone {}", i.saturating_add(1)), PropValue::Text(bone.name.clone())).in_section(section.clone()));
+        let deg = |v: f64| PropValue::number_in(v, -180.0, 180.0).precision(0, 1.0).with_suffix("\u{b0}");
+        out.push(Property::new(format!("bone.{i}.min"), "  Min rotation", deg(lo)).in_section(section.clone()));
+        out.push(Property::new(format!("bone.{i}.max"), "  Max rotation", deg(hi)).in_section(section.clone()));
+    }
+}
+
+/// Applies an edit of an armature property (`bone.<index>.name | min | max`).
+fn apply_bone(doc: &mut AniDoc, rest: &str, value: &PropValue) -> Result<(), String> {
+    let wrong = || format!("property \"bone.{rest}\" cannot take that value");
+    let (index, field) = rest.split_once('.').ok_or_else(wrong)?;
+    let index: usize = index.parse().map_err(|_| wrong())?;
+    let editor = &mut doc.editor;
+    let layer = editor.state.layer;
+    let timeline = editor.state.timeline.clone();
+    let armature = editor
+        .document
+        .timeline_mut(&timeline)
+        .and_then(|t| t.layers.get_mut(layer))
+        .and_then(|l| l.armature.as_mut())
+        .ok_or("the current layer has no armature")?;
+    let bone = armature.bones.get_mut(index).ok_or_else(|| format!("no bone {index}"))?;
+    match field {
+        "name" => bone.name = text(value).ok_or_else(wrong)?,
+        "min" | "max" => {
+            let v = number(value).filter(|v| v.is_finite()).ok_or_else(wrong)?.to_radians();
+            let (mut lo, mut hi) = bone.limits.unwrap_or((-std::f64::consts::PI, std::f64::consts::PI));
+            if field == "min" {
+                lo = v;
+            } else {
+                hi = v;
+            }
+            let full = |a: f64, b: f64| (a + std::f64::consts::PI).abs() < 1.0e-9 && (b - std::f64::consts::PI).abs() < 1.0e-9;
+            bone.limits = if full(lo, hi) { None } else { Some((lo.min(hi), lo.max(hi))) };
+        }
+        _ => return Err(format!("no bone property {field:?}")),
+    }
+    Ok(())
 }
 
 fn union_bounds(doc: &Document, id: &TimelineId, refs: &[ElementRef]) -> Option<anim_core::Rect> {
@@ -262,6 +317,9 @@ fn describe_element(doc: &Document, id: &TimelineId, r: &ElementRef, out: &mut V
 /// # Errors
 /// A message when the property does not exist for the selection or the value has the wrong kind or range.
 pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String> {
+    if let Some(rest) = id.strip_prefix("bone.") {
+        return apply_bone(doc, rest, value);
+    }
     if let Some(rest) = id.strip_prefix("doc.") {
         let d = &mut doc.editor.document;
         match rest {

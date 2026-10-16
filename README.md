@@ -19,7 +19,8 @@ real Animate documents; see [Known gaps](#known-gaps).
 - **Stage and timeline**: scenes, layers (normal, guide, mask, folder), keyframes, frame labels, nested symbols with
   full matrices and skew, color effects, blend modes and filters (blur, glow, drop shadow and others).
 - **Animation**: classic tweens with easing and rotation, motion guides (orient to path, snap), shape tweens with
-  shape hints, onion skins.
+  shape hints, onion skins. Inverse kinematics: the Bone tool builds armatures (symbol or shape), dragging a bone
+  poses the chain with FABRIK within joint limits, and pose keyframes tween.
 - **Drawing**: edge-based vector shapes with solid, gradient and bitmap fills and the XFL stroke kinds; pen, line,
   rectangle, oval, brush, selection, free transform, paint bucket and boolean path operations.
 - **Text**: static, dynamic and input text, with right-to-left scripts (Hebrew, Arabic) and mixed-direction text.
