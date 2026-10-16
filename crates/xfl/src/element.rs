@@ -135,12 +135,7 @@ fn read_symbol_instance(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> SymbolInstance
     instance
 }
 
-const NAMES: [[&str; 4]; 4] = [
-    ["m11", "m12", "m13", "m14"],
-    ["m21", "m22", "m23", "m24"],
-    ["m31", "m32", "m33", "m34"],
-    ["m41", "m42", "m43", "m44"],
-];
+const NAMES: [[&str; 4]; 4] = [["m11", "m12", "m13", "m14"], ["m21", "m22", "m23", "m24"], ["m31", "m32", "m33", "m34"], ["m41", "m42", "m43", "m44"]];
 
 /// Reads `<matrix3D><Matrix3D m11 .. m44/></matrix3D>`; missing entries are the identity's. A matrix with a
 /// non-finite entry is dropped.

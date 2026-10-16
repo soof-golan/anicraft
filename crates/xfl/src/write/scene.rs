@@ -33,12 +33,7 @@ pub fn matrix(out: &mut XmlOut, m: Affine) {
 /// `<matrix3D><Matrix3D m11 .. m44/></matrix3D>` with the identity's entries left out.
 pub fn matrix_3d(out: &mut XmlOut, m: &Matrix3D) {
     out.open("matrix3D", &Attrs::new());
-    let names = [
-        ["m11", "m12", "m13", "m14"],
-        ["m21", "m22", "m23", "m24"],
-        ["m31", "m32", "m33", "m34"],
-        ["m41", "m42", "m43", "m44"],
-    ];
+    let names = [["m11", "m12", "m13", "m14"], ["m21", "m22", "m23", "m24"], ["m31", "m32", "m33", "m34"], ["m41", "m42", "m43", "m44"]];
     let mut attrs = Attrs::new();
     for (row, (values, row_names)) in m.m.iter().zip(names).enumerate() {
         for (column, (value, name)) in values.iter().zip(row_names).enumerate() {
