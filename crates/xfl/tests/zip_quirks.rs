@@ -25,14 +25,9 @@ const BALL: &str = r##"<DOMSymbolItem xmlns="http://ns.adobe.com/xfl/2008/" name
 </elements></DOMFrame></frames></DOMLayer></layers></DOMTimeline></timeline></DOMSymbolItem>"##;
 
 fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFF_u32;
-    for &b in data {
-        crc ^= u32::from(b);
-        for _ in 0..8 {
-            crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
-        }
-    }
-    !crc
+    let mut crc = flate2::Crc::new();
+    crc.update(data);
+    crc.sum()
 }
 
 /// A stored zip. `cd_size_extra` is added to the size the end record claims for the central directory.
