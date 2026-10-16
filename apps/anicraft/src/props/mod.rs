@@ -210,10 +210,10 @@ fn describe_armature(editor: &anicraft_tools::Editor, out: &mut Vec<Property>) {
     let section = format!("Armature {}", armature.name);
     for (i, bone) in armature.bones.iter().enumerate() {
         let (lo, hi) = bone.limits.map_or((-180.0, 180.0), |(lo, hi)| (lo.to_degrees(), hi.to_degrees()));
-        out.push(Property::new(format!("bone.{i}.name"), format!("Bone {}", i.saturating_add(1)), PropValue::Text(bone.name.clone())).in_section(section.clone()));
+        out.push(Property::new(&format!("bone.{i}.name"), &format!("Bone {}", i.saturating_add(1)), PropValue::Text(bone.name.clone())).in_section(&section));
         let deg = |v: f64| PropValue::number_in(v, -180.0, 180.0).precision(0, 1.0).with_suffix("\u{b0}");
-        out.push(Property::new(format!("bone.{i}.min"), "  Min rotation", deg(lo)).in_section(section.clone()));
-        out.push(Property::new(format!("bone.{i}.max"), "  Max rotation", deg(hi)).in_section(section.clone()));
+        out.push(Property::new(&format!("bone.{i}.min"), "  Min rotation", deg(lo)).in_section(&section));
+        out.push(Property::new(&format!("bone.{i}.max"), "  Max rotation", deg(hi)).in_section(&section));
     }
 }
 

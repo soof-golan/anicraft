@@ -3,6 +3,7 @@
 
 mod common;
 
+mod armature;
 mod drawing;
 mod mcp;
 mod painting;
