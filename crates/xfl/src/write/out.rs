@@ -499,6 +499,15 @@ mod tests {
     }
 
     #[test]
+    fn modelled_attributes_replace_raw_ones_of_the_same_name() {
+        let raw = vec![("quality".to_owned(), "high".to_owned()), ("custom".to_owned(), "1".to_owned())];
+        let attrs = Attrs::new().pairs(&raw).s("quality", "80");
+        let names: Vec<&str> = attrs.items.iter().map(|(n, _)| *n).collect();
+        assert_eq!(names, ["custom", "quality"]);
+        assert_eq!(attrs.items.last().map(|(_, v)| v.as_str()), Some("80"));
+    }
+
+    #[test]
     fn elements_nest_and_self_close() {
         let mut out = XmlOut::new();
         out.open("a", &Attrs::new().s("k", "v"));
