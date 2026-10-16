@@ -22,36 +22,51 @@ const fn xml_char(c: char) -> bool {
     matches!(c, '\t' | '\n' | '\r') || (c >= ' ' && c != '\u{FFFE}' && c != '\u{FFFF}')
 }
 
+/// Appends `value` with `reference(c)` in place of each character that has one and without the characters XML cannot
+/// carry. Text between those characters is copied in one piece.
+fn escape_into(value: &str, out: &mut String, reference: fn(char) -> Option<&'static str>) {
+    // Nearly every value is plain text: one scan, one copy. 0xEF starts the encodings of U+FFFE and U+FFFF.
+    if value.bytes().all(|b| b >= b' ' && !matches!(b, b'&' | b'<' | b'>' | b'"' | 0xEF)) {
+        out.push_str(value);
+        return;
+    }
+    let mut copied_to = 0usize;
+    for (at, c) in value.char_indices() {
+        let replacement = reference(c);
+        if replacement.is_none() && xml_char(c) {
+            continue;
+        }
+        out.push_str(value.get(copied_to..at).unwrap_or_default());
+        out.push_str(replacement.unwrap_or_default());
+        copied_to = at.saturating_add(c.len_utf8());
+    }
+    out.push_str(value.get(copied_to..).unwrap_or_default());
+}
+
 /// Escapes an attribute value for double quotes. Line breaks and tabs become character references so that a parser's
 /// attribute-value normalisation does not turn them into spaces.
 pub fn escape_attr(value: &str, out: &mut String) {
-    for c in value.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\n' => out.push_str("&#10;"),
-            '\r' => out.push_str("&#13;"),
-            '\t' => out.push_str("&#9;"),
-            c if xml_char(c) => out.push(c),
-            _ => {}
-        }
-    }
+    escape_into(value, out, |c| match c {
+        '&' => Some("&amp;"),
+        '<' => Some("&lt;"),
+        '>' => Some("&gt;"),
+        '"' => Some("&quot;"),
+        '\n' => Some("&#10;"),
+        '\r' => Some("&#13;"),
+        '\t' => Some("&#9;"),
+        _ => None,
+    });
 }
 
 /// Escapes element text. A carriage return becomes a reference because parsers fold literal ones into line feeds.
 pub fn escape_text(value: &str, out: &mut String) {
-    for c in value.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '\r' => out.push_str("&#13;"),
-            c if xml_char(c) => out.push(c),
-            _ => {}
-        }
-    }
+    escape_into(value, out, |c| match c {
+        '&' => Some("&amp;"),
+        '<' => Some("&lt;"),
+        '>' => Some("&gt;"),
+        '\r' => Some("&#13;"),
+        _ => None,
+    });
 }
 
 /// True when `name` is usable as an attribute name (a conservative subset of XML names).
@@ -496,6 +511,13 @@ mod tests {
         let mut t = String::new();
         escape_text("x\r\ny < z", &mut t);
         assert_eq!(t, "x&#13;\ny &lt; z");
+        // Plain text, multi-byte text and the characters XML cannot carry (U+FFFE, U+FFFF) next to a multi-byte one.
+        let mut m = String::new();
+        escape_attr("שלום \u{FFFE}é\u{FFFF}\u{20AC}x", &mut m);
+        assert_eq!(m, "שלום é\u{20AC}x");
+        let mut p = String::new();
+        escape_text("plain 123", &mut p);
+        assert_eq!(p, "plain 123");
     }
 
     #[test]
