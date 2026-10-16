@@ -272,7 +272,8 @@ fn strokes_carry_linestyle2_properties() {
     assert_eq!(line.width().get(), 0);
     assert_eq!(line.start_cap(), swf::LineCapStyle::None);
     assert_eq!(line.join_style(), swf::LineJoinStyle::Bevel);
-    assert!(line.allow_scale_x() && !line.allow_scale_y());
+    // "horizontal" keeps the thickness from following horizontal scaling: the NoHScale bit
+    assert!(!line.allow_scale_x() && line.allow_scale_y());
     assert!(matches!(line.fill_style(), swf::FillStyle::LinearGradient(_)));
 }
 

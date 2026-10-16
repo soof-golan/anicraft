@@ -141,9 +141,11 @@ impl Slot {
     }
 }
 
-/// Whether a path painted with `paint` can show anything at all.
-fn is_visible(path: &BezPath, paint: &Paint) -> bool {
-    !path.elements().is_empty() && !matches!(paint, Paint::Solid(c) if c.a == 0)
+/// Whether a path painted with `paint` can show anything at all. A solid colour with alpha 0 is only invisible when no
+/// enclosing colour transform can add alpha back (`reveal`): a player applies the transform to the fill's colour
+/// even when its alpha is 0.
+fn is_visible(path: &BezPath, paint: &Paint, reveal: bool) -> bool {
+    !path.elements().is_empty() && (reveal || !matches!(paint, Paint::Solid(c) if c.a == 0))
 }
 
 /// The depth (1-based) of the object at `index` in a display list.
@@ -214,7 +216,7 @@ impl NodeConverter {
     /// [`SwfError::MissingImage`] for a bitmap the store does not hold, [`SwfError::TooDeep`] for runaway nesting, and
     /// any limit of the format (65535 characters or depths).
     pub fn next_frame(&mut self, movie: &mut Movie, stage: &mut Stage, list: &DisplayList, images: &ImageStore) -> Result<Frame, SwfError> {
-        let slots = self.convert_nodes(movie, &list.nodes, images, 0)?;
+        let slots = self.convert_nodes(movie, &list.nodes, images, 0, false)?;
         let mut items = Vec::new();
         for index in 0..stage.previous.len().max(slots.len()) {
             let depth = depth_of(index)?;
@@ -249,7 +251,8 @@ impl NodeConverter {
         movie.define_sprite(&timeline)
     }
 
-    fn convert_nodes(&mut self, movie: &mut Movie, nodes: &[Node], images: &ImageStore, nesting: usize) -> Result<Vec<Slot>, SwfError> {
+    /// `reveal`: some enclosing colour transform adds alpha, so fills with alpha 0 are kept.
+    fn convert_nodes(&mut self, movie: &mut Movie, nodes: &[Node], images: &ImageStore, nesting: usize, reveal: bool) -> Result<Vec<Slot>, SwfError> {
         if nesting > MAX_NESTING {
             return Err(SwfError::TooDeep(MAX_NESTING));
         }
@@ -259,13 +262,13 @@ impl NodeConverter {
             let slot = match node {
                 // a fill immediately followed by a stroke of the same path is one SWF shape
                 Node::Fill(fill) => match remaining.next_if(|next| matches!(next, Node::Stroke(s) if s.path == fill.path && s.transform == fill.transform)) {
-                    Some(Node::Stroke(stroke)) => self.paint_slot(movie, Some(fill), Some(stroke), images)?,
-                    _ => self.paint_slot(movie, Some(fill), None, images)?,
+                    Some(Node::Stroke(stroke)) => self.paint_slot(movie, Some(fill), Some(stroke), images, reveal)?,
+                    _ => self.paint_slot(movie, Some(fill), None, images, reveal)?,
                 },
-                Node::Stroke(stroke) => self.paint_slot(movie, None, Some(stroke), images)?,
+                Node::Stroke(stroke) => self.paint_slot(movie, None, Some(stroke), images, reveal)?,
                 Node::Bitmap(bitmap) => self.bitmap_slot(movie, bitmap, images)?,
-                Node::Group(group) => self.group_slot(movie, group, images, nesting)?,
-                Node::Mesh(mesh) => self.mesh_slot(movie, mesh, images, nesting)?,
+                Node::Group(group) => self.group_slot(movie, group, images, nesting, reveal)?,
+                Node::Mesh(mesh) => self.mesh_slot(movie, mesh, images, nesting, reveal)?,
             };
             slots.extend(slot);
         }
@@ -340,9 +343,9 @@ impl NodeConverter {
 
     /// One shape holding a fill, a stroke, or a fill with the stroke drawn over it (SWF draws strokes over fills
     /// within a shape, which is exactly the order of a `Fill` node followed by a `Stroke` node).
-    fn paint_slot(&mut self, movie: &mut Movie, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore) -> Result<Option<Slot>, SwfError> {
-        let fill = fill.filter(|f| is_visible(&f.path, &f.paint));
-        let stroke = stroke.filter(|s| is_visible(&s.path, &s.paint));
+    fn paint_slot(&mut self, movie: &mut Movie, fill: Option<&Fill>, stroke: Option<&Stroke>, images: &ImageStore, reveal: bool) -> Result<Option<Slot>, SwfError> {
+        let fill = fill.filter(|f| is_visible(&f.path, &f.paint, reveal));
+        let stroke = stroke.filter(|s| is_visible(&s.path, &s.paint, reveal));
         let transform = match (fill, stroke) {
             (Some(f), _) => f.transform,
             (None, Some(s)) => s.transform,
@@ -408,14 +411,15 @@ impl NodeConverter {
         Self::define_slot(movie, &builder.finish(), bitmap.transform)
     }
 
-    fn group_slot(&mut self, movie: &mut Movie, group: &Group, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
-        let children = self.convert_nodes(movie, &group.children, images, nesting.saturating_add(1))?;
+    fn group_slot(&mut self, movie: &mut Movie, group: &Group, images: &ImageStore, nesting: usize, reveal: bool) -> Result<Option<Slot>, SwfError> {
+        let reveal = reveal || group.color.add.get(3).is_some_and(|a| *a > 0.0);
+        let children = self.convert_nodes(movie, &group.children, images, nesting.saturating_add(1), reveal)?;
         if children.is_empty() {
             return Ok(None);
         }
         let mask = match &group.mask {
             Some(nodes) => {
-                let slots = self.convert_nodes(movie, nodes, images, nesting.saturating_add(1))?;
+                let slots = self.convert_nodes(movie, nodes, images, nesting.saturating_add(1), false)?;
                 match slots.as_slice() {
                     // an empty mask hides everything
                     [] => return Ok(None),
@@ -441,8 +445,8 @@ impl NodeConverter {
 
     /// A mesh warps its content triangle by triangle: each triangle is a sprite with the triangle as a clip mask
     /// over a copy of the content moved by the affine map that carries the source triangle onto the target one.
-    fn mesh_slot(&mut self, movie: &mut Movie, mesh: &Mesh, images: &ImageStore, nesting: usize) -> Result<Option<Slot>, SwfError> {
-        let content = self.convert_nodes(movie, &mesh.content, images, nesting.saturating_add(1))?;
+    fn mesh_slot(&mut self, movie: &mut Movie, mesh: &Mesh, images: &ImageStore, nesting: usize, reveal: bool) -> Result<Option<Slot>, SwfError> {
+        let content = self.convert_nodes(movie, &mesh.content, images, nesting.saturating_add(1), reveal)?;
         if content.is_empty() {
             return Ok(None);
         }
@@ -573,12 +577,13 @@ impl DisplayListExporter {
 /// The `LINESTYLE2` for a display-list stroke.
 pub(crate) fn line_style(style: &StrokeStyle, paint: LinePaint) -> LineStyle {
     let width = u16::try_from(num::round_f64_to_i32(style.width.max(0.0) * crate::types::TWIPS_PER_PX).clamp(0, i32::from(u16::MAX))).unwrap_or(u16::MAX);
-    // (thickness stays fixed horizontally, thickness stays fixed vertically)
+    // (NoHScale, NoVScale): the thickness does not follow horizontal / vertical scaling. `Horizontal` is
+    // `LineScaleMode.HORIZONTAL` ("do not scale the thickness if only horizontal scaling is applied"), which is the
+    // `NoHScale` bit, as anim-render also reads it.
     let (fixed_x, fixed_y) = match style.scale {
         StrokeScale::Normal => (false, false),
-        // "horizontal": the thickness scales only when the object is scaled horizontally
-        StrokeScale::Horizontal => (false, true),
-        StrokeScale::Vertical => (true, false),
+        StrokeScale::Horizontal => (true, false),
+        StrokeScale::Vertical => (false, true),
         StrokeScale::None => (true, true),
     };
     LineStyle {
@@ -683,7 +688,7 @@ mod tests {
         let style = StrokeStyle { width: 2.5, cap: Cap::Square, join: Join::Miter, miter_limit: 4.0, scale: StrokeScale::Horizontal, dashes: vec![] };
         let line = line_style(&style, LinePaint::Solid(Rgba8::BLACK));
         assert_eq!(line.width, 50);
-        assert!(!line.no_h_scale && line.no_v_scale);
+        assert!(line.no_h_scale && !line.no_v_scale);
         assert_eq!(line.start_cap, Cap::Square);
     }
 
