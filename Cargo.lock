@@ -334,6 +334,7 @@ dependencies = [
  "png",
  "proptest",
  "roxmltree 0.21.1",
+ "rustc-hash 2.1.3",
  "serde",
  "serde_json",
  "swf",

@@ -11,6 +11,7 @@ pub mod morph;
 pub mod movie;
 pub mod place;
 pub mod shape;
+mod shape_cache;
 pub mod sound;
 pub mod style;
 pub mod tag;

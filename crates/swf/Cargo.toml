@@ -15,6 +15,7 @@ anim-core = { workspace = true }
 anim-display = { workspace = true }
 anim-shape = { workspace = true }
 flate2 = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 

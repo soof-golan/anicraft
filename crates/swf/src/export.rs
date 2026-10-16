@@ -19,6 +19,7 @@ use crate::error::SwfError;
 use crate::movie::{ACTION_STOP, Frame, FrameItem, Movie, MovieSettings};
 use crate::place::{Placement, blend_code};
 use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, clean_path, fill_side_is_right};
+use crate::shape_cache::ShapeCache;
 use crate::style::{FillStyle, LinePaint, LineStyle};
 use crate::types::{CharacterId, CxForm, Matrix};
 
@@ -181,6 +182,8 @@ pub struct NodeConverter {
     by_content: HashMap<u64, Vec<ImageId>>,
     bitmaps: u32,
     notes: Vec<ExportNote>,
+    /// Shapes defined so far, by the nodes they came from.
+    shapes: ShapeCache,
 }
 
 impl NodeConverter {
@@ -358,6 +361,9 @@ impl NodeConverter {
             (None, Some(s)) => s.transform,
             (None, None) => return Ok(None),
         };
+        if let Some(character) = self.shapes.get(fill, stroke) {
+            return Ok(Some(Slot::plain(character, Matrix::from_affine(transform))));
+        }
         let mut builder = ShapeBuilder::new();
         if let Some(fill) = fill {
             builder.set_fill_rule(fill.rule);
@@ -380,7 +386,9 @@ impl NodeConverter {
                 None => builder.add_path(&path, style),
             }
         }
-        Self::define_slot(movie, &builder.finish(), transform)
+        let character = movie.define_shape(&builder.finish())?;
+        self.shapes.insert(fill, stroke, character);
+        Ok(Some(Slot::plain(character, Matrix::from_affine(transform))))
     }
 
     /// SWF has no dashes; split the (cleaned) path into dash-long open pieces instead.

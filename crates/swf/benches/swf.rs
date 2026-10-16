@@ -226,12 +226,27 @@ fn nested_sprites(depth: usize, branch: usize, frames: usize) -> Vec<DisplayList
         .collect()
 }
 
+/// Whether `name` passes the filter on the command line; cases that do not are not even built, which keeps setup out
+/// of profiles of a single case.
+fn wanted(name: &str) -> bool {
+    std::env::args().skip(1).filter(|a| !a.starts_with('-') && a.parse::<f64>().is_err()).all(|filter| name.contains(&filter))
+}
+
+type Build = fn() -> Vec<DisplayList>;
+
 fn synthetic(c: &mut Criterion) {
     let images = ImageStore::new();
-    bench_export(c, "stress", "moving_shapes_800x60", &moving_shapes(800, 60), &images);
-    bench_export(c, "stress", "morphing_shapes_300x40", &morphing_shapes(300, 40), &images);
-    bench_export(c, "stress", "dashed_strokes_120x6", &dashed_strokes(120, 6), &images);
-    bench_export(c, "stress", "nested_sprites_d6b3x8", &nested_sprites(6, 3, 8), &images);
+    let cases: [(&str, Build); 4] = [
+        ("moving_shapes_800x60", || moving_shapes(800, 60)),
+        ("morphing_shapes_300x40", || morphing_shapes(300, 40)),
+        ("dashed_strokes_120x6", || dashed_strokes(120, 6)),
+        ("nested_sprites_d6b3x8", || nested_sprites(6, 3, 8)),
+    ];
+    for (name, build) in cases {
+        if wanted(name) {
+            bench_export(c, "stress", name, &build(), &images);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -239,6 +254,9 @@ fn synthetic(c: &mut Criterion) {
 
 fn samples(c: &mut Criterion) {
     for (name, frames) in [("unicorn_4AE.fla", 48), ("derwood_green_choreo_short.fla", 48)] {
+        if !wanted(name) {
+            continue;
+        }
         let Some(path) = sample(name) else {
             eprintln!("skipping {name}: ANICRAFT_SAMPLES is unset or the file is missing");
             continue;
