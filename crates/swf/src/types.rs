@@ -91,13 +91,13 @@ impl Rect {
 
     /// Appends the byte-aligned `RECT` encoding to `out`.
     pub fn write(&self, out: &mut Vec<u8>) {
-        let mut w = BitWriter::new();
+        let mut w = BitWriter::appending_to(std::mem::take(out));
         let n = sb_bits_all(&[self.x_min, self.x_max, self.y_min, self.y_max]).min(31);
         w.ub(n, 5);
         for v in [self.x_min, self.x_max, self.y_min, self.y_max] {
             w.sb(v, n);
         }
-        out.extend_from_slice(&w.into_bytes());
+        *out = w.into_bytes();
     }
 }
 
@@ -159,9 +159,9 @@ impl Matrix {
 
     /// Appends the byte-aligned `MATRIX` encoding to `out`.
     pub fn write(&self, out: &mut Vec<u8>) {
-        let mut w = BitWriter::new();
+        let mut w = BitWriter::appending_to(std::mem::take(out));
         self.write_bits(&mut w);
-        out.extend_from_slice(&w.into_bytes());
+        *out = w.into_bytes();
     }
 
     /// Writes the `MATRIX` into a bit stream without aligning (fill styles align afterwards).
@@ -240,7 +240,7 @@ impl CxForm {
             n = n.max(sb_bits_all(&self.add));
         }
         let n = n.min(15);
-        let mut w = BitWriter::new();
+        let mut w = BitWriter::appending_to(std::mem::take(out));
         w.bit(has_add);
         w.bit(has_mult);
         w.ub(n, 4);
@@ -254,7 +254,7 @@ impl CxForm {
                 w.sb(v, n);
             }
         }
-        out.extend_from_slice(&w.into_bytes());
+        *out = w.into_bytes();
     }
 }
 

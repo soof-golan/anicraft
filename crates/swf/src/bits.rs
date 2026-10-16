@@ -74,7 +74,8 @@ impl PutBytes for Vec<u8> {
 #[derive(Debug, Default, Clone)]
 pub struct BitWriter {
     bytes: Vec<u8>,
-    acc: u8,
+    /// The not yet written bits, in the low `filled` bits (always fewer than 8 between calls).
+    acc: u64,
     filled: u32,
 }
 
@@ -84,44 +85,55 @@ impl BitWriter {
         Self::default()
     }
 
+    /// A writer that appends to `bytes`, which ends on a byte boundary.
+    #[must_use]
+    pub const fn appending_to(bytes: Vec<u8>) -> Self {
+        Self { bytes, acc: 0, filled: 0 }
+    }
+
+    /// The low `bits` (at most 32) bits of `value`, most significant first.
+    fn put(&mut self, value: u32, bits: u32) {
+        let mask = 1_u64.wrapping_shl(bits).wrapping_sub(1);
+        self.acc = self.acc.wrapping_shl(bits) | (u64::from(value) & mask);
+        self.filled = self.filled.saturating_add(bits);
+        while self.filled >= 8 {
+            self.filled = self.filled.saturating_sub(8);
+            self.bytes.push(u8::try_from(self.acc.wrapping_shr(self.filled) & 0xff).unwrap_or(0));
+        }
+        self.acc &= 1_u64.wrapping_shl(self.filled).wrapping_sub(1);
+    }
+
+    /// `count` copies of `bit`, for the extension of fields wider than 32 bits.
+    fn put_run(&mut self, bit: bool, mut count: u32) {
+        while count > 0 {
+            let n = count.min(32);
+            self.put(if bit { u32::MAX } else { 0 }, n);
+            count = count.saturating_sub(n);
+        }
+    }
+
     /// One bit.
     pub fn bit(&mut self, value: bool) {
-        self.acc = self.acc.wrapping_shl(1) | u8::from(value);
-        self.filled = self.filled.saturating_add(1);
-        if self.filled >= 8 {
-            self.bytes.push(self.acc);
-            self.acc = 0;
-            self.filled = 0;
-        }
+        self.put(u32::from(value), 1);
     }
 
     /// The low `bits` bits of `value`, most significant first (`UB[bits]`).
     pub fn ub(&mut self, value: u32, bits: u32) {
-        for i in (0..bits).rev() {
-            self.bit(i < 32 && (value.wrapping_shr(i) & 1) == 1);
-        }
+        self.put_run(false, bits.saturating_sub(32));
+        self.put(value, bits.min(32));
     }
 
     /// `value` as a two's complement field of `bits` bits (`SB[bits]` and `FB[bits]`). Widths above 32 sign-extend.
     pub fn sb(&mut self, value: i32, bits: u32) {
-        let sign = value < 0;
-        let raw = u32::from_ne_bytes(value.to_ne_bytes());
-        for i in (0..bits).rev() {
-            self.bit(if i < 32 { (raw.wrapping_shr(i) & 1) == 1 } else { sign });
-        }
+        self.put_run(value < 0, bits.saturating_sub(32));
+        self.put(u32::from_ne_bytes(value.to_ne_bytes()), bits.min(32));
     }
 
     /// Pads the current byte with zero bits.
     pub fn align(&mut self) {
-        while self.filled != 0 {
-            self.bit(false);
+        if self.filled != 0 {
+            self.put(0, 8_u32.saturating_sub(self.filled));
         }
-    }
-
-    /// Number of whole bytes written so far (not counting a partial byte).
-    #[must_use]
-    pub const fn byte_len(&self) -> usize {
-        self.bytes.len()
     }
 
     /// Pads to a byte boundary and returns the bytes.
@@ -182,6 +194,40 @@ mod tests {
         let mut w = BitWriter::new();
         w.ub(0b11, 2);
         assert_eq!(w.into_bytes(), vec![0b1100_0000]);
+    }
+
+    /// The obvious one-bit-at-a-time writer the word-wise one replaced.
+    fn naive(fields: &[(bool, i64, u32)]) -> Vec<u8> {
+        let mut bits = Vec::new();
+        for &(signed, value, width) in fields {
+            for i in (0..width).rev() {
+                bits.push(if i < 32 { (value >> i) & 1 == 1 } else { signed && value < 0 });
+            }
+        }
+        bits.chunks(8)
+            .map(|chunk| chunk.iter().enumerate().fold(0_u8, |byte, (i, &b)| byte | u8::from(b).wrapping_shl(7_u32.saturating_sub(u32::try_from(i).unwrap()))))
+            .collect()
+    }
+
+    #[test]
+    fn word_wise_writer_matches_the_bitwise_reference() {
+        let values = [0_i64, 1, -1, 5, -5, 255, -256, 65_535, -65_536, i64::from(i32::MAX), i64::from(i32::MIN), 0x1234_5678];
+        let mut fields = Vec::new();
+        let mut w = BitWriter::new();
+        let mut seed = 7_u32;
+        for round in 0..400_u32 {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let value = values[usize::try_from(seed >> 8).unwrap() % values.len()];
+            let width = (seed >> 3) % 40;
+            let signed = round % 2 == 0;
+            if signed {
+                w.sb(i32::try_from(value).unwrap(), width);
+            } else {
+                w.ub(u32::try_from(value & 0xffff_ffff).unwrap(), width);
+            }
+            fields.push((signed, if signed { value } else { value & 0xffff_ffff }, width));
+        }
+        assert_eq!(w.into_bytes(), naive(&fields));
     }
 
     #[test]

@@ -10,7 +10,7 @@ use anim_display::Spread;
 
 use crate::bits::PutBytes;
 use crate::error::SwfError;
-use crate::shape::{MAX_STYLES, ShapeDef, ShapeRecord, StyleChange, encode_records, write_style_array};
+use crate::shape::{MAX_STYLES, ShapeDef, ShapeRecord, StyleChange, append_records, write_style_array};
 use crate::style::{FillStyle, Gradient, LinePaint, LineStyle};
 use crate::types::{Rect, put_rgba};
 
@@ -111,9 +111,9 @@ impl MorphShapeDef {
         if let Some(e) = failure {
             return Err(e);
         }
-        after_offset.extend_from_slice(&encode_records(&self.start.records, self.start.fills.len(), self.start.lines.len())?);
+        append_records(&mut after_offset, &self.start.records, self.start.fills.len(), self.start.lines.len())?;
         let end_edges_at = u32::try_from(after_offset.len()).map_err(|_| SwfError::TooLarge(after_offset.len()))?;
-        after_offset.extend_from_slice(&encode_records(&self.end_records, self.start.fills.len(), self.start.lines.len())?);
+        append_records(&mut after_offset, &self.end_records, self.start.fills.len(), self.start.lines.len())?;
         out.put_u32(end_edges_at);
         out.extend_from_slice(&after_offset);
         Ok(out)

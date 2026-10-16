@@ -97,17 +97,17 @@ impl ShapeDef {
                 line.write(out);
             }
         });
-        out.extend_from_slice(&encode_records(&self.records, self.fills.len(), self.lines.len())?);
+        append_records(&mut out, &self.records, self.fills.len(), self.lines.len())?;
         Ok(out)
     }
 }
 
-/// The `SHAPE` part of a shape: the two bit counts, the records and the end record, byte aligned. Style indices in
-/// the records are written with as many bits as `fill_count` and `line_count` need.
-pub(crate) fn encode_records(records: &[ShapeRecord], fill_count: usize, line_count: usize) -> Result<Vec<u8>, SwfError> {
+/// Appends the `SHAPE` part of a shape to `out`: the two bit counts, the records and the end record, byte aligned.
+/// Style indices in the records are written with as many bits as `fill_count` and `line_count` need.
+pub(crate) fn append_records(out: &mut Vec<u8>, records: &[ShapeRecord], fill_count: usize, line_count: usize) -> Result<(), SwfError> {
     let fill_bits = ub_bits(u32::try_from(fill_count).unwrap_or(0));
     let line_bits = ub_bits(u32::try_from(line_count).unwrap_or(0));
-    let mut w = BitWriter::new();
+    let mut w = BitWriter::appending_to(std::mem::take(out));
     w.ub(fill_bits, 4);
     w.ub(line_bits, 4);
     for record in records {
@@ -115,7 +115,8 @@ pub(crate) fn encode_records(records: &[ShapeRecord], fill_count: usize, line_co
     }
     // EndShapeRecord: type flag 0 and five zero flags
     w.ub(0, 6);
-    Ok(w.into_bytes())
+    *out = w.into_bytes();
+    Ok(())
 }
 
 /// `FILLSTYLEARRAY` / `LINESTYLEARRAY` count prefix, then the styles.
