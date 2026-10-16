@@ -59,7 +59,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev \
-            libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev libfontconfig1-dev
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev libfontconfig1-dev \
+            desktop-file-utils
       - run: rustup show
       - run: rustup target add ${{ matrix.target }}
       - name: Build
@@ -110,11 +111,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v makensis >/dev/null; then
-            if [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then choco install nsis -y --no-progress; fi
-            export PATH="/c/Program Files (x86)/NSIS:$PATH"
-          fi
-          makensis -V2 "-DVERSION=${VERSION}" "-DSTAGE=stage/${PKG}" "-DOUTFILE=dist/${PKG}-setup.exe" packaging/windows/anicraft.nsi
+          # Portable NSIS (x86 build; runs on x64 and, emulated, on Arm64), pinned by SHA-256. No installer or choco needed.
+          NSIS_VERSION=3.11
+          NSIS_SHA256=c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1
+          NSIS_DIR="$RUNNER_TEMP/nsis"
+          mkdir -p "$NSIS_DIR"
+          curl -fsSL --retry 5 --retry-delay 5 -o "$NSIS_DIR/nsis.zip" "https://downloads.sourceforge.net/project/nsis/NSIS%203/${NSIS_VERSION}/nsis-${NSIS_VERSION}.zip"
+          echo "${NSIS_SHA256}  $NSIS_DIR/nsis.zip" | sha256sum -c -
+          7z x -y "$NSIS_DIR/nsis.zip" "-o$NSIS_DIR" > /dev/null
+          # makensis resolves relative paths from the .nsi's directory, so pass absolute Windows paths.
+          mkdir -p dist
+          STAGE_WIN="$(cygpath -w "$PWD/stage/${PKG}")"
+          OUTFILE_WIN="$(cygpath -w "$PWD/dist/${PKG}-setup.exe")"
+          MSYS2_ARG_CONV_EXCL='*' "$NSIS_DIR/nsis-${NSIS_VERSION}/makensis.exe" -V2 "-DVERSION=${VERSION}" "-DSTAGE=${STAGE_WIN}" "-DOUTFILE=${OUTFILE_WIN}" packaging/windows/anicraft.nsi
           ls -l dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

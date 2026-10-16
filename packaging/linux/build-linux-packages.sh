@@ -4,7 +4,7 @@
 #   build-linux-packages.sh APP VERSION STAGE_DIR OUT_DIR
 #
 # APP is the program name (anicraft, charcraft); STAGE_DIR holds APP, APP-cli and anything they load next to
-# themselves (the ONNX Runtime library, licences). Needs dpkg-deb and curl. The metadata comes from
+# themselves (the ONNX Runtime library, licences). Needs dpkg-deb, curl and desktop-file-utils. The metadata comes from
 # packaging/linux/APP.desktop, APP.svg and APP-mime.xml beside this script.
 set -euo pipefail
 umask 022
@@ -21,15 +21,19 @@ case "$(uname -m)" in
     ARCH=x86_64
     DEB_ARCH=amd64
     APPIMAGETOOL_SHA256="46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1"
+    RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
     ;;
   aarch64 | arm64)
     ARCH=aarch64
     DEB_ARCH=arm64
     APPIMAGETOOL_SHA256="04f45ea45b5aa07bb2b071aed9dbf7a5185d3953b11b47358c1311f11ea94a96"
+    RUNTIME_SHA256="00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444"
     ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${ARCH}.AppImage"
+# The AppImage runtime embedded in the output, pinned so the build never fetches an unverified one.
+RUNTIME_URL="https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-${ARCH}"
 
 # Debian orders 0.1.0~rc.1 before 0.1.0; a non-numeric version (a branch build) gets a 0~ prefix.
 DEB_VERSION="${VERSION/-/\~}"
@@ -97,6 +101,13 @@ if [ ! -x "$TOOL" ]; then
   echo "$APPIMAGETOOL_SHA256  $TOOL" | sha256sum -c -
   chmod 755 "$TOOL"
 fi
-# --appimage-extract-and-run: runners have no FUSE. The output is named by us, not guessed from the desktop file.
-ARCH="$ARCH" "$TOOL" --appimage-extract-and-run --no-appstream "$APPDIR" "$OUT/${APP}-${VERSION}-linux-${ARCH}.AppImage" > /dev/null
+RUNTIME="$WORK/runtime-$ARCH"
+curl -fsSL --retry 5 --retry-delay 5 -o "$RUNTIME" "$RUNTIME_URL"
+echo "$RUNTIME_SHA256  $RUNTIME" | sha256sum -c -
+# appimagetool validates the desktop file with desktop-file-validate (desktop-file-utils).
+command -v desktop-file-validate > /dev/null || { echo "desktop-file-validate is missing: install desktop-file-utils" >&2; exit 1; }
+desktop-file-validate "$HERE/$APP.desktop"
+# APPIMAGE_EXTRACT_AND_RUN: runners have no FUSE. The output is named by us, not guessed from the desktop file.
+ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --appimage-extract-and-run --no-appstream --runtime-file "$RUNTIME" \
+  "$APPDIR" "$OUT/${APP}-${VERSION}-linux-${ARCH}.AppImage" > /dev/null
 echo "built $OUT/${APP}-${VERSION}-linux-${ARCH}.AppImage"

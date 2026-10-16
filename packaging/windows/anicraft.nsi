@@ -1,4 +1,4 @@
-; AniCraft installer (NSIS). Build: makensis -DVERSION=0.1.0 -DSTAGE=stage/anicraft-0.1.0-windows-x86_64 -DOUTFILE=dist/anicraft-0.1.0-windows-x86_64-setup.exe packaging/windows/anicraft.nsi
+; AniCraft installer (NSIS). Build: makensis -DVERSION=0.1.0 -DSTAGE=C:\src\stage\anicraft-0.1.0-windows-x86_64 -DOUTFILE=C:\src\dist\anicraft-0.1.0-windows-x86_64-setup.exe packaging/windows/anicraft.nsi
 ; Installs everything in STAGE under Program Files, adds Start-menu shortcuts, registers .fla and .xfl and an uninstaller.
 Unicode true
 !include "MUI2.nsh"
@@ -26,7 +26,8 @@ SetCompressor /SOLID lzma
 Section "Install"
   SetRegView 64
   SetOutPath "$INSTDIR"
-  File /r "${STAGE}/*"
+  ; STAGE must be an absolute path: makensis resolves relative paths from this file's directory.
+  File /r "${STAGE}\*"
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\${APP}"
