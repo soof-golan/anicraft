@@ -1,0 +1,118 @@
+name: release
+
+# Push a tag like v0.1.0 to build the app and the CLI on Linux, macOS (Apple silicon and Intel) and Windows, and attach
+# the packages plus SHA256SUMS to a GitHub pre-release. The binaries are unsigned (no signing secrets are used).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev libfontconfig1-dev
+      - run: rustup show
+      - run: rustup target add ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }} -p anicraft -p anicraft-cli
+      - name: Package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          NAME: ${{ matrix.name }}
+          OS_KIND: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then VERSION="dev"; fi
+          PKG="anicraft-${VERSION}-${NAME}"
+          BIN="target/${TARGET}/release"
+          mkdir -p dist "stage/${PKG}"
+          cp README.md LICENSE-MIT LICENSE-BSD-3-Clause "stage/${PKG}/"
+          case "$OS_KIND" in
+            Linux)
+              cp "${BIN}/anicraft" "${BIN}/anicraft-cli" "stage/${PKG}/"
+              tar -C stage -czf "dist/${PKG}.tar.gz" "${PKG}"
+              ;;
+            macOS)
+              APP="stage/${PKG}/AniCraft.app"
+              mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
+              cp "${BIN}/anicraft" "${APP}/Contents/MacOS/anicraft"
+              sed -e "s/@VERSION@/${VERSION}/g" packaging/macos/Info.plist > "${APP}/Contents/Info.plist"
+              cp "${BIN}/anicraft-cli" "stage/${PKG}/"
+              codesign --force --deep --sign - "${APP}" || true
+              (cd stage && ditto -c -k --keepParent "${PKG}" "../dist/${PKG}.zip")
+              ;;
+            Windows)
+              cp "${BIN}/anicraft.exe" "${BIN}/anicraft-cli.exe" "stage/${PKG}/"
+              (cd stage && 7z a -tzip "../dist/${PKG}.zip" "${PKG}")
+              ;;
+          esac
+          ls -l dist
+      - uses: actions/upload-artifact@v5
+        with:
+          name: package-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: package-*
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cat > notes.md <<'EOF'
+          AniCraft ${{ github.ref_name }}: an Animate-compatible 2D animation editor (XFL/FLA, SWF, GIF and MP4 export).
+
+          These binaries are unsigned. On macOS, right-click the app and choose Open the first time (or run
+          `xattr -dr com.apple.quarantine AniCraft.app`). On Windows, SmartScreen may warn: choose More info, then Run
+          anyway. Verify downloads against SHA256SUMS.
+          EOF
+          gh release create "${{ github.ref_name }}" dist/* --prerelease --title "AniCraft ${{ github.ref_name }}" --notes-file notes.md
