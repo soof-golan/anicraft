@@ -37,6 +37,7 @@
 pub mod diff;
 pub mod document;
 pub mod element;
+pub mod entities;
 pub mod error;
 pub mod library;
 pub mod media;
@@ -51,6 +52,7 @@ use anim_archive::{Container, ContainerKind, IndexSource, Limits};
 use anim_scene::{Document, MediaStore};
 use serde::{Deserialize, Serialize};
 
+pub use entities::display_name;
 pub use error::XflError;
 pub use media::{BitmapFormat, LosslessHeader, decode_bitmap, decode_bitmap_bytes, encode_lossless_bitmap, lossless_header, sniff_bitmap, sound_payload};
 pub use write::{WriteOptions, WriteReport, write_fla, write_fla_bytes, write_loaded, write_path, write_to, write_xfl_folder};
