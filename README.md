@@ -36,9 +36,9 @@ Download a package from the [releases page](https://github.com/soof-golan/anicra
 
 | Platform | Installer | Also |
 | --- | --- | --- |
-| Linux (x86_64) | `.AppImage` (`chmod +x`, then run it) or `.deb` (`sudo apt install ./anicraft_*.deb`) | `tar.gz` |
+| Linux (x86_64, arm64) | `.AppImage` (`chmod +x`, then run it) or `.deb` (`sudo apt install ./anicraft_*.deb`) | `tar.gz` |
 | macOS | `.dmg` for Apple silicon (`macos-arm64`) or Intel (`macos-x86_64`): drag AniCraft to Applications | `zip` |
-| Windows (x86_64) | `-setup.exe`: Start-menu shortcuts, opens `.fla` and `.xfl` files | `zip` |
+| Windows (x86_64, arm64) | `-setup.exe`: Start-menu shortcuts, opens `.fla` and `.xfl` files | `zip` |
 
 The `.deb` and the Windows installer register `.fla` and `.xfl` so a double click opens them in AniCraft; the `.deb`
 also puts `anicraft` and `anicraft-cli` on the `PATH`.
