@@ -340,6 +340,12 @@ impl AniApp {
                         p2: [0.75, 1.15],
                     });
                 }
+                "optimize-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::optimize())),
+                "expand-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::expand_fill())),
+                "soften-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::soften_edges())),
+                "scale-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::scale_rotate())),
+                "trace-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::trace_bitmap())),
+                "paste-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::paste_special())),
                 _ => {}
             }
         }

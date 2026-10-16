@@ -254,6 +254,22 @@ impl AniApp {
             self.handle(ctx, super::actions::UiEvent::Menu(MenuAction::Frame(action)));
             return;
         }
+        // Shape and arrange chords (Paste in Place, Lock, Distribute to Layers, Rotate 90, ...).
+        let shape_chord = match (modifiers.command, modifiers.shift, modifiers.alt, key) {
+            (true, true, false, K::V) => Some(MenuAction::PasteInPlace),
+            (true, false, true, K::L) => Some(MenuAction::Command { id: "modify.lock", params: json!({}) }),
+            (true, true, true, K::L) => Some(MenuAction::Command { id: "modify.unlock_all", params: json!({}) }),
+            (true, true, false, K::D) => Some(MenuAction::Command { id: "modify.distribute_to_layers", params: json!({}) }),
+            (true, true, false, K::Num9) => Some(MenuAction::Command { id: "modify.transform", params: json!({ "op": "rotate_90_cw" }) }),
+            (true, true, false, K::Num7) => Some(MenuAction::Command { id: "modify.transform", params: json!({ "op": "rotate_90_ccw" }) }),
+            (true, false, true, K::S) => Some(MenuAction::Dialog(Dialog::Shape(crate::shape_ui::ShapeDialog::scale_rotate()))),
+            (true, true, true, K::C) => Some(MenuAction::Dialog(Dialog::Shape(crate::shape_ui::ShapeDialog::optimize()))),
+            _ => None,
+        };
+        if let Some(action) = shape_chord {
+            self.handle(ctx, super::actions::UiEvent::Menu(action));
+            return;
+        }
         // Application-level chords first.
         let action = match (modifiers.command, modifiers.shift, key) {
             (false, false, K::Escape) if self.ui.test_movie.is_some() => Some(MenuAction::Doc(DocAction::TestMovie)),

@@ -137,6 +137,7 @@ impl AniApp {
             }
             MenuAction::Copy => self.copy_selection(),
             MenuAction::Paste => self.paste(),
+            MenuAction::PasteInPlace => self.paste_with("in_place", false),
             MenuAction::ZoomIn => self.zoom(1.25),
             MenuAction::ZoomOut => self.zoom(0.8),
             MenuAction::ZoomFit => self.ui.stage.fit_request = true,
@@ -258,10 +259,15 @@ impl AniApp {
 
     /// Runs a registered command as one undo step and reports failures in the status bar.
     pub(crate) fn run(&mut self, id: &str, params: &Value) -> bool {
+        self.run_value(id, params).is_some()
+    }
+
+    /// [`run`](Self::run), giving the command's answer.
+    pub(crate) fn run_value(&mut self, id: &str, params: &Value) -> Option<Value> {
         let before = self.host.session().history().undo_len();
         let result = self.host.session_mut().execute(id, params);
         match result {
-            Ok(_) => {
+            Ok(value) => {
                 let history = self.host.session().history();
                 if history.undo_len() > before {
                     // Keep the History panel's command log in step with the undo stack.
@@ -272,11 +278,11 @@ impl AniApp {
                 if id.starts_with("edit.undo") || id.starts_with("edit.redo") {
                     self.ui.drag_base = None;
                 }
-                true
+                Some(value)
             }
             Err(e) => {
                 self.status(format!("{id}: {e}"));
-                false
+                None
             }
         }
     }
@@ -515,30 +521,18 @@ impl AniApp {
     }
 
     fn paste(&mut self) {
+        self.paste_with("offset", false);
+    }
+
+    /// Paste (`position` offset), Paste in Place (`in_place`) and Paste Special: the `edit.paste` command with what
+    /// the clipboard holds.
+    pub(crate) fn paste_with(&mut self, position: &str, as_bitmap: bool) {
         if self.ui.clipboard.is_empty() {
             self.status("the clipboard is empty");
             return;
         }
-        let elements = self.ui.clipboard.clone();
-        let (timeline, layer, frame) = {
-            let s = &self.host.session().doc().editor.state;
-            (s.timeline.clone(), s.layer, s.frame)
-        };
-        let result = self
-            .host
-            .session_mut()
-            .edit("Paste", None, |doc| crate::commands::paste_elements(&mut doc.editor.document, &timeline, layer, frame, elements, Point::new(12.0, 12.0)));
-        match result {
-            Ok(indices) => {
-                let keyframe = self.keyframe_index(layer, frame);
-                self.host.session_mut().doc_mut().editor.state.selection =
-                    Selection { items: indices.into_iter().map(|i| ElementRef::top_level(layer, keyframe, i)).collect(), scope: None };
-            }
-            Err(e) => {
-                self.host.session_mut().undo();
-                self.status(format!("paste failed: {e}"));
-            }
-        }
+        let elements = serde_json::to_value(&self.ui.clipboard).unwrap_or(Value::Null);
+        self.run("edit.paste", &json!({ "elements": elements, "position": position, "as_bitmap": as_bitmap }));
     }
 
     // ---- timeline ---------------------------------------------------------------------------------------------
@@ -1104,7 +1098,27 @@ impl AniApp {
                 self.run("library.rename_item", &json!({ "name": old, "new_name": new_name }));
             }
             Dialog::DocumentSettings => self.apply_settings(),
+            Dialog::Shape(d) => self.shape_dialog_ok(&d),
             Dialog::About | Dialog::Message { .. } => {}
+        }
+    }
+
+    /// Runs the command a shape dialog stands for and tells what it did in the status bar.
+    fn shape_dialog_ok(&mut self, dialog: &crate::shape_ui::ShapeDialog) {
+        if let Some((position, as_bitmap)) = dialog.paste_choice() {
+            self.paste_with(position, as_bitmap);
+            return;
+        }
+        let Some((id, params)) = dialog.command() else { return };
+        let Some(report) = self.run_value(id, &params) else { return };
+        let count = |key: &str| report.get(key).and_then(Value::as_u64);
+        let message = match id {
+            "modify.shape_curves" => count("anchors_before").zip(count("anchors_after")).map(|(b, a)| format!("optimized: {b} anchor points reduced to {a}")),
+            "modify.trace_bitmap" => count("regions").map(|n| format!("traced into {n} coloured regions")),
+            _ => None,
+        };
+        if let Some(message) = message {
+            self.status(message);
         }
     }
 

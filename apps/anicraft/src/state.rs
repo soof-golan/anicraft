@@ -28,6 +28,8 @@ pub enum Dialog {
     FrameProperties(FrameProps),
     /// Document settings (size, frame rate, background).
     DocumentSettings,
+    /// A shape command's dialog (Optimize, Expand Fill, Soften Fill Edges, Scale and Rotate, Trace Bitmap, Paste Special).
+    Shape(crate::shape_ui::ShapeDialog),
     /// Something went wrong that the person should read.
     Message { title: String, text: String },
     /// Keyboard shortcuts and about.

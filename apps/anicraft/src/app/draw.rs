@@ -320,6 +320,7 @@ impl AniApp {
             Dialog::LayerProperties(_) => "Layer Properties",
             Dialog::FrameProperties(_) => "Frame Properties",
             Dialog::DocumentSettings => "Document Settings",
+            Dialog::Shape(d) => d.title(),
             Dialog::Message { title, .. } => title.as_str(),
             Dialog::About => "AniCraft",
         }
@@ -434,6 +435,10 @@ impl AniApp {
                     Some(state) => super::doc_dialogs::settings_ui(ui, state, document, &mut confirmed, &mut keep),
                     None => keep = false,
                 }
+            }
+            Dialog::Shape(d) => {
+                d.ui(ui);
+                ok_cancel(ui, &mut confirmed, &mut keep);
             }
             Dialog::Message { text, .. } => {
                 ui.label(crate::text(text));

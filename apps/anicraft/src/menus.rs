@@ -10,6 +10,7 @@ use egui::Ui;
 use serde_json::{Value, json};
 
 use crate::docs::{BUILTIN_CATEGORY_ORDER, DOC_PANELS, DocAction, PlayToggle, TemplateChoice, panel_title};
+use crate::shape_ui::ShapeDialog;
 use crate::state::Dialog;
 
 /// What an export menu item asks for.
@@ -42,6 +43,8 @@ pub enum MenuAction {
     Cut,
     Copy,
     Paste,
+    /// Paste at the objects' original coordinates (Ctrl+Shift+V).
+    PasteInPlace,
     ZoomIn,
     ZoomOut,
     ZoomFit,
@@ -284,6 +287,8 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Cut", "Ctrl+X", view.has_selection), MenuAction::Cut);
             push(item(ui, "Copy", "Ctrl+C", view.has_selection), MenuAction::Copy);
             push(item(ui, "Paste", "Ctrl+V", true), MenuAction::Paste);
+            push(item(ui, "Paste in Place", "Ctrl+Shift+V", true), MenuAction::PasteInPlace);
+            push(item(ui, "Paste Special...", "", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::paste_special())));
             push(item(ui, "Delete", "Delete", view.on("edit.delete")), command("edit.delete"));
             push(item(ui, "Duplicate", "Ctrl+D", view.on("edit.duplicate")), command("edit.duplicate"));
             ui.separator();
@@ -397,14 +402,50 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                     for (label, mode) in [("Bring to Front", "front"), ("Bring Forward", "forward"), ("Send Backward", "backward"), ("Send to Back", "back")] {
                         push(item(ui, label, "", true), MenuAction::Command { id: "modify.arrange", params: json!({ "mode": mode }) });
                     }
+                    ui.separator();
+                    push(item(ui, "Lock", "Ctrl+Alt+L", true), command("modify.lock"));
                 });
                 ui.menu_button("Transform", |ui| {
+                    push(item(ui, "Scale and Rotate...", "Ctrl+Alt+S", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::scale_rotate())));
+                    ui.separator();
+                    push(
+                        item(ui, "Rotate 90\u{b0} CW", "Ctrl+Shift+9", true),
+                        MenuAction::Command { id: "modify.transform", params: json!({ "op": "rotate_90_cw" }) },
+                    );
+                    push(
+                        item(ui, "Rotate 90\u{b0} CCW", "Ctrl+Shift+7", true),
+                        MenuAction::Command { id: "modify.transform", params: json!({ "op": "rotate_90_ccw" }) },
+                    );
+                    ui.separator();
                     push(item(ui, "Flip Horizontal", "", true), MenuAction::Command { id: "modify.flip", params: json!({ "axis": "horizontal" }) });
                     push(item(ui, "Flip Vertical", "", true), MenuAction::Command { id: "modify.flip", params: json!({ "axis": "vertical" }) });
+                    ui.separator();
+                    push(item(ui, "Remove Transform", "", true), MenuAction::Command { id: "modify.transform", params: json!({ "op": "remove" }) });
+                });
+                ui.menu_button("Combine Objects", |ui| {
+                    for (label, op) in [("Union", "union"), ("Intersect", "intersect"), ("Punch", "punch"), ("Crop", "crop")] {
+                        push(item(ui, label, "", true), MenuAction::Command { id: "modify.combine_objects", params: json!({ "op": op }) });
+                    }
+                });
+                ui.menu_button("Bitmap", |ui| {
+                    push(item(ui, "Convert to Bitmap", "", true), command("modify.convert_to_bitmap"));
+                    push(item(ui, "Trace Bitmap...", "", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::trace_bitmap())));
                 });
             });
+            push(item(ui, "Unlock All", "Ctrl+Alt+Shift+L", true), command("modify.unlock_all"));
             ui.separator();
             ui.menu_button("Shape", |ui| {
+                ui.add_enabled_ui(view.has_selection, |ui| {
+                    for (label, op) in [("Smooth", "smooth"), ("Straighten", "straighten")] {
+                        push(item(ui, label, "", true), MenuAction::Command { id: "modify.shape_curves", params: json!({ "op": op }) });
+                    }
+                    push(item(ui, "Optimize...", "Ctrl+Alt+Shift+C", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::optimize())));
+                    ui.separator();
+                    push(item(ui, "Convert Lines to Fills", "", true), command("modify.convert_lines_to_fills"));
+                    push(item(ui, "Expand Fill...", "", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::expand_fill())));
+                    push(item(ui, "Soften Fill Edges...", "", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::soften_edges())));
+                });
+                ui.separator();
                 push(item(ui, "Add Shape Hint", "Ctrl+Shift+H", true), command("shape.add_hint"));
                 push(item(ui, "Remove All Hints", "", true), command("shape.remove_hint"));
                 ui.separator();
@@ -419,6 +460,9 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                 push(item(ui, "Reverse Frames", "", true), MenuAction::Frame(FrameAction::ReverseFrames));
                 push(item(ui, "Convert to Keyframes", "F6", true), MenuAction::Frame(FrameAction::ConvertToKeyframes));
                 push(item(ui, "Convert to Blank Keyframes", "F7", true), MenuAction::Frame(FrameAction::ConvertToBlankKeyframes));
+                ui.separator();
+                push(item(ui, "Distribute to Layers", "Ctrl+Shift+D", view.has_selection), command("modify.distribute_to_layers"));
+                push(item(ui, "Distribute to Keyframes", "", view.has_selection), command("modify.distribute_to_keyframes"));
                 ui.separator();
                 push(check(ui, "Edit Multiple Frames", "", view.edit_multiple), MenuAction::ToggleEditMultiple);
                 push(check(ui, "Auto Keyframe", "", view.auto_keyframe), MenuAction::ToggleAutoKeyframe);

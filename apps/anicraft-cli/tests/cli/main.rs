@@ -7,4 +7,5 @@ mod bridge;
 mod cli;
 mod mcp;
 mod samples;
+mod shape_ops;
 mod visual_xfl;

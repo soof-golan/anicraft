@@ -36,6 +36,7 @@ pub mod prefs;
 pub mod preview;
 pub mod props;
 pub mod recovery;
+pub mod shape_ui;
 pub mod smoke;
 pub mod state;
 pub mod templates;
