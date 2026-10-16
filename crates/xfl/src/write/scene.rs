@@ -313,7 +313,7 @@ fn symbol_instance(out: &mut XmlOut, i: &SymbolInstance) {
         .f_opt("centerPoint3DX", i.center_point_3d.filter(|p| p.x != 0.0 || p.y == 0.0).map(|p| p.x))
         .f_opt("centerPoint3DY", i.center_point_3d.filter(|p| p.y != 0.0).map(|p| p.y))
         .extra(&i.extra);
-    out.open("DOMSymbolInstance", &attrs);
+    out.open(if i.component.is_some() { "DOMComponentInstance" } else { "DOMSymbolInstance" }, &attrs);
     if i.matrix != Affine::IDENTITY {
         matrix(out, i.matrix);
     }
@@ -331,6 +331,9 @@ fn symbol_instance(out: &mut XmlOut, i: &SymbolInstance) {
     }
     for child in &i.extra.children {
         out.raw("DOMSymbolInstance", child);
+    }
+    if let Some(component) = &i.component {
+        out.cdata_leaf("parametersAsXML", &component.parameters_xml);
     }
     out.close();
 }

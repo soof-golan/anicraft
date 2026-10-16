@@ -297,6 +297,22 @@ fn text_filters_colours_and_scripts_round_trip() {
 }
 
 #[test]
+fn component_instances_round_trip_with_their_parameters() {
+    let mut doc = Document::new(100.0, 100.0, 24.0);
+    let mut instance = SymbolInstance::new("Button", Affine::IDENTITY);
+    instance.name = Some("go_btn".to_owned());
+    instance.component = Some(anim_scene::ComponentInstance::from_params(&[("label", "Go & \"play\"", "String"), ("enabled", "true", "Boolean")]));
+    let frame = Frame::new(0, 4, vec![Element::SymbolInstance(Box::new(instance))]);
+    doc.scenes.first_mut().unwrap().layers.first_mut().unwrap().frames = vec![frame];
+    let (bytes, _) = write_fla_bytes(&doc, &MediaStore::new(), &[], &WriteOptions::default()).unwrap();
+    let back = read_bytes(bytes, &ReadOptions::default()).unwrap();
+    let Element::SymbolInstance(i) = &back.document.scenes[0].layers[0].frames[0].elements[0] else { panic!("not an instance") };
+    let c = i.component.as_ref().expect("component survives");
+    assert_eq!(c.param("label").as_deref(), Some("Go & \"play\""));
+    assert_eq!(c.param("enabled").as_deref(), Some("true"));
+}
+
+#[test]
 fn unusable_kept_xml_is_left_out_with_a_warning() {
     let mut doc = Document::default();
     doc.extra.children.push("<ok a=\"1\"/>".to_owned());
