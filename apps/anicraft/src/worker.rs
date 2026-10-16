@@ -351,8 +351,7 @@ mod tests {
         assert!(matches!(worker.wait(Duration::from_secs(20)), Some(Done::Frame { .. })));
         // The editor sends a Load and its Render back to back; the worker must not answer with the previous document.
         for round in 1..=30_u64 {
-            let mut doc = Document::default();
-            doc.background_color = Rgba8 { r: 255, g: 0, b: 0, a: 255 };
+            let doc = Document { background_color: Rgba8 { r: 255, g: 0, b: 0, a: 255 }, ..Document::default() };
             worker.send(Job::Load { document: Box::new(doc), media: None });
             worker.send(Job::Render(RenderJob { id: round, ..job(0) }));
             match worker.wait(Duration::from_secs(20)) {

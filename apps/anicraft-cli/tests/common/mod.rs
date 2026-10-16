@@ -1,5 +1,14 @@
 //! Helpers shared by the integration tests.
 #![allow(dead_code, reason = "each test binary uses a different part")]
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    clippy::needless_pass_by_value,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code"
+)]
 
 pub mod client;
 
