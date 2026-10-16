@@ -9,8 +9,7 @@ use anicraft_cli::export::{self, ExportJob, ExportOutcome, Format};
 use anicraft_cli::mcp::AniDoc;
 use anicraft_cli::project::{Project, evaluator_for, resolve_span};
 use anicraft_xfl::WriteOptions;
-use anim_core::{Affine, num};
-use anim_scene::{BitmapCompression, BitmapInstance, BitmapItem, Element, LibraryItem, TimelineId};
+use anim_scene::TimelineId;
 use anim_session::{JobContext, JobError};
 
 /// Result of a background job.
@@ -116,6 +115,8 @@ pub use anicraft_cli::import::{import_artwork, place_bitmap};
 
 #[cfg(test)]
 mod tests {
+    use anim_scene::Element;
+
     use super::*;
 
     fn png_bytes(w: u32, h: u32) -> Vec<u8> {

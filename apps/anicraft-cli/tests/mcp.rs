@@ -276,3 +276,217 @@ fn a_bad_root_is_reported_before_the_client_connects() {
     assert!(!out.status.success());
     assert!(out.stdout.is_empty(), "nothing may reach stdout before the protocol starts");
 }
+
+#[test]
+fn bridge_options_are_validated_before_the_protocol_starts() {
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_anicraft-cli")).arg("mcp").args(args).env_remove("ANIM_MCP_TOKEN").stdin(Stdio::null()).output().unwrap()
+    };
+    // Nothing listens, and there is no token: a clear error, nothing on stdout.
+    let out = run(&["--bridge", "1"]);
+    assert!(!out.status.success());
+    assert!(out.stdout.is_empty(), "nothing may reach stdout");
+    let message = String::from_utf8_lossy(&out.stderr);
+    assert!(message.contains("--token-file") || message.contains("could not"), "{message}");
+    // A bridge drives the editor's document: it cannot be combined with a headless file or roots.
+    for extra in [["--file", "x.fla"], ["--root", "/tmp"], ["--read-root", "/tmp"], ["--write-root", "/tmp"]] {
+        let out = run(&["--bridge", "1", extra[0], extra[1]]);
+        assert!(!out.status.success(), "{extra:?}");
+        assert!(out.stdout.is_empty(), "nothing may reach stdout");
+    }
+    assert!(!run(&["--token-file", "/tmp/x"]).status.success(), "--token-file needs --bridge");
+}
+
+fn tiny_png(path: &Path) {
+    let mut encoder = png::Encoder::new(std::fs::File::create(path).unwrap(), 4, 4);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header().unwrap().write_image_data(&[200_u8; 64]).unwrap();
+}
+
+#[test]
+fn every_editor_command_is_a_tool_with_a_schema_and_a_description() {
+    let mut client = Client::spawn(&[]);
+    let tools = client.request("tools/list", json!({}));
+    let list = tools["tools"].as_array().unwrap();
+    let names: Vec<&str> = list.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    for expected in [
+        // files, queries, rendering, export
+        "new_document",
+        "open_document",
+        "save_document",
+        "inspect_document",
+        "get_library",
+        "get_property",
+        "set_property",
+        "render_frame",
+        "screenshot",
+        "export",
+        "list_export_formats",
+        "query_timeline",
+        "query_element",
+        "query_stats",
+        "undo",
+        "redo",
+        "run_batch",
+        // document, scenes, layers
+        "document_set_stage",
+        "scene_add",
+        "layer_add",
+        "layer_duplicate",
+        "layer_set_state",
+        "layer_move",
+        // timeline
+        "timeline_insert_keyframe",
+        "timeline_create_classic_tween",
+        "timeline_create_shape_tween",
+        "timeline_set_tween_options",
+        "timeline_set_ease",
+        "timeline_set_sound",
+        "timeline_set_script",
+        "timeline_move_keyframe",
+        "timeline_set_label",
+        // tools as commands
+        "draw_rectangle",
+        "draw_oval",
+        "draw_line",
+        "draw_path",
+        "draw_freehand",
+        "draw_text",
+        "select_at",
+        "select_rect",
+        "select_all",
+        "transform_move",
+        "transform_scale",
+        "transform_rotate",
+        "transform_skew",
+        "transform_matrix",
+        "paint_bucket",
+        "paint_ink",
+        "edit_enter",
+        "edit_exit",
+        "editor_goto",
+        // objects, symbols, library
+        "modify_group",
+        "modify_convert_to_symbol",
+        "modify_arrange",
+        "modify_flip",
+        "insert_symbol",
+        "instance_set_color_effect",
+        "instance_add_filter",
+        "instance_clear_filters",
+        "instance_set_options",
+        "text_set_style",
+        "stage_add_symbol_instance",
+        "library_import",
+        "library_rename_item",
+    ] {
+        assert!(names.contains(&expected), "{expected} is missing");
+    }
+    for tool in list {
+        let name = tool["name"].as_str().unwrap();
+        assert!(tool["description"].as_str().is_some_and(|d| d.len() > 15), "{name} needs a real description");
+        assert_eq!(tool["inputSchema"]["type"], "object", "{name}");
+    }
+    let png_tool = list.iter().find(|t| t["name"] == "render_frame").unwrap();
+    assert_eq!(png_tool["annotations"]["readOnlyHint"], true);
+    // Export lists every format.
+    let formats = client.ok("list_export_formats", json!({}));
+    let ids: Vec<&str> = formats["formats"].as_array().unwrap().iter().map(|f| f["id"].as_str().unwrap()).collect();
+    for id in ["png-seq", "gif", "mp4", "mov", "svg", "svg-anim", "spritesheet", "swf"] {
+        assert!(ids.contains(&id), "{id} in {ids:?}");
+    }
+}
+
+#[test]
+fn a_whole_animation_is_built_looked_at_exported_saved_and_reopened() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut c = Client::spawn(&["--read-root", &root(&dir), "--write-root", &root(&dir)]);
+    c.ok("new_document", json!({}));
+    c.ok("document_set_stage", json!({ "width": 160, "height": 100, "frame_rate": 12, "background": "#ffffff" }));
+
+    // Static artwork on the bottom layer, drawn with the tools: a rectangle, an oval, a triangle and mixed-direction text.
+    c.ok("draw_rectangle", json!({ "x": 10, "y": 10, "width": 50, "height": 40, "fill": "#ff0000", "object_drawing": true }));
+    c.ok("draw_oval", json!({ "x": 90, "y": 10, "width": 50, "height": 40, "fill": "#0000ff", "object_drawing": true }));
+    c.ok("draw_path", json!({ "d": "M 10 95 L 60 70 L 110 95 Z", "fill": "#00aa00", "object_drawing": true }));
+    let hebrew = "שלום world مرحبا";
+    c.ok("draw_text", json!({ "x": 70, "y": 60, "text": hebrew, "size": 20, "color": "#000000" }));
+    assert_eq!(c.ok("stage_elements", json!({}))["result"]["elements"].as_array().unwrap().len(), 4);
+
+    // Right-to-left text is data, not an afterthought: it reads back as typed and can be forced to rtl.
+    let table = c.ok("query_timeline", json!({}));
+    let keyframe = &table["layers"][0]["keyframes"][0];
+    let text_index = keyframe["elements"].as_array().unwrap().iter().find(|e| e["kind"] == "text").unwrap()["index"].as_u64().unwrap();
+    let element = c.ok("query_element", json!({ "layer": 0, "frame": 1, "index": text_index }));
+    assert_eq!(element["element"]["Text"]["text_runs"][0]["characters"], hebrew);
+    c.ok("text_set_style", json!({ "layer": 0, "frame": 1, "index": text_index, "direction": "rtl", "align": "right", "size": 18 }));
+    let element = c.ok("query_element", json!({ "layer": 0, "frame": 1, "index": text_index }));
+    assert_eq!(element["element"]["Text"]["text_runs"][0]["direction"], "RightToLeft");
+    assert_eq!(element["element"]["Text"]["text_runs"][0]["alignment"], "Right");
+    assert!(c.tool("text_set_style", json!({ "layer": 0, "frame": 1, "index": 0, "direction": "diagonal" })).1);
+
+    // A moving symbol on a new top layer: convert, colour, filter, keyframe, move, tween.
+    c.ok("layer_add", json!({ "name": "mover" }));
+    c.ok("editor_goto", json!({ "layer": 0, "frame": 1 }));
+    c.ok("draw_rectangle", json!({ "x": 10, "y": 56, "width": 20, "height": 20, "fill": "#ff8800", "object_drawing": true }));
+    c.ok("modify_convert_to_symbol", json!({ "name": "Block", "kind": "movie_clip" }));
+    c.ok("instance_set_color_effect", json!({ "effect": "alpha", "value": 90 }));
+    c.ok("instance_add_filter", json!({ "kind": "drop_shadow", "distance": 3, "blur_x": 3, "blur_y": 3, "color": "#00000080" }));
+    c.ok("instance_set_options", json!({ "blend_mode": "normal", "name": "block" }));
+    c.ok("timeline_insert_keyframe", json!({ "layer": 0, "frame": 12 }));
+    c.ok("editor_goto", json!({ "frame": 12 }));
+    c.ok("select_at", json!({ "x": 20, "y": 66 }));
+    c.ok("transform_move", json!({ "dx": 120, "dy": 0 }));
+    c.ok("timeline_create_classic_tween", json!({ "layer": 0, "frame": 1 }));
+    c.ok("timeline_set_tween_options", json!({ "layer": 0, "frame": 1, "rotate": "clockwise", "rotate_times": 1 }));
+    c.ok("timeline_set_label", json!({ "layer": 0, "frame": 1, "label": "run" }));
+    assert_eq!(c.ok("query_validate", json!({}))["problems"], json!([]));
+    let table = c.ok("query_timeline", json!({}));
+    assert_eq!(table["frames"], 12);
+    assert_eq!(table["layers"][0]["name"], "mover");
+    assert_eq!(table["layers"][0]["keyframes"][0]["tween"], "Classic");
+    assert_eq!(table["layers"][0]["keyframes"][0]["rotate"], "Clockwise");
+    let symbol = c.ok("query_timeline", json!({ "symbol": "Block" }));
+    assert_eq!(symbol["layers"][0]["keyframes"][0]["elements"].as_array().unwrap().len(), 1);
+
+    // Look at it: the images are real PNGs that differ over time, and the text left ink on the page.
+    let first = decode_png(&c.images("render_frame", json!({ "frame": 1 }))[0]);
+    let last = decode_png(&c.images("render_frame", json!({ "frame": 12 }))[0]);
+    let middle = decode_png(&c.images("render_frame", json!({ "frame": 6 }))[0]);
+    assert_eq!((first.width, first.height), (160, 100));
+    assert_ne!(first.rgba, last.rgba);
+    assert_ne!(first.rgba, middle.rgba);
+    let ink = (70..155).flat_map(|x| (60..95).map(move |y| (x, y))).filter(|&(x, y)| first.at(x, y)[..3].iter().all(|v| *v < 100)).count();
+    assert!(ink > 30, "the Hebrew and Arabic text should be drawn ({ink} dark pixels)");
+
+    // Import an image, and see it in the library and on the stage.
+    let png_path = dir.path().join("dot.png");
+    tiny_png(&png_path);
+    let imported = c.ok("library_import", json!({ "path": png_path.to_str().unwrap(), "place": true }));
+    assert_eq!(imported["result"]["name"], "dot.png", "{imported}");
+    assert_eq!(c.ok("get_library", json!({}))["bitmaps"][0], "dot.png");
+
+    // Export a GIF, save, reopen and find the same animation.
+    let gif = dir.path().join("anim.gif");
+    let exported = c.ok("export", json!({ "format": "gif", "path": gif.to_str().unwrap(), "options": { "from": 1, "to": 12 } }));
+    assert_eq!(exported["frames"], 12);
+    assert!(std::fs::read(&gif).unwrap().starts_with(b"GIF8"));
+    let fla = dir.path().join("anim.fla");
+    let before_save = decode_png(&c.images("render_frame", json!({ "frame": 12 }))[0]);
+    c.ok("save_document", json!({ "path": fla.to_str().unwrap() }));
+    c.ok("new_document", json!({}));
+    assert_eq!(c.ok("inspect_document", json!({ "depth": 0 }))["scenes"][0]["frames"], 1);
+    c.ok("open_document", json!({ "path": fla.to_str().unwrap() }));
+    let reopened = c.ok("query_timeline", json!({}));
+    assert_eq!(reopened["frames"], 12);
+    assert_eq!(reopened["layers"][0]["keyframes"][0]["tween"], "Classic");
+    let text = c.ok("query_element", json!({ "layer": 1, "frame": 1, "index": text_index }));
+    assert_eq!(text["element"]["Text"]["text_runs"][0]["characters"], hebrew);
+    // (XFL has no slot for a forced direction; `auto` resolves Hebrew and Arabic runs right-to-left by their letters.)
+    assert_eq!(text["element"]["Text"]["text_runs"][0]["alignment"], "Right");
+    let again = decode_png(&c.images("render_frame", json!({ "frame": 12 }))[0]);
+    assert_eq!(again.rgba, before_save.rgba, "the reopened file renders like the document that was saved");
+    // The saved file is a valid Animate document for the one-shot commands too.
+    let info = common::cli_ok(&["info", fla.to_str().unwrap(), "--json"]);
+    assert!(info.contains("Block"));
+}

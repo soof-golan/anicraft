@@ -193,7 +193,11 @@ fn timeline_name(id: &TimelineId) -> Value {
 }
 
 fn uint(params: &Value, key: &str) -> Result<usize, ControlError> {
-    params.get(key).and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).ok_or_else(|| ControlError::invalid(format!("`{key}` is required and must be a non-negative integer")))
+    params
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|v| usize::try_from(v).ok())
+        .ok_or_else(|| ControlError::invalid(format!("`{key}` is required and must be a non-negative integer")))
 }
 
 /// What an element is, in a few words an agent can act on (the index is its position in the keyframe).
@@ -553,11 +557,13 @@ fn bridge_backend(target: &BridgeTarget) -> color_eyre::Result<anim_mcp::Backend
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], target.port));
     let token = match anim_mcp::read_token_file(&file) {
         Ok((token, _)) => token,
-        Err(e) if target.token_file.is_none() => std::env::var("ANIM_MCP_TOKEN")
-            .map_err(|_| eyre!("no token for the editor on port {}: {} is unreadable ({e}); pass --token-file or set ANIM_MCP_TOKEN", target.port, file.display()))?,
+        Err(e) if target.token_file.is_none() => std::env::var("ANIM_MCP_TOKEN").map_err(|_| {
+            eyre!("no token for the editor on port {}: {} is unreadable ({e}); pass --token-file or set ANIM_MCP_TOKEN", target.port, file.display())
+        })?,
         Err(e) => return Err(e).wrap_err_with(|| format!("could not read {}", file.display())),
     };
-    anim_mcp::connect_bridge(addr, &token).wrap_err_with(|| format!("could not connect to the editor at {addr}; start it with `anicraft --control-port {}`", target.port))
+    anim_mcp::connect_bridge(addr, &token)
+        .wrap_err_with(|| format!("could not connect to the editor at {addr}; start it with `anicraft --control-port {}`", target.port))
 }
 
 /// Runs the MCP server on stdin and stdout until the client disconnects: a headless session, or a bridge to a running

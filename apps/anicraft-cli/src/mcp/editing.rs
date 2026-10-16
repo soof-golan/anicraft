@@ -128,7 +128,7 @@ fn instance_commands() -> Vec<CommandSpec<AniDoc>> {
     ]
 }
 
-fn timeline_commands()-> Vec<CommandSpec<AniDoc>> {
+fn timeline_commands() -> Vec<CommandSpec<AniDoc>> {
     vec![
         CommandSpec::new("timeline.set_tween_options", "Tween Options", set_tween_options)
             .describe("Sets the options of the classic tween that starts at the keyframe: `rotate` (auto, none, clockwise, counter_clockwise) with `rotate_times` full extra turns, `scale`, `snap`, `orient_to_path`, `sync`.")
@@ -418,7 +418,8 @@ fn new_symbol(doc: &mut AniDoc, params: &Value) -> Out {
 
 fn copy_selection(doc: &mut AniDoc, _params: &Value) -> Out {
     let id = editing(doc);
-    let elements: Vec<&Element> = doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(&doc.editor.document, &id, r)).map(|r| r.element).collect();
+    let elements: Vec<&Element> =
+        doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(&doc.editor.document, &id, r)).map(|r| r.element).collect();
     Ok(json!({ "count": elements.len(), "elements": serde_json::to_value(&elements).map_err(failed)? }))
 }
 
@@ -426,7 +427,14 @@ fn copy_selection(doc: &mut AniDoc, _params: &Value) -> Out {
 ///
 /// # Errors
 /// When the layer or keyframe does not exist.
-pub fn paste_elements(doc: &mut Document, id: &TimelineId, layer: usize, frame: u32, elements: Vec<Element>, offset: Point) -> Result<Vec<usize>, anim_scene::SceneError> {
+pub fn paste_elements(
+    doc: &mut Document,
+    id: &TimelineId,
+    layer: usize,
+    frame: u32,
+    elements: Vec<Element>,
+    offset: Point,
+) -> Result<Vec<usize>, anim_scene::SceneError> {
     let mut at = Vec::new();
     for mut element in elements {
         if let Some(m) = element.matrix() {
@@ -461,11 +469,7 @@ fn targets(doc: &AniDoc, layer: Option<usize>, frame: Option<u32>, index: Option
     match (layer, frame, index) {
         (None, None, None) => {
             let items = doc.editor.state.selection.items.clone();
-            if items.is_empty() {
-                Err(CommandError::failed("nothing is selected: select objects first, or pass layer, frame and index"))
-            } else {
-                Ok(items)
-            }
+            if items.is_empty() { Err(CommandError::failed("nothing is selected: select objects first, or pass layer, frame and index")) } else { Ok(items) }
         }
         (Some(layer), Some(frame), Some(index)) => {
             let id = editing(doc);
@@ -498,7 +502,9 @@ fn on_instances(
         }
     }
     if touched == 0 {
-        return Err(CommandError::failed("no symbol instance among the targets (graphics, movie clips and buttons have these properties; shapes, text and bitmaps do not)"));
+        return Err(CommandError::failed(
+            "no symbol instance among the targets (graphics, movie clips and buttons have these properties; shapes, text and bitmaps do not)",
+        ));
     }
     Ok(touched)
 }
@@ -713,7 +719,14 @@ fn add_filter(doc: &mut AniDoc, params: &Value) -> Out {
             knockout: p.knockout,
             hide_object: p.hide_object,
         },
-        "glow" => anim_display::Filter::Glow { color: shadow_color("#ff0000")?, blur_x: blur(p.blur_x, "blur_x")?, blur_y: blur(p.blur_y, "blur_y")?, strength, inner: p.inner, knockout: p.knockout },
+        "glow" => anim_display::Filter::Glow {
+            color: shadow_color("#ff0000")?,
+            blur_x: blur(p.blur_x, "blur_x")?,
+            blur_y: blur(p.blur_y, "blur_y")?,
+            strength,
+            inner: p.inner,
+            knockout: p.knockout,
+        },
         "color_matrix" => {
             let values = p.matrix.as_deref().ok_or_else(|| CommandError::invalid_params("color_matrix needs `matrix` (20 numbers)"))?;
             finite(values, "matrix")?;
@@ -989,12 +1002,8 @@ fn set_layer_state(doc: &mut AniDoc, params: &Value) -> Out {
     if p.parent.is_some() || p.clear_parent {
         edit::set_layer_parent(&mut doc.editor.document, &id, p.layer, p.parent).map_err(failed)?;
     }
-    let layer = doc
-        .editor
-        .document
-        .timeline_mut(&id)
-        .and_then(|t| t.layers.get_mut(p.layer))
-        .ok_or_else(|| CommandError::failed(format!("no layer {}", p.layer)))?;
+    let layer =
+        doc.editor.document.timeline_mut(&id).and_then(|t| t.layers.get_mut(p.layer)).ok_or_else(|| CommandError::failed(format!("no layer {}", p.layer)))?;
     if let Some(v) = p.visible {
         layer.visible = v;
     }

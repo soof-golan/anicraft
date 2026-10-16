@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use anicraft_tools::{Cursor, ElementRef, Overlay as ToolOverlay, Role};
+use anicraft_tools::{Cursor, Overlay as ToolOverlay, Role};
 use anim_core::{Rgba8, num};
 use anim_scene::timeline::{LayerKind as SceneLayerKind, TweenType};
 use anim_scene::{Document, Element, LibraryItem, SymbolKind, Timeline, TimelineId};

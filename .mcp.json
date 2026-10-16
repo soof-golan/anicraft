@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "anicraft": {
+      "command": "cargo",
+      "args": ["run", "-q", "-p", "anicraft-cli", "--", "mcp", "--read-root", ".", "--write-root", "./out"],
+      "env": { "RUST_LOG": "warn" }
+    },
+    "anicraft-window": {
+      "command": "cargo",
+      "args": ["run", "-q", "-p", "anicraft-cli", "--", "mcp", "--bridge", "7421"],
+      "env": { "RUST_LOG": "warn" }
+    }
+  }
+}

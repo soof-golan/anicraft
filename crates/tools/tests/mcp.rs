@@ -255,7 +255,8 @@ fn enter_symbols_groups_and_go_to() {
     c.ok("edit_exit", json!({}));
     assert_eq!(c.ok("tools_state", json!({}))["timeline"], json!({ "Scene": 0 }));
     assert!(c.err("edit_enter", json!({ "x": 500, "y": 350 })).contains("no group"));
-    c.ok("editor_goto", json!({ "symbol": "box", "layer": 0, "frame": 0 }));
+    c.ok("editor_goto", json!({ "symbol": "box", "layer": 0, "frame": 1 }));
+    assert!(c.err("editor_goto", json!({ "frame": 0 })).contains("start at 1"));
     c.ok("draw_oval", json!({ "x": 10, "y": 10, "width": 30, "height": 30 }));
     assert_eq!(c.stage().len(), 2, "drawing lands inside the symbol");
     assert!(c.err("editor_goto", json!({ "symbol": "missing" })).contains("no such timeline"));

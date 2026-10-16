@@ -252,11 +252,13 @@ fn selection_json(editor: &Editor) -> Value {
 fn stage_elements_json(editor: &Editor, layer: Option<usize>, frame: Option<u32>) -> Value {
     editor.with_context(|ctx| {
         let layer_index = layer.unwrap_or(ctx.layer);
-        let frame_number = frame.unwrap_or(ctx.frame);
+        // The parameter and the answer count frames from 1, like the timeline; the model counts from 0.
+        let frame_number = frame.map_or(ctx.frame, |f| f.saturating_sub(1));
+        let shown = frame_number.saturating_add(1);
         let Some(l) = ctx.layer_ref(layer_index) else { return json!({ "layer": layer_index, "elements": [] }) };
-        let Some(k) = l.keyframe_at(frame_number) else { return json!({ "layer": layer_index, "frame": frame_number, "keyframe": null, "elements": [] }) };
+        let Some(k) = l.keyframe_at(frame_number) else { return json!({ "layer": layer_index, "frame": shown, "keyframe": null, "elements": [] }) };
         let elements: Vec<Value> = (0..k.elements.len()).map(|i| element_json(ctx, &ElementRef::top_level(layer_index, k.index, i))).collect();
-        json!({ "layer": layer_index, "layer_name": l.name, "frame": frame_number, "keyframe": k.index, "elements": elements })
+        json!({ "layer": layer_index, "layer_name": l.name, "frame": shown, "keyframe": k.index, "elements": elements })
     })
 }
 
@@ -424,9 +426,9 @@ fn editor_goto<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Comma
     editor.state.timeline = timeline;
     editor.state.layer = layer;
     if let Some(frame) = p.frame {
-        editor.state.frame = frame;
+        editor.state.frame = frame.checked_sub(1).ok_or_else(|| CommandError::invalid_params("frames start at 1"))?;
     }
-    Ok(json!({ "timeline": editor.state.timeline, "layer": editor.state.layer, "frame": editor.state.frame }))
+    Ok(json!({ "timeline": editor.state.timeline, "layer": editor.state.layer, "frame": editor.state.frame.saturating_add(1) }))
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -975,9 +977,8 @@ const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"prope
 
 const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string"}},"additionalProperties":false}"#;
 const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, bucket_gap, text, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
-const SCHEMA_ELEMENTS: &str =
-    r#"{"type":"object","properties":{"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":0}},"additionalProperties":false}"#;
-const SCHEMA_GOTO: &str = r#"{"type":"object","properties":{"scene":{"type":"integer","minimum":0},"symbol":{"type":"string","description":"Library name of a symbol to edit"},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":0}},"additionalProperties":false}"#;
+const SCHEMA_ELEMENTS: &str = r#"{"type":"object","properties":{"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based; the playhead by default"}},"additionalProperties":false}"#;
+const SCHEMA_GOTO: &str = r#"{"type":"object","properties":{"scene":{"type":"integer","minimum":0},"symbol":{"type":"string","description":"Library name of a symbol to edit"},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based playhead position"}},"additionalProperties":false}"#;
 
 const fn schema_box() -> &'static str {
     r##"{"type":"object","required":["x","y","width","height"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number","exclusiveMinimum":0},"height":{"type":"number","exclusiveMinimum":0},"corner_radius":{"type":"number","minimum":0},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##
