@@ -105,12 +105,12 @@ const LAYER_FRAME_COUNT: &str = r#"{"type":"object","additionalProperties":false
 
 /// Resolves the `scene` parameter against the document.
 fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandError> {
-    let last = doc.document.scenes.len().saturating_sub(1);
-    let index = scene.unwrap_or_else(|| doc.document.current_timeline.min(last));
-    if index < doc.document.scenes.len() {
+    let last = doc.editor.document.scenes.len().saturating_sub(1);
+    let index = scene.unwrap_or_else(|| doc.editor.document.current_timeline.min(last));
+    if index < doc.editor.document.scenes.len() {
         Ok(TimelineId::Scene(index))
     } else {
-        Err(CommandError::failed(format!("no scene {index}; the document has {}", doc.document.scenes.len())))
+        Err(CommandError::failed(format!("no scene {index}; the document has {}", doc.editor.document.scenes.len())))
     }
 }
 
@@ -164,21 +164,21 @@ fn set_stage(doc: &mut AniDoc, params: &Value) -> Out {
         if v.is_finite() && v > 0.0 && v <= 16384.0 { Ok(v) } else { Err(CommandError::invalid_params(format!("{what} {v} is out of range"))) }
     };
     if let Some(w) = p.width {
-        doc.document.width = positive(w, "width")?;
+        doc.editor.document.width = positive(w, "width")?;
     }
     if let Some(h) = p.height {
-        doc.document.height = positive(h, "height")?;
+        doc.editor.document.height = positive(h, "height")?;
     }
     if let Some(f) = p.frame_rate {
         if !(f.is_finite() && f > 0.0 && f <= 1000.0) {
             return Err(CommandError::invalid_params(format!("frame_rate {f} is out of range")));
         }
-        doc.document.frame_rate = f;
+        doc.editor.document.frame_rate = f;
     }
     if let Some(c) = p.background {
-        doc.document.background_color = parse_color(&c)?;
+        doc.editor.document.background_color = parse_color(&c)?;
     }
-    ok(json!({ "width": doc.document.width, "height": doc.document.height, "frame_rate": doc.document.frame_rate }))
+    ok(json!({ "width": doc.editor.document.width, "height": doc.editor.document.height, "frame_rate": doc.editor.document.frame_rate }))
 }
 
 #[derive(Deserialize)]
@@ -190,8 +190,8 @@ struct SceneAdd {
 
 fn scene_add(doc: &mut AniDoc, params: &Value) -> Out {
     let p: SceneAdd = parse_params(params)?;
-    let at = p.at.unwrap_or(doc.document.scenes.len());
-    let index = edit::add_scene(&mut doc.document, &p.name, at).map_err(|e| failed(&e))?;
+    let at = p.at.unwrap_or(doc.editor.document.scenes.len());
+    let index = edit::add_scene(&mut doc.editor.document, &p.name, at).map_err(|e| failed(&e))?;
     ok(json!({ "scene": index }))
 }
 
@@ -203,7 +203,7 @@ struct SceneOnly {
 
 fn scene_remove(doc: &mut AniDoc, params: &Value) -> Out {
     let p: SceneOnly = parse_params(params)?;
-    let removed = edit::remove_scene(&mut doc.document, p.scene).map_err(|e| failed(&e))?;
+    let removed = edit::remove_scene(&mut doc.editor.document, p.scene).map_err(|e| failed(&e))?;
     ok(json!({ "removed": removed.name }))
 }
 
@@ -219,7 +219,7 @@ fn scene_rename(doc: &mut AniDoc, params: &Value) -> Out {
     if p.name.trim().is_empty() {
         return Err(CommandError::invalid_params("a scene needs a name"));
     }
-    let scene = doc.document.scenes.get_mut(p.scene).ok_or_else(|| CommandError::failed(format!("no scene {}", p.scene)))?;
+    let scene = doc.editor.document.scenes.get_mut(p.scene).ok_or_else(|| CommandError::failed(format!("no scene {}", p.scene)))?;
     p.name.clone_into(&mut scene.name);
     ok(json!({ "scene": p.scene, "name": p.name }))
 }
@@ -244,7 +244,7 @@ fn layer_add(doc: &mut AniDoc, params: &Value) -> Out {
         other => return Err(CommandError::invalid_params(format!("unknown layer kind {other:?}"))),
     };
     let at = p.at.unwrap_or(0);
-    let index = edit::add_layer(&mut doc.document, &id, at, p.name.as_deref(), kind).map_err(|e| failed(&e))?;
+    let index = edit::add_layer(&mut doc.editor.document, &id, at, p.name.as_deref(), kind).map_err(|e| failed(&e))?;
     ok(json!({ "layer": index }))
 }
 
@@ -258,7 +258,7 @@ struct LayerRef {
 fn layer_remove(doc: &mut AniDoc, params: &Value) -> Out {
     let p: LayerRef = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    let remaining = edit::remove_layer(&mut doc.document, &id, p.layer).map_err(|e| failed(&e))?;
+    let remaining = edit::remove_layer(&mut doc.editor.document, &id, p.layer).map_err(|e| failed(&e))?;
     ok(json!({ "layers_left": remaining }))
 }
 
@@ -273,7 +273,7 @@ struct LayerRename {
 fn layer_rename(doc: &mut AniDoc, params: &Value) -> Out {
     let p: LayerRename = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    edit::rename_layer(&mut doc.document, &id, p.layer, &p.name).map_err(|e| failed(&e))?;
+    edit::rename_layer(&mut doc.editor.document, &id, p.layer, &p.name).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "name": p.name }))
 }
 
@@ -288,7 +288,7 @@ struct LayerMove {
 fn layer_move(doc: &mut AniDoc, params: &Value) -> Out {
     let p: LayerMove = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    let index = edit::move_layer(&mut doc.document, &id, p.from, p.to).map_err(|e| failed(&e))?;
+    let index = edit::move_layer(&mut doc.editor.document, &id, p.from, p.to).map_err(|e| failed(&e))?;
     ok(json!({ "layer": index }))
 }
 
@@ -304,7 +304,7 @@ struct At {
 fn at(doc: &mut AniDoc, params: &Value, f: impl FnOnce(&mut anim_scene::Document, &TimelineId, usize, u32) -> Result<(), SceneError>) -> Out {
     let p: At = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    f(&mut doc.document, &id, p.layer, zero_based(p.frame)?).map_err(|e| failed(&e))?;
+    f(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "frame": p.frame }))
 }
 
@@ -344,14 +344,14 @@ struct Counted {
 fn insert_frames(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Counted = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    edit::insert_frames(&mut doc.document, &id, p.layer, zero_based(p.frame)?, p.count).map_err(|e| failed(&e))?;
+    edit::insert_frames(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, p.count).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "frame": p.frame, "count": p.count }))
 }
 
 fn remove_frames(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Counted = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    edit::remove_frames(&mut doc.document, &id, p.layer, zero_based(p.frame)?, p.count).map_err(|e| failed(&e))?;
+    edit::remove_frames(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, p.count).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "frame": p.frame, "count": p.count }))
 }
 
@@ -367,7 +367,7 @@ struct Ease {
 fn set_ease(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Ease = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    edit::set_classic_ease(&mut doc.document, &id, p.layer, zero_based(p.frame)?, p.acceleration.clamp(-100, 100)).map_err(|e| failed(&e))?;
+    edit::set_classic_ease(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, p.acceleration.clamp(-100, 100)).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "frame": p.frame, "acceleration": p.acceleration.clamp(-100, 100) }))
 }
 
@@ -385,7 +385,7 @@ fn set_label(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Name = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
     let label = p.text.as_deref().filter(|l| !l.is_empty()).map(|l| (l, LabelType::Name));
-    edit::set_frame_label(&mut doc.document, &id, p.layer, zero_based(p.frame)?, label).map_err(|e| failed(&e))?;
+    edit::set_frame_label(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, label).map_err(|e| failed(&e))?;
     ok(json!({ "layer": p.layer, "frame": p.frame, "label": p.text }))
 }
 
@@ -404,7 +404,7 @@ fn add_instance(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Place = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
     let matrix = Affine::translate((p.x.unwrap_or(0.0), p.y.unwrap_or(0.0)));
-    let index = edit::add_symbol_instance(&mut doc.document, &id, p.layer, zero_based(p.frame)?, &p.symbol, matrix).map_err(|e| failed(&e))?;
+    let index = edit::add_symbol_instance(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, &p.symbol, matrix).map_err(|e| failed(&e))?;
     ok(json!({ "element": index }))
 }
 
@@ -420,7 +420,7 @@ struct Remove {
 fn remove_elements(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Remove = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    let removed = edit::remove_elements(&mut doc.document, &id, p.layer, zero_based(p.frame)?, &p.indices).map_err(|e| failed(&e))?;
+    let removed = edit::remove_elements(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, &p.indices).map_err(|e| failed(&e))?;
     ok(json!({ "removed": removed.len() }))
 }
 
@@ -433,7 +433,7 @@ struct Rename {
 
 fn rename_item(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Rename = parse_params(params)?;
-    edit::rename_library_item(&mut doc.document, &p.name, &p.new_name).map_err(|e| failed(&e))?;
+    edit::rename_library_item(&mut doc.editor.document, &p.name, &p.new_name).map_err(|e| failed(&e))?;
     ok(json!({ "name": p.new_name }))
 }
 
@@ -445,13 +445,13 @@ struct Named {
 
 fn remove_item(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Named = parse_params(params)?;
-    let item = edit::remove_library_item(&mut doc.document, &p.name).map_err(|e| failed(&e))?;
+    let item = edit::remove_library_item(&mut doc.editor.document, &p.name).map_err(|e| failed(&e))?;
     ok(json!({ "removed": item.name() }))
 }
 
 fn duplicate_symbol(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Rename = parse_params(params)?;
-    edit::duplicate_symbol(&mut doc.document, &p.name, &p.new_name).map_err(|e| failed(&e))?;
+    edit::duplicate_symbol(&mut doc.editor.document, &p.name, &p.new_name).map_err(|e| failed(&e))?;
     ok(json!({ "name": p.new_name }))
 }
 
@@ -487,24 +487,24 @@ mod tests {
     fn editing_is_undoable_and_errors_change_nothing() {
         let mut s = session();
         s.execute("scene.add", &json!({ "name": "Intro" })).unwrap();
-        assert_eq!(s.doc().document.scenes.len(), 2);
+        assert_eq!(s.doc().editor.document.scenes.len(), 2);
         s.execute("layer.add", &json!({ "scene": 1, "name": "bg" })).unwrap();
         s.execute("timeline.insert_keyframe", &json!({ "scene": 1, "layer": 0, "frame": 12 })).unwrap();
-        assert!(s.doc().document.scenes[1].layers[0].frames.iter().any(|f| f.index == 11));
-        let before = s.doc().document.clone();
+        assert!(s.doc().editor.document.scenes[1].layers[0].frames.iter().any(|f| f.index == 11));
+        let before = s.doc().editor.document.clone();
         assert!(s.execute("timeline.insert_keyframe", &json!({ "layer": 99, "frame": 3 })).is_err());
         assert!(s.execute("timeline.insert_keyframe", &json!({ "layer": 0, "frame": 0 })).is_err());
         assert!(s.execute("scene.rename", &json!({ "scene": 0, "name": "", "extra": 1 })).is_err());
-        assert_eq!(s.doc().document, before);
+        assert_eq!(s.doc().editor.document, before);
         s.undo();
-        assert_eq!(s.doc().document.scenes[1].layers[0].frames.iter().filter(|f| f.index == 11).count(), 0);
+        assert_eq!(s.doc().editor.document.scenes[1].layers[0].frames.iter().filter(|f| f.index == 11).count(), 0);
     }
 
     #[test]
     fn stage_settings_are_validated() {
         let mut s = session();
         s.execute("document.set_stage", &json!({ "width": 1920, "height": 1080, "frame_rate": 30, "background": "#112233" })).unwrap();
-        let d = &s.doc().document;
+        let d = &s.doc().editor.document;
         assert_eq!((d.width, d.height, d.frame_rate), (1920.0, 1080.0, 30.0));
         assert_eq!(d.background_color, Rgba8 { r: 0x11, g: 0x22, b: 0x33, a: 255 });
         assert!(s.execute("document.set_stage", &json!({ "width": -1 })).is_err());

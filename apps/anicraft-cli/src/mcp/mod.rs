@@ -45,6 +45,8 @@ pub fn registry() -> CommandRegistry<AniDoc> {
     let mut registry = CommandRegistry::with_history_commands();
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(commands::all()).expect("built-in command ids are unique");
+    #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
+    registry.register_all(anicraft_tools::mcp_commands::<AniDoc>()).expect("tool command ids are unique");
     registry
 }
 
@@ -196,7 +198,7 @@ fn keyframe_json(frame: &anim_scene::Frame) -> Value {
 
 impl AppHooks<AniDoc> for AniHooks {
     fn status(&self, session: &Session<AniDoc>) -> Value {
-        let d = &session.doc().document;
+        let d = session.doc().document();
         json!({ "scenes": d.scenes.len(), "stage": [d.width, d.height], "frame_rate": d.frame_rate, "total_frames": d.total_frames(), "frame_numbers": "1-based" })
     }
 
@@ -219,7 +221,7 @@ impl AppHooks<AniDoc> for AniHooks {
     }
 
     fn query(&mut self, session: &Session<AniDoc>, name: &str, params: &Value, _ticket: &Ticket) -> HookResult {
-        let doc = &session.doc().document;
+        let doc = session.doc().document();
         let value = match name {
             "stats" => {
                 let s = doc.stats();
@@ -285,7 +287,7 @@ impl AppHooks<AniDoc> for AniHooks {
     }
 
     fn outline(&self, doc: &AniDoc, depth: Option<u32>) -> Result<Value, ControlError> {
-        let d = &doc.document;
+        let d = &doc.editor.document;
         let depth = depth.unwrap_or(2);
         let scenes: Vec<Value> = d
             .scenes
@@ -322,34 +324,34 @@ impl AppHooks<AniDoc> for AniHooks {
     }
 
     fn library(&self, doc: &AniDoc) -> Result<Value, ControlError> {
-        serde_json::to_value(info::library_info(&doc.document)).map_err(|e| ControlError::failed(e.to_string()))
+        serde_json::to_value(info::library_info(&doc.editor.document)).map_err(|e| ControlError::failed(e.to_string()))
     }
 
     fn get_property(&self, doc: &AniDoc, path: &str) -> Result<Value, ControlError> {
-        let view = serde_json::to_value(props_view(&doc.document)).map_err(|e| ControlError::failed(e.to_string()))?;
+        let view = serde_json::to_value(props_view(&doc.editor.document)).map_err(|e| ControlError::failed(e.to_string()))?;
         props::get(&view, &props::parse_path(path)?).cloned()
     }
 
     fn set_property(&self, doc: &mut AniDoc, path: &str, value: Value) -> Result<Value, ControlError> {
-        let mut view = serde_json::to_value(props_view(&doc.document)).map_err(|e| ControlError::failed(e.to_string()))?;
+        let mut view = serde_json::to_value(props_view(&doc.editor.document)).map_err(|e| ControlError::failed(e.to_string()))?;
         let segments = props::parse_path(path)?;
         props::set(&mut view, &segments, value)?;
         let new: PropsView = serde_json::from_value(view).map_err(|e| ControlError::invalid(format!("{path}: {e}")))?;
-        apply_props(&mut doc.document, new)?;
-        props::get(&serde_json::to_value(props_view(&doc.document)).map_err(|e| ControlError::failed(e.to_string()))?, &segments).cloned()
+        apply_props(&mut doc.editor.document, new)?;
+        props::get(&serde_json::to_value(props_view(&doc.editor.document)).map_err(|e| ControlError::failed(e.to_string()))?, &segments).cloned()
     }
 
     fn render(&mut self, doc: &AniDoc, request: &RenderRequest, _ticket: &Ticket) -> HookResult {
         let opts: RenderOpts = options(&request.options)?;
-        let mut ev = evaluator_for(&doc.document, &doc.media, false);
+        let mut ev = evaluator_for(&doc.editor.document, &doc.media, false);
         let frame = request.frame.map_or(Ok(1), u32::try_from).map_err(|_| ControlError::invalid("frame numbers start at 1"))?;
         let spec = RenderSpec { scale: f64::from(request.scale), transparent: opts.transparent };
         let (image, what) = if let Some(symbol) = &opts.symbol {
-            let frames = doc.document.library.find_symbol(symbol).map_or(1, |s| s.timeline.frame_count());
+            let frames = doc.editor.document.library.find_symbol(symbol).map_or(1, |s| s.timeline.frame_count());
             let span = resolve_span(frames, Some(frame), Some(frame)).map_err(|e| cli_error(&e))?;
             (export::render_symbol(&mut ev, symbol, span.start, spec).map_err(|e| cli_error(&e))?, json!({ "symbol": symbol, "frame": frame, "of": frames }))
         } else {
-            let scene = scene_of(&doc.document, opts.scene)?;
+            let scene = scene_of(&doc.editor.document, opts.scene)?;
             let total = ev.scene_frames(scene);
             let span = resolve_span(total, Some(frame), Some(frame)).map_err(|e| cli_error(&e))?;
             (export::render_frame(&mut ev, scene, span.start, spec).map_err(|e| cli_error(&e))?, json!({ "scene": scene, "frame": frame, "of": total }))
@@ -384,8 +386,8 @@ impl AppHooks<AniDoc> for AniHooks {
     fn export(&mut self, doc: &AniDoc, request: &ExportRequest, ticket: &Ticket) -> HookResult {
         let opts: ExportOpts = options(&request.options)?;
         let format = Format::parse(&request.format).ok_or_else(|| ControlError::new(ErrorKind::NotFound, format!("no export format {:?}", request.format)))?;
-        let scene = scene_of(&doc.document, opts.scene)?;
-        let total = evaluator_for(&doc.document, &doc.media, false).scene_frames(scene);
+        let scene = scene_of(&doc.editor.document, opts.scene)?;
+        let total = evaluator_for(&doc.editor.document, &doc.media, false).scene_frames(scene);
         let mut span = resolve_span(total, opts.from, opts.to).map_err(|e| cli_error(&e))?;
         if format == Format::Svg {
             span = span.start..span.start.saturating_add(1);
@@ -393,7 +395,7 @@ impl AppHooks<AniDoc> for AniHooks {
         let data = doc.clone();
         let (fps, scale, transparent, out) = (opts.fps, opts.scale.unwrap_or(1.0), opts.transparent, request.path.clone());
         run_job(ticket, "export", move |ticket| {
-            let job = ExportJob { doc: &data.document, media: &data.media, scene, span, fps, scale, transparent, format, out };
+            let job = ExportJob { doc: data.document(), media: &data.media, scene, span, fps, scale, transparent, format, out };
             let mut progress = |done: u32, count: u32| {
                 let fraction = done.saturating_mul(1000).checked_div(count).map_or(1.0, |m| f32::from(u16::try_from(m).unwrap_or(1000)) / 1000.0);
                 ticket.progress(fraction, format!("{done}/{count} frames"));
@@ -413,7 +415,7 @@ impl AppHooks<AniDoc> for AniHooks {
     }
 
     fn save(&mut self, doc: &AniDoc, file: &mut File) -> io::Result<()> {
-        let (bytes, _report) = anicraft_xfl::write_fla_bytes(&doc.document, &doc.media, &doc.sidecars, &WriteOptions::default()).map_err(io::Error::other)?;
+        let (bytes, _report) = anicraft_xfl::write_fla_bytes(&doc.editor.document, &doc.media, &doc.sidecars, &WriteOptions::default()).map_err(io::Error::other)?;
         file.write_all(&bytes)
     }
 }
@@ -472,9 +474,9 @@ mod tests {
         let mut doc = AniDoc::default();
         assert_eq!(hooks.get_property(&doc, "/stage/width").unwrap(), json!(550.0));
         hooks.set_property(&mut doc, "/stage/width", json!(800)).unwrap();
-        assert!((doc.document.width - 800.0).abs() < f64::EPSILON);
+        assert!((doc.editor.document.width - 800.0).abs() < f64::EPSILON);
         hooks.set_property(&mut doc, "/scenes/0/layers/0/visible", json!(false)).unwrap();
-        assert!(!doc.document.scenes[0].layers[0].visible);
+        assert!(!doc.editor.document.scenes[0].layers[0].visible);
         assert!(hooks.set_property(&mut doc, "/stage/width", json!(-3)).is_err());
         assert!(hooks.set_property(&mut doc, "/stage/width", json!("wide")).is_err());
         assert!(hooks.get_property(&doc, "/scenes/9").is_err());
