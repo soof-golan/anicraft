@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::SwfError;
 use crate::movie::{ACTION_STOP, Frame, FrameItem, Movie, MovieSettings};
 use crate::place::{Placement, blend_code};
-use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, clean_path, fill_side_is_right};
+use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, clean_path, filled_path_shape};
 use crate::shape_cache::ShapeCache;
 use crate::style::{FillStyle, LinePaint, LineStyle};
 use crate::types::{CharacterId, CxForm, Matrix};
@@ -369,9 +369,7 @@ impl NodeConverter {
             builder.set_fill_rule(fill.rule);
             let index = builder.add_fill(self.fill_style(movie, &fill.paint, images)?)?;
             let path = clean_path(&fill.path);
-            let style =
-                if fill_side_is_right(&path) { PathStyle { fill1: index, ..PathStyle::default() } } else { PathStyle { fill0: index, ..PathStyle::default() } };
-            builder.add_path(&path, style);
+            builder.add_path(&path, PathStyle::filled_inside(&path, index));
         }
         if let Some(stroke) = stroke {
             let paint = match &stroke.paint {
@@ -487,17 +485,7 @@ impl NodeConverter {
                 path.line_to(e1);
                 path.line_to(e2);
                 path.close_path();
-                let mut builder = ShapeBuilder::new();
-                let index = builder.add_fill(FillStyle::Solid(Rgba8::BLACK))?;
-                builder.add_path(
-                    &path,
-                    if fill_side_is_right(&path) {
-                        PathStyle { fill1: index, ..PathStyle::default() }
-                    } else {
-                        PathStyle { fill0: index, ..PathStyle::default() }
-                    },
-                );
-                movie.define_shape(&builder.finish())?
+                movie.define_shape(&filled_path_shape(&path, FillStyle::Solid(Rgba8::BLACK), anim_display::FillRule::EvenOdd)?)?
             };
             let mut mask_slot = Slot::plain(mask, Matrix::IDENTITY);
             mask_slot.clip_depth = Some(2);

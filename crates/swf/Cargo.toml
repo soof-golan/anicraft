@@ -33,6 +33,6 @@ anim-render = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }
 # The sample-gated tests (tests/samples.rs) read library XML out of the FLA zips.
-roxmltree = "0.21"
+roxmltree = { workspace = true }
 serde_json = { workspace = true }
 swf = { workspace = true }

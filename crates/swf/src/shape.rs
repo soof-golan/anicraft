@@ -208,6 +208,16 @@ pub struct PathStyle {
     pub line: u32,
 }
 
+impl PathStyle {
+    /// Fill style `fill` on the inside of `path`: clockwise paths (positive area in y-down coordinates) have their
+    /// inside on the right of their edges (`fill1`), the others on the left (`fill0`).
+    #[must_use]
+    pub fn filled_inside(path: &BezPath, fill: u32) -> Self {
+        let area = Shape::area(path);
+        if area >= 0.0 || area.is_nan() { Self { fill1: fill, ..Self::default() } } else { Self { fill0: fill, ..Self::default() } }
+    }
+}
+
 /// Builds a [`ShapeDef`] from styles and `kurbo` paths.
 #[derive(Debug, Default)]
 pub struct ShapeBuilder {
@@ -508,15 +518,6 @@ pub fn clean_path(path: &BezPath) -> BezPath {
     BezPath::from_vec(elements)
 }
 
-/// Whether a path's fill belongs on the right of its edges (`fill1`) rather than the left (`fill0`).
-///
-/// Clockwise paths in y-down coordinates (positive area) have their inside on the right.
-#[must_use]
-pub fn fill_side_is_right(path: &BezPath) -> bool {
-    let area = Shape::area(path);
-    area >= 0.0 || area.is_nan()
-}
-
 /// Convenience: a single filled path as a shape with one fill style.
 ///
 /// # Errors
@@ -525,8 +526,7 @@ pub fn filled_path_shape(path: &BezPath, fill: FillStyle, rule: FillRule) -> Res
     let mut b = ShapeBuilder::new();
     b.set_fill_rule(rule);
     let id = b.add_fill(fill)?;
-    let style = if fill_side_is_right(path) { PathStyle { fill1: id, ..PathStyle::default() } } else { PathStyle { fill0: id, ..PathStyle::default() } };
-    b.add_path(path, style);
+    b.add_path(path, PathStyle::filled_inside(path, id));
     Ok(b.finish())
 }
 
@@ -568,7 +568,7 @@ mod tests {
         path.line_to((10.0, 10.0));
         path.line_to((10.0, 0.0));
         path.close_path();
-        assert!(!fill_side_is_right(&path));
+        assert_eq!(PathStyle::filled_inside(&path, 1), PathStyle { fill0: 1, ..PathStyle::default() });
         let def = filled_path_shape(&path, FillStyle::Solid(Rgba8::BLACK), FillRule::EvenOdd).unwrap();
         assert!(matches!(def.records[0], ShapeRecord::Style(StyleChange { fill0: Some(1), fill1: None, .. })));
         assert!(!def.non_zero_winding);
