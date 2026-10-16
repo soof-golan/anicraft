@@ -57,7 +57,7 @@ fn as2_frame_scripts_become_do_action_tags_and_labels_are_written() {
     for tag in &parsed.tags {
         match tag {
             swf::Tag::DoAction(body) => per_frame.last_mut().unwrap().push(avm1_actions(body, parsed.header.version())),
-            swf::Tag::FrameLabel(l) => labels.push(l.label.to_string_lossy(swf::UTF_8).into_owned()),
+            swf::Tag::FrameLabel(l) => labels.push(l.label.to_string_lossy(swf::UTF_8)),
             swf::Tag::ShowFrame => per_frame.push(Vec::new()),
             _ => {}
         }
@@ -126,7 +126,7 @@ fn as3_frame_scripts_become_a_document_class_with_add_frame_script() {
     for tag in &parsed.tags {
         match tag {
             swf::Tag::DoAbc2(d) => abc_data = Some(d.data),
-            swf::Tag::SymbolClass(s) => symbols.extend(s.iter().map(|l| (l.id, l.class_name.to_string_lossy(swf::UTF_8).into_owned()))),
+            swf::Tag::SymbolClass(s) => symbols.extend(s.iter().map(|l| (l.id, l.class_name.to_string_lossy(swf::UTF_8)))),
             _ => {}
         }
     }
