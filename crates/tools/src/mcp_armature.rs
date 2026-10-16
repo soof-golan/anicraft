@@ -315,7 +315,7 @@ pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
         CommandSpec::new("armature.set_limits", "Set Joint Limits", armature_set_limits::<D>)
             .with_schema(SCHEMA_LIMITS)
             .describe("Limit how far a bone may rotate away from its rest angle (degrees); give neither bound to remove the limit."),
-        CommandSpec::new("armature.rename_bone", "Rename Bone", armature_rename_bone::<D>).with_schema(SCHEMA_RENAME).describe("Rename a bone."),
+        CommandSpec::new("armature.rename_bone", "Rename Bone", armature_rename_bone::<D>).with_schema(SCHEMA_RENAME).describe("Rename a bone of a layer's armature; the name shows in the Properties panel and is saved in the file."),
         CommandSpec::new("armature.remove_bone", "Remove Bone", armature_remove_bone::<D>)
             .with_schema(SCHEMA_BONE)
             .describe("Remove a bone and the bones below it."),
