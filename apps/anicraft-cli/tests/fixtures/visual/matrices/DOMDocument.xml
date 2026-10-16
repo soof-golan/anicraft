@@ -1,0 +1,43 @@
+<DOMDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" width="100" height="100" frameRate="12" backgroundColor="#FFFFFF" currentTimeline="1" xflVersion="2.9" creatorInfo="hand-written test fixture">
+  <symbols>
+    <Include href="Arrow.xml" loadImmediate="false" itemID="f0000005-00000001"/>
+  </symbols>
+  <timelines>
+    <DOMTimeline name="Scene 1">
+      <layers>
+        <DOMLayer name="L" color="#4F80FF">
+          <frames>
+            <DOMFrame index="0" duration="1" keyMode="9728">
+              <elements>
+                <DOMSymbolInstance libraryItemName="Arrow" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix a="0" b="1" c="-1" d="0" tx="50" ty="10"/>
+                  </matrix>
+                  <transformationPoint>
+                    <Point x="10" y="5"/>
+                  </transformationPoint>
+                </DOMSymbolInstance>
+                <DOMSymbolInstance libraryItemName="Arrow" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix a="-1" b="0" c="0" d="-1" tx="90" ty="90"/>
+                  </matrix>
+                  <transformationPoint>
+                    <Point x="-300" y="80"/>
+                  </transformationPoint>
+                </DOMSymbolInstance>
+                <DOMSymbolInstance libraryItemName="Arrow" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix a="1" b="0" c="0" d="-2" tx="10" ty="70"/>
+                  </matrix>
+                  <transformationPoint>
+                    <Point/>
+                  </transformationPoint>
+                </DOMSymbolInstance>
+              </elements>
+            </DOMFrame>
+          </frames>
+        </DOMLayer>
+      </layers>
+    </DOMTimeline>
+  </timelines>
+</DOMDocument>

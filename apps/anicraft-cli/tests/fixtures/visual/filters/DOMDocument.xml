@@ -1,0 +1,52 @@
+<DOMDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" width="100" height="100" frameRate="12" backgroundColor="#FFFFFF" currentTimeline="1" xflVersion="2.9" creatorInfo="hand-written test fixture">
+  <symbols>
+    <Include href="Black.xml" loadImmediate="false" itemID="f000000a-00000001"/>
+    <Include href="Red.xml" loadImmediate="false" itemID="f000000a-00000002"/>
+  </symbols>
+  <timelines>
+    <DOMTimeline name="Scene 1">
+      <layers>
+        <DOMLayer name="L" color="#4F80FF">
+          <frames>
+            <DOMFrame index="0" duration="1" keyMode="9728">
+              <elements>
+                <DOMSymbolInstance libraryItemName="Black" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix tx="20" ty="20"/>
+                  </matrix>
+                  <filters>
+                    <BlurFilter blurX="10" blurY="10" quality="2"/>
+                  </filters>
+                </DOMSymbolInstance>
+                <DOMSymbolInstance libraryItemName="Red" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix tx="20" ty="60"/>
+                  </matrix>
+                  <filters>
+                    <DropShadowFilter blurX="0" blurY="0" distance="10" angle="45" color="#000000" alpha="1" strength="1" quality="1"/>
+                  </filters>
+                </DOMSymbolInstance>
+                <DOMSymbolInstance libraryItemName="Red" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix tx="60" ty="60"/>
+                  </matrix>
+                  <filters>
+                    <DropShadowFilter blurX="0" blurY="0" distance="10" angle="45" color="#000000" alpha="1" strength="1" quality="1" hideObject="true"/>
+                  </filters>
+                </DOMSymbolInstance>
+                <DOMSymbolInstance libraryItemName="Black" symbolType="graphic" loop="loop">
+                  <matrix>
+                    <Matrix tx="70" ty="15"/>
+                  </matrix>
+                  <filters>
+                    <BlurFilter blurX="30" blurY="0" quality="1"/>
+                  </filters>
+                </DOMSymbolInstance>
+              </elements>
+            </DOMFrame>
+          </frames>
+        </DOMLayer>
+      </layers>
+    </DOMTimeline>
+  </timelines>
+</DOMDocument>

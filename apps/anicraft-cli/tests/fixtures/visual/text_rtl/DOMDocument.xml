@@ -1,0 +1,85 @@
+<DOMDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://ns.adobe.com/xfl/2008/" width="200" height="110" frameRate="12" backgroundColor="#FFFFFF" currentTimeline="1" xflVersion="2.9" creatorInfo="hand-written test fixture">
+  <timelines>
+    <DOMTimeline name="Scene 1">
+      <layers>
+        <DOMLayer name="text" color="#4F80FF">
+          <frames>
+            <DOMFrame index="0" duration="1" keyMode="9728">
+              <elements>
+                <DOMStaticText width="180" height="30" autoExpand="true" isSelectable="false">
+                  <matrix>
+                    <Matrix tx="10" ty="5"/>
+                  </matrix>
+                  <textRuns>
+                    <DOMTextRun>
+                      <characters>שלום</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#FF0000" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                    <DOMTextRun>
+                      <characters> עולם</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#0000FF" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                    <DOMTextRun>
+                      <characters> abc</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#00A000" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                  </textRuns>
+                </DOMStaticText>
+                <DOMStaticText width="180" height="30" autoExpand="true" isSelectable="false">
+                  <matrix>
+                    <Matrix tx="10" ty="40"/>
+                  </matrix>
+                  <textRuns>
+                    <DOMTextRun>
+                      <characters>abc </characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#00A000" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                    <DOMTextRun>
+                      <characters>שלום</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#FF0000" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                    <DOMTextRun>
+                      <characters>!</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#0000FF" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                  </textRuns>
+                </DOMStaticText>
+                <DOMStaticText width="180" height="30" autoExpand="true" isSelectable="false">
+                  <matrix>
+                    <Matrix tx="10" ty="75"/>
+                  </matrix>
+                  <textRuns>
+                    <DOMTextRun>
+                      <characters>שלום</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#FF0000" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                    <DOMTextRun>
+                      <characters>!</characters>
+                      <textAttrs>
+                        <DOMTextAttrs size="22" face="Arial" fillColor="#0000FF" alignment="left"/>
+                      </textAttrs>
+                    </DOMTextRun>
+                  </textRuns>
+                </DOMStaticText>
+              </elements>
+            </DOMFrame>
+          </frames>
+        </DOMLayer>
+      </layers>
+    </DOMTimeline>
+  </timelines>
+</DOMDocument>
