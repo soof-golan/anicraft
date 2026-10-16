@@ -1,6 +1,7 @@
 name: release
 
-# Push a tag like v0.1.0 to build the app and the CLI on Linux, macOS (Apple silicon and Intel) and Windows, and attach
+# Push a tag like v0.1.0 to build the app and the CLI on Linux and Windows (x86_64 and Arm64) and macOS (Apple silicon
+# and Intel), and attach
 # the packages plus SHA256SUMS to a GitHub pre-release. The binaries are unsigned (no signing secrets are used).
 
 on:
@@ -33,9 +34,25 @@ jobs:
           - name: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
+          - name: linux-arm64
+            os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - name: windows-arm64
+            os: windows-11-arm
+            target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+      - name: Install rustup if the runner image lacks it
+        # The Windows on Arm image does not ship rustup; the pinned toolchain then comes from rust-toolchain.toml.
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest -Uri https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain none --profile minimal
+            Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.cargo\bin"
+          }
       - name: Linux system libraries
         if: runner.os == 'Linux'
         run: |
