@@ -499,7 +499,7 @@ fn space_bar_pans_temporarily_and_letters_switch_tools() {
     assert_eq!(e.tools.active(), ToolId::Rectangle);
     assert!(elements(&e).is_empty(), "nothing was drawn while panning");
 
-    for tool in ToolId::ALL {
+    for tool in ToolId::ALL.into_iter().filter(|t| t.shortcut() != '\0') {
         let c = send_all(&mut e, vec![KeyEvent::press(Key::Char(tool.shortcut())).into()]);
         assert_eq!(c, vec![ToolCommand::ActivateTool { tool }]);
         assert_eq!(e.tools.active(), tool);

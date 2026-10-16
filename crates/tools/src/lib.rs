@@ -47,6 +47,7 @@ pub mod hit;
 pub mod mcp;
 mod mcp_armature;
 pub mod overlay;
+mod region_select;
 pub mod script;
 pub mod selection;
 pub mod settings;
@@ -67,6 +68,9 @@ pub use mcp::{ToolHost, commands as mcp_commands};
 pub use overlay::{Compass, Cursor, Marker, Node, Overlay, Role};
 pub use script::{ScriptReport, ScriptStep, ToolInfo, ToolScript, catalog, run_script};
 pub use selection::{ElementRef, Selection};
-pub use settings::{BrushMode, EraserMode, GapSize, OvalSettings, PencilMode, SnapSettings, TextSettings, TipShape, ToolSettings};
+pub use settings::{
+    BrushMode, EraserMode, GapSize, LassoMode, LassoSettings, OvalSettings, PencilMode, PolyStarSettings, PolyStarStyle, SnapSettings, TextSettings, TipShape,
+    ToolSettings,
+};
 pub use state::{EditorState, View};
 pub use tool::{Tool, ToolId, ToolOutput, ToolSet};

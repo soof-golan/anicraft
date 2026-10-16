@@ -4,7 +4,7 @@
 //! reference implementation used by the app, the CLI and the MCP server).
 
 use anim_core::{Affine, Matrix3D, Point, Rect, Vec2};
-use anim_scene::{ArmatureKind, Element, Pose};
+use anim_scene::{ArmatureKind, Element, Pose, Primitive};
 use anim_shape::{EdgeShape, FillStyle, StrokeStyle};
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +61,14 @@ pub enum ToolCommand {
     ReplaceShape { target: ElementRef, shape: EdgeShape },
     /// Removes elements (for example shapes that were erased completely).
     DeleteElements { targets: Vec<ElementRef> },
+    /// Selects what lies inside a lasso polygon (stage pixels, implicitly closed) on the unlocked layers at the
+    /// playhead. Merge-mode shapes are cut along the polygon and the part inside becomes an element of its own.
+    /// With `additive` the current selection is kept.
+    LassoSelect { polygon: Vec<Point>, additive: bool },
+    /// The magic wand: selects the fills whose colour is within `threshold` (per channel) of the fill at `point`.
+    WandSelect { point: Point, threshold: f64, additive: bool },
+    /// Replaces the parameters of a Rectangle or Oval Primitive and regenerates its shape.
+    SetPrimitive { target: ElementRef, primitive: Primitive },
     /// Inserts text at a byte offset of the field's concatenated text (always on a character boundary).
     InsertText { target: ElementRef, offset: usize, text: String },
     /// Deletes the byte range `start..end` of the field's text.
@@ -120,6 +128,9 @@ impl ToolCommand {
                 | Self::AddElement { .. }
                 | Self::ReplaceShape { .. }
                 | Self::DeleteElements { .. }
+                | Self::LassoSelect { .. }
+                | Self::WandSelect { .. }
+                | Self::SetPrimitive { .. }
                 | Self::InsertText { .. }
                 | Self::DeleteText { .. }
                 | Self::AddBone { .. }

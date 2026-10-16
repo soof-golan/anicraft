@@ -103,6 +103,13 @@ impl Tool for PenTool {
                         // The first click of the double click already placed this anchor.
                         return self.finish(ctx, false);
                     }
+                    if self.anchors.is_empty()
+                        && let Some(command) = Self::modify_selected(ctx, p.pos, p.modifiers.alt)
+                    {
+                        // Pen modifiers on a selected path: alt converts a point, a click on a point deletes it and
+                        // a click on a segment adds one.
+                        return ToolOutput::with(Cursor::Pen, vec![command]);
+                    }
                     if self.near_first(ctx, p.pos) {
                         self.closing = true;
                         return ToolOutput::cursor(Cursor::PenClose);
@@ -200,6 +207,18 @@ impl Tool for PenTool {
 }
 
 impl PenTool {
+    /// The anchor edit a press at `pos` makes on the selected shapes, if it lands on one of their points or segments.
+    fn modify_selected(ctx: &ToolContext<'_>, pos: Point, alt: bool) -> Option<ToolCommand> {
+        use super::anchors::{AnchorMode, anchor_click};
+        if ctx.selection.items.is_empty() {
+            return None;
+        }
+        if alt {
+            return anchor_click(ctx, pos, AnchorMode::Convert, None, true);
+        }
+        anchor_click(ctx, pos, AnchorMode::Delete, None, true).or_else(|| anchor_click(ctx, pos, AnchorMode::Add, None, true))
+    }
+
     fn near_first_hover(&self, ctx: &ToolContext<'_>) -> bool {
         self.hover.is_some_and(|h| self.near_first(ctx, h))
     }

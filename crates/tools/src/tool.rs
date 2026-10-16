@@ -7,8 +7,9 @@ use crate::context::ToolContext;
 use crate::event::{Key, ToolEvent};
 use crate::overlay::{Cursor, Overlay};
 use crate::tools::{
-    BoneTool, BrushTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool,
-    PenTool, PencilTool, RectangleTool, Rotation3DTool, SelectionTool, SubselectionTool, TextTool, Translation3DTool, ZoomTool, bone_under, bones_overlay,
+    AddAnchorTool, BoneTool, BrushTool, ConvertAnchorTool, DeleteAnchorTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool,
+    InkBottleTool, LassoTool, LineTool, OvalPrimitiveTool, OvalTool, PaintBucketTool, PenTool, PencilTool, PolyStarTool, RectanglePrimitiveTool, RectangleTool,
+    Rotation3DTool, SelectionTool, SubselectionTool, TextTool, Translation3DTool, ZoomTool, bone_under, bones_overlay,
 };
 
 /// Every tool.
@@ -35,22 +36,36 @@ pub enum ToolId {
     Text,
     Hand,
     Zoom,
+    Lasso,
+    AddAnchor,
+    DeleteAnchor,
+    ConvertAnchor,
+    PolyStar,
+    RectanglePrimitive,
+    OvalPrimitive,
 }
 
 impl ToolId {
     /// All tools in toolbox order.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 27] = [
         Self::Selection,
         Self::Subselection,
         Self::FreeTransform,
         Self::GradientTransform,
         Self::Rotation3D,
         Self::Translation3D,
+        Self::Lasso,
         Self::Pen,
+        Self::AddAnchor,
+        Self::DeleteAnchor,
+        Self::ConvertAnchor,
         Self::Text,
         Self::Line,
         Self::Rectangle,
         Self::Oval,
+        Self::RectanglePrimitive,
+        Self::OvalPrimitive,
+        Self::PolyStar,
         Self::Pencil,
         Self::Brush,
         Self::Bone,
@@ -86,6 +101,13 @@ impl ToolId {
             Self::Text => "text",
             Self::Hand => "hand",
             Self::Zoom => "zoom",
+            Self::Lasso => "lasso",
+            Self::AddAnchor => "add_anchor",
+            Self::DeleteAnchor => "delete_anchor",
+            Self::ConvertAnchor => "convert_anchor",
+            Self::PolyStar => "polystar",
+            Self::RectanglePrimitive => "rect_primitive",
+            Self::OvalPrimitive => "oval_primitive",
         }
     }
 
@@ -119,6 +141,13 @@ impl ToolId {
             Self::Text => "Text Tool",
             Self::Hand => "Hand Tool",
             Self::Zoom => "Zoom Tool",
+            Self::Lasso => "Lasso Tool",
+            Self::AddAnchor => "Add Anchor Point Tool",
+            Self::DeleteAnchor => "Delete Anchor Point Tool",
+            Self::ConvertAnchor => "Convert Anchor Point Tool",
+            Self::PolyStar => "PolyStar Tool",
+            Self::RectanglePrimitive => "Rectangle Primitive Tool",
+            Self::OvalPrimitive => "Oval Primitive Tool",
         }
     }
 
@@ -158,6 +187,17 @@ impl ToolId {
             Self::Text => "Click to place a text field and type; click a field to edit it. Right-to-left text works.",
             Self::Hand => "Drag to pan the stage.",
             Self::Zoom => "Click to zoom in (alt zooms out); drag a rectangle to zoom to it.",
+            Self::Lasso => {
+                "Drag a free-form loop to select the parts of shapes inside it; hold alt and click to place polygon corners (double-click closes); in magic wand mode click a region to select every fill of a similar colour."
+            }
+            Self::AddAnchor => "Click a path to add an anchor point without changing its shape.",
+            Self::DeleteAnchor => "Click an anchor point to remove it; its neighbours are joined.",
+            Self::ConvertAnchor => "Click a corner point to make it smooth or a smooth point to make it a corner; drag from a point to pull out its handles.",
+            Self::PolyStar => "Drag from the centre to draw a polygon or star with the sides and star point size options; shift snaps the angle.",
+            Self::RectanglePrimitive => "Drag to draw a rectangle that stays editable: change its size and corner radii in the Properties panel afterwards.",
+            Self::OvalPrimitive => {
+                "Drag to draw an oval that stays editable: change its start and end angle and inner radius in the Properties panel afterwards."
+            }
         }
     }
 
@@ -185,6 +225,12 @@ impl ToolId {
             Self::Text => 't',
             Self::Hand => 'h',
             Self::Zoom => 'z',
+            Self::Lasso => 'l',
+            Self::AddAnchor => '=',
+            Self::DeleteAnchor => '-',
+            Self::ConvertAnchor => 'c',
+            // Reached from the flyout of the tool they share a button with.
+            Self::PolyStar | Self::RectanglePrimitive | Self::OvalPrimitive => '\0',
         }
     }
 
@@ -192,6 +238,9 @@ impl ToolId {
     #[must_use]
     pub fn from_shortcut(c: char) -> Option<Self> {
         let c = c.to_ascii_lowercase();
+        if c == '\0' {
+            return None;
+        }
         Self::ALL.into_iter().find(|t| t.shortcut() == c)
     }
 }
@@ -281,6 +330,13 @@ pub struct ToolSet {
     text: TextTool,
     hand: HandTool,
     zoom: ZoomTool,
+    lasso: LassoTool,
+    add_anchor: AddAnchorTool,
+    delete_anchor: DeleteAnchorTool,
+    convert_anchor: ConvertAnchorTool,
+    polystar: PolyStarTool,
+    rect_primitive: RectanglePrimitiveTool,
+    oval_primitive: OvalPrimitiveTool,
 }
 
 impl Default for ToolSet {
@@ -316,6 +372,13 @@ impl ToolSet {
             text: TextTool::default(),
             hand: HandTool::default(),
             zoom: ZoomTool::default(),
+            lasso: LassoTool::default(),
+            add_anchor: AddAnchorTool::default(),
+            delete_anchor: DeleteAnchorTool::default(),
+            convert_anchor: ConvertAnchorTool::default(),
+            polystar: PolyStarTool::default(),
+            rect_primitive: RectanglePrimitiveTool::default(),
+            oval_primitive: OvalPrimitiveTool::default(),
         }
     }
 
@@ -347,6 +410,13 @@ impl ToolSet {
             ToolId::Text => &mut self.text,
             ToolId::Hand => &mut self.hand,
             ToolId::Zoom => &mut self.zoom,
+            ToolId::Lasso => &mut self.lasso,
+            ToolId::AddAnchor => &mut self.add_anchor,
+            ToolId::DeleteAnchor => &mut self.delete_anchor,
+            ToolId::ConvertAnchor => &mut self.convert_anchor,
+            ToolId::PolyStar => &mut self.polystar,
+            ToolId::RectanglePrimitive => &mut self.rect_primitive,
+            ToolId::OvalPrimitive => &mut self.oval_primitive,
         }
     }
 
@@ -372,6 +442,13 @@ impl ToolSet {
             ToolId::Text => &self.text,
             ToolId::Hand => &self.hand,
             ToolId::Zoom => &self.zoom,
+            ToolId::Lasso => &self.lasso,
+            ToolId::AddAnchor => &self.add_anchor,
+            ToolId::DeleteAnchor => &self.delete_anchor,
+            ToolId::ConvertAnchor => &self.convert_anchor,
+            ToolId::PolyStar => &self.polystar,
+            ToolId::RectanglePrimitive => &self.rect_primitive,
+            ToolId::OvalPrimitive => &self.oval_primitive,
         }
     }
 
@@ -505,9 +582,12 @@ mod tests {
     #[test]
     fn shortcuts_and_toolbar_ids_are_unique_and_round_trip() {
         for tool in ToolId::ALL {
-            assert_eq!(ToolId::from_shortcut(tool.shortcut()), Some(tool));
+            if tool.shortcut() != '\0' {
+                assert_eq!(ToolId::from_shortcut(tool.shortcut()), Some(tool));
+            }
             assert_eq!(ToolId::from_toolbar_id(tool.toolbar_id()), Some(tool));
         }
+        assert_eq!(ToolId::from_shortcut('\0'), None);
         assert_eq!(ToolId::from_shortcut('V'), Some(ToolId::Selection));
         assert_eq!(ToolId::from_shortcut('!'), None);
     }

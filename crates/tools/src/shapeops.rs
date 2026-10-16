@@ -461,6 +461,95 @@ pub fn erase(shape: &EdgeShape, spec: &EraseSpec<'_>) -> Erased {
     if rebuilt.is_empty() { Erased::Gone } else { Erased::Changed(rebuilt) }
 }
 
+/// A shape cut in two.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Split {
+    /// What lies inside the region (or matches the wand), if anything.
+    pub inside: Option<EdgeShape>,
+    /// Everything else, if anything.
+    pub outside: Option<EdgeShape>,
+}
+
+fn non_empty(parts: &Parts) -> Option<EdgeShape> {
+    let shape = rebuild(parts);
+    (!shape.is_empty()).then_some(shape)
+}
+
+/// Cuts `shape` along the closed `region` (the Lasso tool): fills are intersected with it and subtracted from it,
+/// strokes are cut at its border. Both are in the shape's own coordinates.
+#[must_use]
+pub fn split_by_region(shape: &EdgeShape, region: &BezPath) -> Split {
+    let Some(region_bounds) = path_bounds(region) else { return Split { inside: None, outside: non_empty(&decompose(shape)) } };
+    let parts = decompose(shape);
+    let region_data = PathData::from_bezpath(region);
+    let mut inside = Parts::default();
+    let mut outside = Parts::default();
+    for (style, path) in &parts.fills {
+        if path_bounds(path).is_none_or(|b| !overlaps(b, region_bounds)) {
+            outside.fills.push((style.clone(), path.clone()));
+            continue;
+        }
+        let data = PathData::from_bezpath(path);
+        let inner = boolean(&data, FillRule::EvenOdd, &region_data, FillRule::NonZero, BoolOp::Intersect);
+        let rest = boolean(&data, FillRule::EvenOdd, &region_data, FillRule::NonZero, BoolOp::Difference);
+        if !inner.is_empty() {
+            inside.fills.push((style.clone(), inner.to_bezpath()));
+        }
+        if !rest.is_empty() {
+            outside.fills.push((style.clone(), rest.to_bezpath()));
+        }
+    }
+    for (style, path) in &parts.strokes {
+        if path_bounds(path).is_none_or(|b| !overlaps(b.inflate(1.0, 1.0), region_bounds)) {
+            outside.strokes.push((style.clone(), path.clone()));
+            continue;
+        }
+        let inner = trim_path(path, Some(region_bounds), &|pt| region.winding(pt) != 0);
+        let rest = trim_path(path, Some(region_bounds), &|pt| region.winding(pt) == 0);
+        if !inner.elements().is_empty() {
+            inside.strokes.push((style.clone(), inner));
+        }
+        if !rest.elements().is_empty() {
+            outside.strokes.push((style.clone(), rest));
+        }
+    }
+    Split { inside: non_empty(&inside), outside: non_empty(&outside) }
+}
+
+/// True when two fills are the same paint or two solid colours within `threshold` on every channel.
+fn similar_fill(a: &FillStyle, b: &FillStyle, threshold: f64) -> bool {
+    match (a, b) {
+        (FillStyle::Solid(x), FillStyle::Solid(y)) => {
+            [(x.r, y.r), (x.g, y.g), (x.b, y.b), (x.a, y.a)].into_iter().all(|(p, q)| f64::from(p.abs_diff(q)) <= threshold)
+        }
+        _ => a == b,
+    }
+}
+
+/// The paint of the fill at `p` (the shape's pixels).
+#[must_use]
+pub fn paint_at(shape: &EdgeShape, p: Point) -> Option<FillStyle> {
+    shape.fill(shape.fill_at(p)?).cloned()
+}
+
+/// The Lasso tool's magic wand: the fills of `shape` whose paint is similar to `clicked` are split from the rest,
+/// strokes stay behind.
+#[must_use]
+pub fn split_by_paint(shape: &EdgeShape, clicked: &FillStyle, threshold: f64) -> Split {
+    let parts = decompose(shape);
+    let mut inside = Parts::default();
+    let mut outside = Parts::default();
+    for (style, path) in &parts.fills {
+        if similar_fill(style, clicked, threshold) {
+            inside.fills.push((style.clone(), path.clone()));
+        } else {
+            outside.fills.push((style.clone(), path.clone()));
+        }
+    }
+    outside.strokes.clone_from(&parts.strokes);
+    Split { inside: non_empty(&inside), outside: non_empty(&outside) }
+}
+
 /// Merge-mode drawing: `new` is drawn over `existing`. Its fills replace what lies underneath (fills are cut,
 /// strokes under a fill are cut); its strokes lie on top. Regions of the same style are united.
 #[must_use]

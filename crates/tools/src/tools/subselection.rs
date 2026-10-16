@@ -161,6 +161,12 @@ enum State {
         current: Point,
         additive: bool,
     },
+    /// Alt pressed on an anchor: a click toggles it between corner and smooth, a drag pulls out its handles.
+    Converting {
+        element: ElementRef,
+        anchor: Point,
+        start: Point,
+    },
 }
 
 /// Edits the points of shapes.
@@ -205,6 +211,12 @@ impl SubselectionTool {
     fn down(&mut self, p: &PointerEvent, ctx: &ToolContext<'_>) -> ToolOutput {
         self.sync(ctx);
         let additive = p.modifiers.shift;
+        if p.modifiers.alt
+            && let Some((element, PointKey::Anchor(anchor))) = Self::point_at(ctx, p.pos)
+        {
+            self.state = State::Converting { element, anchor, start: p.pos };
+            return ToolOutput::cursor(Cursor::Point);
+        }
         if let Some((element, key)) = Self::point_at(ctx, p.pos) {
             let entry = (element, key);
             if let Some(i) = self.points.iter().position(|e| *e == entry) {
@@ -237,6 +249,10 @@ impl SubselectionTool {
         let state = std::mem::take(&mut self.state);
         let mut commands = Vec::new();
         match state {
+            State::Converting { element, anchor, start } => {
+                let pull = (start.distance(p.pos) >= ctx.drag_threshold()).then(|| p.pos - start);
+                commands.extend(super::anchors::convert_element_anchor(ctx, &element, anchor, pull));
+            }
             State::Moving { start, .. } => {
                 let delta = p.pos - start;
                 commands = self.replacements(ctx, delta, false);
@@ -411,7 +427,7 @@ impl Tool for SubselectionTool {
     }
 
     fn is_busy(&self) -> bool {
-        matches!(self.state, State::Moving { .. } | State::Marquee { .. })
+        matches!(self.state, State::Moving { .. } | State::Marquee { .. } | State::Converting { .. })
     }
 }
 

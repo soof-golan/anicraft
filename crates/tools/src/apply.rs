@@ -361,6 +361,51 @@ fn delete_text(doc: &mut Document, state: &EditorState, target: &ElementRef, sta
     Ok(())
 }
 
+/// Applies the commands that replace a shape's geometry or select by region; true when the document changed.
+fn apply_shape_edit(doc: &mut Document, state: &mut EditorState, command: &ToolCommand) -> Result<bool, ApplyError> {
+    match command {
+        ToolCommand::ReplaceShape { target, shape } => {
+            let element = shape_mut(doc, &state.timeline, target)?;
+            element.shape = shape.clone();
+            // Editing the outline by hand ends the primitive: its parameters no longer describe the shape.
+            element.primitive = None;
+            Ok(true)
+        }
+        ToolCommand::SetPrimitive { target, primitive } => {
+            let element = shape_mut(doc, &state.timeline, target)?;
+            if element.primitive.is_none() {
+                return Err(ApplyError::WrongKind { expected: "rectangle or oval primitive" });
+            }
+            if !primitive_is_finite(primitive) {
+                return Err(ApplyError::BadMatrix);
+            }
+            element.set_primitive(primitive.clone());
+            Ok(true)
+        }
+        ToolCommand::LassoSelect { polygon, additive } => {
+            if polygon.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
+                return Err(ApplyError::BadMatrix);
+            }
+            Ok(crate::region_select::lasso_select(doc, state, polygon, *additive))
+        }
+        ToolCommand::WandSelect { point, threshold, additive } => {
+            if !point.x.is_finite() || !point.y.is_finite() || !threshold.is_finite() {
+                return Err(ApplyError::BadMatrix);
+            }
+            Ok(crate::region_select::wand_select(doc, state, *point, *threshold, *additive))
+        }
+        _ => Ok(false),
+    }
+}
+
+fn primitive_is_finite(primitive: &anim_scene::Primitive) -> bool {
+    use anim_scene::PrimitiveKind;
+    match &primitive.kind {
+        PrimitiveKind::Rectangle(r) => r.width.is_finite() && r.height.is_finite() && r.radii.iter().all(|v| v.is_finite()),
+        PrimitiveKind::Oval(o) => [o.width, o.height, o.start_angle, o.end_angle, o.inner_radius].iter().all(|v| v.is_finite()),
+    }
+}
+
 /// Applies one command.
 ///
 /// With [`EditorState::auto_keyframe`] on, a command that changes the artwork of a held frame first makes that
@@ -399,7 +444,9 @@ fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
             let keyframe = doc.timeline(&timeline).and_then(|t| t.keyframe_at(*layer, *frame)).map_or(*frame, |f| f.index);
             state.selection = Selection { items: vec![ElementRef::top_level(*layer, keyframe, index)], scope: None };
         }
-        ToolCommand::ReplaceShape { target, shape } => shape_mut(doc, &state.timeline, target)?.shape = shape.clone(),
+        ToolCommand::ReplaceShape { .. } | ToolCommand::SetPrimitive { .. } | ToolCommand::LassoSelect { .. } | ToolCommand::WandSelect { .. } => {
+            changed = apply_shape_edit(doc, state, command)?;
+        }
         ToolCommand::DeleteElements { targets } => {
             remove_refs(doc, &state.timeline, targets);
             state.selection.items.retain(|s| !targets.contains(s));

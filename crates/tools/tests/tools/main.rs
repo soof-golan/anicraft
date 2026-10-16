@@ -5,6 +5,7 @@ mod common;
 
 mod armature;
 mod drawing;
+mod drawing_tools;
 mod mcp;
 mod painting;
 mod scripts;

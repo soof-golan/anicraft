@@ -19,7 +19,19 @@ const MAX_SHAPES: usize = 200;
 /// True when the tool takes snapped positions: the ones that place geometry.
 #[must_use]
 pub const fn tool_snaps(tool: ToolId) -> bool {
-    matches!(tool, ToolId::Line | ToolId::Rectangle | ToolId::Oval | ToolId::Pen | ToolId::Pencil | ToolId::Subselection | ToolId::Text)
+    matches!(
+        tool,
+        ToolId::Line
+            | ToolId::Rectangle
+            | ToolId::Oval
+            | ToolId::RectanglePrimitive
+            | ToolId::OvalPrimitive
+            | ToolId::PolyStar
+            | ToolId::Pen
+            | ToolId::Pencil
+            | ToolId::Subselection
+            | ToolId::Text
+    )
 }
 
 /// The anchor points (segment ends) of the shapes on the stage, in stage coordinates.

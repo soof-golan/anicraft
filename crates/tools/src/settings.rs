@@ -1,6 +1,7 @@
 //! Tool options: the Properties panel and toolbox state that tools read.
 
 use anim_core::Rgba8;
+use anim_scene::TextKind;
 use anim_shape::{FillStyle, StrokeStyle};
 use serde::{Deserialize, Serialize};
 
@@ -155,6 +156,87 @@ impl OvalSettings {
     }
 }
 
+/// Polygon or star.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolyStarStyle {
+    #[default]
+    Polygon,
+    Star,
+}
+
+impl PolyStarStyle {
+    /// Both styles in the order the options menu lists them.
+    pub const ALL: [Self; 2] = [Self::Polygon, Self::Star];
+
+    /// The menu label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Polygon => "polygon",
+            Self::Star => "star",
+        }
+    }
+}
+
+/// The `PolyStar` tool's options.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PolyStarSettings {
+    pub style: PolyStarStyle,
+    /// Number of sides (3 to 32).
+    pub sides: u32,
+    /// Star point size, 0 to 1: the inner radius as a fraction of the outer one. Closer to 0 gives sharper points.
+    pub star_point_size: f64,
+}
+
+impl Default for PolyStarSettings {
+    fn default() -> Self {
+        Self { style: PolyStarStyle::Polygon, sides: 5, star_point_size: 0.5 }
+    }
+}
+
+/// How the Lasso tool selects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LassoMode {
+    /// Drag a free-form loop.
+    #[default]
+    Freeform,
+    /// Click the corners of a polygon; double-click closes it.
+    Polygon,
+    /// Click a region to select all fills of a similar colour.
+    MagicWand,
+}
+
+impl LassoMode {
+    /// All modes in the order the options menu lists them.
+    pub const ALL: [Self; 3] = [Self::Freeform, Self::Polygon, Self::MagicWand];
+
+    /// The menu label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Freeform => "Free-form",
+            Self::Polygon => "Polygon",
+            Self::MagicWand => "Magic Wand",
+        }
+    }
+}
+
+/// The Lasso tool's options.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct LassoSettings {
+    pub mode: LassoMode,
+    /// Magic wand: how far a colour may be from the clicked one (0 to 255 per channel).
+    pub threshold: f64,
+}
+
+impl Default for LassoSettings {
+    fn default() -> Self {
+        Self { mode: LassoMode::Freeform, threshold: 10.0 }
+    }
+}
+
 /// Snapping switches of the View > Snapping menu.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[expect(clippy::struct_excessive_bools, reason = "independent snapping switches")]
@@ -189,11 +271,14 @@ pub struct TextSettings {
     pub color: Rgba8,
     pub bold: bool,
     pub italic: bool,
+    /// Static, dynamic or input text for new fields.
+    #[serde(default)]
+    pub kind: TextKind,
 }
 
 impl Default for TextSettings {
     fn default() -> Self {
-        Self { face: "Arial".to_owned(), size: 24.0, color: Rgba8::BLACK, bold: false, italic: false }
+        Self { face: "Arial".to_owned(), size: 24.0, color: Rgba8::BLACK, bold: false, italic: false, kind: TextKind::Static }
     }
 }
 
@@ -245,6 +330,12 @@ pub struct ToolSettings {
     /// Arc settings of the oval tool.
     #[serde(default)]
     pub oval: OvalSettings,
+    /// Polygon and star settings of the `PolyStar` tool.
+    #[serde(default)]
+    pub polystar: PolyStarSettings,
+    /// How the Lasso tool selects.
+    #[serde(default)]
+    pub lasso: LassoSettings,
     /// Snapping switches.
     #[serde(default)]
     pub snap: SnapSettings,
@@ -279,6 +370,8 @@ impl Default for ToolSettings {
             corner_radii: [0.0; 4],
             corner_lock: true,
             oval: OvalSettings::default(),
+            polystar: PolyStarSettings::default(),
+            lasso: LassoSettings::default(),
             snap: SnapSettings::default(),
             text: TextSettings::default(),
             hit_tolerance: 4.0,

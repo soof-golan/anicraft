@@ -26,6 +26,7 @@ fn refs_of<'a>(state: &'a EditorState, command: &'a ToolCommand) -> Vec<&'a Elem
         ToolCommand::SetTransformationPoint { target, .. }
         | ToolCommand::SetCenterPoint3D { target, .. }
         | ToolCommand::ReplaceShape { target, .. }
+        | ToolCommand::SetPrimitive { target, .. }
         | ToolCommand::InsertText { target, .. }
         | ToolCommand::DeleteText { target, .. } => vec![target],
         ToolCommand::DeleteElements { targets } => targets.iter().collect(),
@@ -79,6 +80,7 @@ pub fn prepare(doc: &mut Document, state: &mut EditorState, command: &ToolComman
         ToolCommand::SetTransformationPoint { target, .. }
         | ToolCommand::SetCenterPoint3D { target, .. }
         | ToolCommand::ReplaceShape { target, .. }
+        | ToolCommand::SetPrimitive { target, .. }
         | ToolCommand::InsertText { target, .. }
         | ToolCommand::DeleteText { target, .. } => point_at_new(target),
         ToolCommand::DeleteElements { targets } => targets.iter_mut().for_each(point_at_new),

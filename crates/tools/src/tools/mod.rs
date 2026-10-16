@@ -1,9 +1,11 @@
 //! The tools.
 
+mod anchors;
 mod bone;
 mod drawing;
 mod freehand;
 mod gradient;
+mod lasso;
 mod paint;
 mod pen;
 mod selection;
@@ -13,10 +15,12 @@ mod transform;
 mod transform3d;
 mod view;
 
+pub use anchors::{AddAnchorTool, AnchorMode, ConvertAnchorTool, DeleteAnchorTool, add_anchor, anchor_click, anchor_near, convert_anchor, is_smooth};
 pub use bone::{BoneTool, bone_under, bones_overlay};
-pub use drawing::{LineTool, OvalTool, RectangleTool};
+pub use drawing::{LineTool, OvalPrimitiveTool, OvalTool, PolyStarTool, RectanglePrimitiveTool, RectangleTool, polystar_path};
 pub use freehand::{BrushTool, PencilTool};
 pub use gradient::GradientTransformTool;
+pub use lasso::LassoTool;
 pub use paint::{EraserTool, InkBottleTool, PaintBucketTool};
 pub use pen::PenTool;
 pub use selection::SelectionTool;
