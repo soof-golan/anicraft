@@ -71,6 +71,15 @@ in anicraft-libs' AGENTS.md ("Visual verification"):
 - Fix the code, not the prediction.
 - Assertions plus goldens at the end.
 
+## After it is correct: profile, then simplify
+
+Follow anicraft-libs' AGENTS.md section of the same name:
+- Benchmarks and real profiles (perf, samply or flamegraph) on the sample files and stress fixtures.
+- Optimisations backed by measurements.
+- Deletion and deduplication.
+- Moving helpers shared with other crates into anicraft-libs (anim-core or a small shared crate) and deleting the
+  local copies.
+
 ## Building: always through the job queue
 
 Never run `cargo` directly for builds, checks, clippy or tests. Use the queue so parallel agents share the machine:
