@@ -314,6 +314,7 @@ dependencies = [
  "color-eyre",
  "criterion",
  "png",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",

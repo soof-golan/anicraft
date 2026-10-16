@@ -12,8 +12,10 @@
 
 pub mod commands;
 pub mod doc;
+pub mod docfile;
 pub mod editing;
 pub mod timeline_ops;
+pub mod find;
 
 use std::fs::File;
 use std::io::{self, Write as _};
@@ -49,6 +51,8 @@ pub fn registry() -> CommandRegistry<AniDoc> {
     registry.register_all(commands::all()).expect("built-in command ids are unique");
     editing::register(&mut registry);
     timeline_ops::register(&mut registry);
+    docfile::register(&mut registry);
+    find::register(&mut registry);
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(anicraft_tools::mcp_commands::<AniDoc>()).expect("tool command ids are unique");
     registry

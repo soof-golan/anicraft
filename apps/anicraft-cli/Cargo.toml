@@ -30,10 +30,12 @@ anim-mcp = { workspace = true }
 anim-render = { workspace = true }
 anim-scene = { workspace = true }
 anim-session = { workspace = true }
+anim-shape = { workspace = true }
 anim-timeline = { workspace = true }
 anim-video = { workspace = true }
 clap = { workspace = true }
 color-eyre = { workspace = true }
+regex = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
