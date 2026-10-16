@@ -209,7 +209,11 @@ fn samples_script_and_component_survey() {
                 components += usize::from(i.component.is_some());
             }
         });
-        println!("survey {name}: {} frame scripts, {components} component instances, first scripts {:?}", scripts.len(), scripts.iter().take(5).collect::<Vec<_>>());
+        println!(
+            "survey {name}: {} frame scripts, {components} component instances, first scripts {:?}",
+            scripts.len(),
+            scripts.iter().take(5).collect::<Vec<_>>()
+        );
     }
 }
 
