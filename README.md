@@ -81,9 +81,9 @@ from `anicraft-libs`, pinned by git rev in `Cargo.toml`.
 
 - Parts of the Animate format are kept in the file but not interpreted: components, 3D transforms, inverse kinematics
   (armatures) and ActionScript. Dashed, dotted and hatched strokes render as solid.
-- SWF output is validated by parsing its tag stream and by round trips, not yet frame by frame in a Flash player.
-- The library panel can show raw entity names for some symbols, and some panels (properties, library preview) are
-  basic.
+- SWF output is checked against Ruffle's renderer on synthetic fixtures, and by parsing and round trips on the
+  samples. It has not been checked in Adobe's Flash Player.
+- Some panels (properties, library preview) are basic.
 - Large documents are slow to export (software rendering and encoding).
 - Binaries are unsigned and there is no installer.
 
