@@ -128,7 +128,17 @@ mod tests {
         let bounds = LibraryBounds::new(&doc.library);
         let timeline = TimelineId::Scene(0);
         let selection = Selection::empty();
-        let ctx = ToolContext { document: &doc, timeline: &timeline, layer: 0, frame: 0, selection: &selection, settings, zoom: 1.0, bounds: &bounds };
+        let ctx = ToolContext {
+            document: &doc,
+            timeline: &timeline,
+            layer: 0,
+            frame: 0,
+            selection: &selection,
+            settings,
+            zoom: 1.0,
+            bounds: &bounds,
+            edit_range: None,
+        };
         f(&ctx)
     }
 
