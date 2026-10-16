@@ -33,7 +33,7 @@ fn translating_along_z_gives_the_instance_depth_and_leaves_x_and_y() {
     // The z handle is the diagonal up and to the right of the centre (200, 150); 10 along it is (207.07, 142.93).
     let d = 10.0 / 2.0_f64.sqrt();
     let from = (200.0 + d, 150.0 - d);
-    let to = (200.0 + 3.0 * d, 150.0 - 3.0 * d);
+    let to = (3.0_f64.mul_add(d, 200.0), 3.0_f64.mul_add(-d, 150.0));
     let commands = drag(&mut e, ToolId::Translation3D, from, to);
     assert!(matches!(commands.last(), Some(ToolCommand::Transform3DSelection { .. })), "{commands:?}");
     let i = instance(&e);
@@ -61,7 +61,7 @@ fn rotating_about_y_turns_the_box_about_its_origin() {
     let m = instance(&e).matrix_3d.expect("a 3D placement");
     let s = 45.0_f64.to_radians();
     assert!(near(m.transform_point([0.0, 0.0, 0.0]), [200.0, 150.0, 0.0]));
-    assert!(near(m.transform_point([100.0, 0.0, 0.0]), [200.0 + 100.0 * s.cos(), 150.0, -100.0 * s.sin()]), "{:?}", m.transform_point([100.0, 0.0, 0.0]));
+    assert!(near(m.transform_point([100.0, 0.0, 0.0]), [100.0_f64.mul_add(s.cos(), 200.0), 150.0, -100.0 * s.sin()]), "{:?}", m.transform_point([100.0, 0.0, 0.0]));
     assert!(near(m.transform_point([0.0, 100.0, 0.0]), [200.0, 250.0, 0.0]));
 }
 
@@ -84,7 +84,7 @@ fn rotating_about_the_centre_point_keeps_it_fixed() {
 fn the_3d_tools_ignore_selections_without_symbol_instances() {
     let mut e = editor();
     let commands = drag(&mut e, ToolId::Rotation3D, (200.0, 100.0), (155.0, 100.0));
-    assert!(commands.is_empty());
+    assert_eq!(commands.len(), 0);
 }
 
 #[test]
