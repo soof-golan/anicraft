@@ -49,7 +49,8 @@ struct Args {
     #[arg(long, value_name = "PORT")]
     control_port: Option<u16>,
 
-    /// Where to write the control token and address (default: none; the address is printed to stderr).
+    /// Where to write the control token and address (default for a fixed --control-port: `anicraft-control-PORT.token`
+    /// in $XDG_RUNTIME_DIR or the temp folder, where `anicraft-cli mcp --bridge PORT` finds it).
     #[arg(long, value_name = "FILE")]
     token_file: Option<PathBuf>,
 
@@ -82,7 +83,7 @@ fn main() -> color_eyre::Result<()> {
         file: args.file,
         shot,
         dark: !args.light,
-        links: LinkOptions { stdio: args.mcp_stdio, control_port: args.control_port, token_file: args.token_file },
+        links: LinkOptions { stdio: args.mcp_stdio, control_port: args.control_port, token_file: args.token_file.or_else(|| args.control_port.filter(|p| *p != 0).map(anicraft_cli::mcp::default_token_file)) },
         roots: args.roots,
         window: Some(window),
     };

@@ -273,6 +273,7 @@ dependencies = [
  "anicraft-swf",
  "anicraft-tools",
  "anicraft-xfl",
+ "anim-artwork",
  "anim-audio",
  "anim-core",
  "anim-display",

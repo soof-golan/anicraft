@@ -119,11 +119,27 @@ pub struct ConvertArgs {
 /// Arguments of `mcp`.
 #[derive(Debug, Args)]
 pub struct McpArgs {
-    /// A document to open at start.
+    /// A document to open at start (also accepted as a plain argument).
+    #[arg(long = "file", value_name = "FILE", conflicts_with = "positional_file")]
     pub file: Option<PathBuf>,
-    /// Folders the client may read and write (repeatable). Without any, files are off limits.
-    #[arg(long = "root")]
+    /// A document to open at start.
+    #[arg(value_name = "FILE")]
+    pub positional_file: Option<PathBuf>,
+    /// Folders the client may read and write (repeatable). Without any root, files are off limits.
+    #[arg(long = "root", value_name = "DIR")]
     pub roots: Vec<PathBuf>,
+    /// Folders the client may read (repeatable).
+    #[arg(long = "read-root", value_name = "DIR")]
+    pub read_roots: Vec<PathBuf>,
+    /// Folders the client may write (repeatable). Writing does not imply reading.
+    #[arg(long = "write-root", value_name = "DIR")]
+    pub write_roots: Vec<PathBuf>,
+    /// Drive the running editor (`anicraft --control-port PORT`) instead of a headless session, so you can watch it work.
+    #[arg(long, value_name = "PORT", conflicts_with_all = ["file", "positional_file", "roots", "read_roots", "write_roots"])]
+    pub bridge: Option<u16>,
+    /// With --bridge: the token file the editor wrote (default: the one named after the port, else the `ANIM_MCP_TOKEN` variable).
+    #[arg(long, value_name = "FILE", requires = "bridge")]
+    pub token_file: Option<PathBuf>,
 }
 
 /// Runs a parsed command line.
@@ -136,7 +152,20 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Render(args) => render_command(&args),
         Command::Export(args) => export_command(&args),
         Command::Convert(args) => convert_command(&args),
-        Command::Mcp(args) => crate::mcp::serve_stdio(args.file.as_deref(), &args.roots),
+        Command::Mcp(args) => crate::mcp::serve(&mcp_options(args)),
+    }
+}
+
+fn mcp_options(args: McpArgs) -> crate::mcp::ServeOptions {
+    let mut read_roots = args.roots.clone();
+    read_roots.extend(args.read_roots);
+    let mut write_roots = args.roots;
+    write_roots.extend(args.write_roots);
+    crate::mcp::ServeOptions {
+        file: args.file.or(args.positional_file),
+        read_roots,
+        write_roots,
+        bridge: args.bridge.map(|port| crate::mcp::BridgeTarget { port, token_file: args.token_file }),
     }
 }
 

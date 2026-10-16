@@ -47,17 +47,7 @@ fn element<'a>(doc: &'a Document, id: &TimelineId, r: &ElementRef) -> Option<&'a
 }
 
 /// Mutable access to the element a reference points at.
-pub fn element_mut<'a>(doc: &'a mut Document, id: &TimelineId, r: &ElementRef) -> Option<&'a mut Element> {
-    let layer = doc.timeline_mut(id)?.layers.get_mut(r.layer)?;
-    let frame = layer.frames.iter_mut().find(|f| f.index == r.keyframe)?;
-    let mut elements = &mut frame.elements;
-    let (last, ancestors) = r.path.split_last()?;
-    for &i in ancestors {
-        let Some(Element::Group(g)) = elements.get_mut(i) else { return None };
-        elements = &mut g.members;
-    }
-    elements.get_mut(*last)
-}
+pub use anicraft_cli::mcp::editing::element_mut;
 
 fn linear(m: Affine) -> (f64, f64, f64) {
     let [a, b, c, d, _, _] = m.as_coeffs();

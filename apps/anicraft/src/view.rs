@@ -307,17 +307,7 @@ pub const fn cursor_icon(cursor: Cursor) -> CursorIcon {
 }
 
 /// Where an element ref points, as the stage rectangle it covers, for the selection outline.
-#[must_use]
-pub fn selection_rects(doc: &Document, id: &TimelineId, refs: &[ElementRef]) -> Vec<anim_core::Rect> {
-    let bounds = anicraft_tools::LibraryBounds::new(&doc.library);
-    refs.iter()
-        .filter_map(|r| {
-            let resolved = anicraft_tools::resolve_ref(doc, id, r)?;
-            let local = anicraft_tools::hit::bounds_in_parent(&bounds, resolved.element, 0)?;
-            anicraft_tools::hit::transform_rect(resolved.parent_to_stage, local)
-        })
-        .collect()
-}
+pub use anicraft_cli::mcp::editing::selection_rects;
 
 /// A short label for an element, for the properties panel header.
 #[must_use]

@@ -21,6 +21,7 @@ path = "src/main.rs"
 anicraft-swf = { workspace = true }
 anicraft-tools = { workspace = true }
 anicraft-xfl = { workspace = true }
+anim-artwork = { workspace = true }
 anim-audio = { workspace = true }
 anim-core = { workspace = true }
 anim-display = { workspace = true }

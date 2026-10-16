@@ -18,6 +18,7 @@ pub mod cli;
 pub mod convert;
 pub mod error;
 pub mod export;
+pub mod import;
 pub mod info;
 pub mod mcp;
 pub mod project;

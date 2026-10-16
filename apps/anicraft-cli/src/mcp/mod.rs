@@ -12,6 +12,7 @@
 
 pub mod commands;
 pub mod doc;
+pub mod editing;
 
 use std::fs::File;
 use std::io::{self, Write as _};
@@ -45,6 +46,7 @@ pub fn registry() -> CommandRegistry<AniDoc> {
     let mut registry = CommandRegistry::with_history_commands();
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(commands::all()).expect("built-in command ids are unique");
+    editing::register(&mut registry);
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(anicraft_tools::mcp_commands::<AniDoc>()).expect("tool command ids are unique");
     registry
@@ -172,6 +174,28 @@ fn scene_of(doc: &Document, scene: Option<usize>) -> Result<usize, ControlError>
     }
 }
 
+/// The timeline a query names: `symbol`, else `scene`, else the open scene.
+fn timeline_of<'a>(doc: &'a Document, params: &Value) -> Result<(TimelineId, &'a anim_scene::Timeline), ControlError> {
+    let id = if let Some(name) = params.get("symbol").and_then(Value::as_str) {
+        TimelineId::Symbol(name.to_owned())
+    } else {
+        TimelineId::Scene(scene_of(doc, params.get("scene").and_then(Value::as_u64).and_then(|s| usize::try_from(s).ok()))?)
+    };
+    let timeline = doc.timeline(&id).ok_or_else(|| ControlError::new(ErrorKind::NotFound, format!("no such timeline {}", timeline_name(&id))))?;
+    Ok((id, timeline))
+}
+
+fn timeline_name(id: &TimelineId) -> Value {
+    match id {
+        TimelineId::Scene(i) => json!({ "scene": i }),
+        TimelineId::Symbol(n) => json!({ "symbol": n }),
+    }
+}
+
+fn uint(params: &Value, key: &str) -> Result<usize, ControlError> {
+    params.get(key).and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok()).ok_or_else(|| ControlError::invalid(format!("`{key}` is required and must be a non-negative integer")))
+}
+
 /// What an element is, in a few words an agent can act on (the index is its position in the keyframe).
 fn element_json(index: usize, element: &anim_scene::Element) -> Value {
     use anim_scene::Element;
@@ -193,6 +217,9 @@ fn keyframe_json(frame: &anim_scene::Frame) -> Value {
         "elements": frame.elements.iter().enumerate().map(|(i, e)| element_json(i, e)).collect::<Vec<_>>(),
         "label": frame.label,
         "sound": frame.sound.as_ref().map(|s| s.name.as_str()),
+        "acceleration": frame.acceleration,
+        "rotate": format!("{:?}", frame.motion_tween_rotate),
+        "script": frame.actionscript.is_some(),
     })
 }
 
@@ -216,6 +243,26 @@ impl AppHooks<AniDoc> for AniHooks {
             })),
             QuerySpec::new("sound_cues", "Sounds starting on the keyframes of a scene, with sync and loop mode.").with_schema(json!({
                 "type": "object", "additionalProperties": false, "properties": { "scene": scene }
+            })),
+            QuerySpec::new(
+                "timeline",
+                "The layer and frame table of a scene or of a library symbol: every layer with its state and its keyframes (frame, duration, tween and its options, label, sound, script, element summaries). Pass `scene` (default: the open scene) or `symbol`.",
+            )
+            .with_schema(json!({
+                "type": "object", "additionalProperties": false,
+                "properties": { "scene": scene, "symbol": { "type": "string", "description": "library name of a symbol, to read its own timeline" } }
+            })),
+            QuerySpec::new(
+                "element",
+                "All properties of one object, addressed by path: the timeline (`scene` or `symbol`), `layer`, 1-based `frame`, `index` in the keyframe and, for members of groups, `members` (indices going down). Returns the object as the model stores it.",
+            )
+            .with_schema(json!({
+                "type": "object", "required": ["layer", "frame", "index"], "additionalProperties": false,
+                "properties": {
+                    "scene": scene, "symbol": { "type": "string" },
+                    "layer": { "type": "integer", "minimum": 0 }, "frame": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 0 },
+                    "members": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+                }
             })),
         ]
     }
@@ -280,6 +327,43 @@ impl AppHooks<AniDoc> for AniHooks {
                     .map(|c| json!({ "sound": c.name, "frame": c.frame.saturating_add(1), "sync": c.sync.xfl_name(), "loop": format!("{:?}", c.looping) }))
                     .collect();
                 json!({ "scene": scene, "cues": cues })
+            }
+            "timeline" => {
+                let (id, timeline) = timeline_of(doc, params)?;
+                let layers: Vec<Value> = timeline
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .map(|(i, layer)| {
+                        json!({
+                            "index": i, "name": layer.name, "kind": format!("{:?}", layer.kind), "parent": layer.parent_layer_index,
+                            "visible": layer.visible, "locked": layer.locked, "outline": layer.outline,
+                            "keyframes": layer.frames.iter().map(keyframe_json).collect::<Vec<_>>(),
+                        })
+                    })
+                    .collect();
+                json!({ "timeline": timeline_name(&id), "frames": timeline.frame_count(), "layers": layers })
+            }
+            "element" => {
+                let (_, timeline) = timeline_of(doc, params)?;
+                let layer = uint(params, "layer")?;
+                let frame = uint(params, "frame")?.checked_sub(1).ok_or_else(|| ControlError::invalid("frames start at 1"))?;
+                let mut index = uint(params, "index")?;
+                let keyframe = timeline
+                    .layers
+                    .get(layer)
+                    .ok_or_else(|| ControlError::invalid(format!("no layer {layer}")))?
+                    .keyframe_at(u32::try_from(frame).map_err(|_| ControlError::invalid("frame out of range"))?)
+                    .ok_or_else(|| ControlError::invalid(format!("layer {layer} has no keyframe covering frame {}", frame.saturating_add(1))))?;
+                let mut element = keyframe.elements.get(index).ok_or_else(|| ControlError::invalid(format!("the keyframe has no object {index}")))?;
+                if let Some(members) = params.get("members").and_then(Value::as_array) {
+                    for m in members {
+                        index = m.as_u64().and_then(|m| usize::try_from(m).ok()).ok_or_else(|| ControlError::invalid("`members` must be indices"))?;
+                        let anim_scene::Element::Group(g) = element else { return Err(ControlError::invalid("that object is not a group")) };
+                        element = g.members.get(index).ok_or_else(|| ControlError::invalid(format!("the group has no member {index}")))?;
+                    }
+                }
+                json!({ "summary": element_json(index, element), "element": serde_json::to_value(element).map_err(|e| ControlError::failed(e.to_string()))? })
             }
             other => return Err(ControlError::new(ErrorKind::NotFound, format!("no query named {other:?}"))),
         };
@@ -431,32 +515,105 @@ pub fn host(doc: AniDoc, path: Option<PathBuf>, confinement: Confinement) -> Ses
     SessionHost::new(info, session, AniHooks).with_confinement(confinement)
 }
 
-/// Runs the MCP server on stdin and stdout until the client disconnects.
+/// Which running editor `anicraft-cli mcp --bridge` drives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgeTarget {
+    /// The loopback port of the editor's control server (`anicraft --control-port PORT`).
+    pub port: u16,
+    /// The token file the editor wrote; `None` uses [`default_token_file`] and then `ANIM_MCP_TOKEN`.
+    pub token_file: Option<PathBuf>,
+}
+
+/// What `anicraft-cli mcp` should serve.
+#[derive(Debug, Clone, Default)]
+pub struct ServeOptions {
+    /// A document to open first (headless only).
+    pub file: Option<PathBuf>,
+    /// Folders the client may read (headless only).
+    pub read_roots: Vec<PathBuf>,
+    /// Folders the client may write (headless only).
+    pub write_roots: Vec<PathBuf>,
+    /// Drive a running editor instead of a headless session; its own confinement applies.
+    pub bridge: Option<BridgeTarget>,
+}
+
+/// Where the editor writes its control token by default.
 ///
-/// `file` is opened first when given. Without `roots` the client cannot read or write any file (renders and
-/// previews still come back as images).
+/// `anicraft --control-port PORT` writes it there when no `--token-file` is given, and `anicraft-cli mcp --bridge PORT`
+/// looks for it there: `anicraft-control-PORT.token` in `$XDG_RUNTIME_DIR`, or in the temp folder.
+#[must_use]
+pub fn default_token_file(port: u16) -> PathBuf {
+    let base = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(std::env::temp_dir);
+    base.join(format!("anicraft-control-{port}.token"))
+}
+
+fn bridge_backend(target: &BridgeTarget) -> color_eyre::Result<anim_mcp::Backend> {
+    use color_eyre::eyre::{WrapErr as _, eyre};
+    let file = target.token_file.clone().unwrap_or_else(|| default_token_file(target.port));
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], target.port));
+    let token = match anim_mcp::read_token_file(&file) {
+        Ok((token, _)) => token,
+        Err(e) if target.token_file.is_none() => std::env::var("ANIM_MCP_TOKEN")
+            .map_err(|_| eyre!("no token for the editor on port {}: {} is unreadable ({e}); pass --token-file or set ANIM_MCP_TOKEN", target.port, file.display()))?,
+        Err(e) => return Err(e).wrap_err_with(|| format!("could not read {}", file.display())),
+    };
+    anim_mcp::connect_bridge(addr, &token).wrap_err_with(|| format!("could not connect to the editor at {addr}; start it with `anicraft --control-port {}`", target.port))
+}
+
+/// Runs the MCP server on stdin and stdout until the client disconnects: a headless session, or a bridge to a running
+/// editor.
+///
+/// A headless session opens `file` first when given. Without roots the client cannot read or write any file (renders
+/// and previews still come back as images).
 ///
 /// # Errors
-/// When the document cannot be read, a root does not exist, or the transport fails.
-pub fn serve_stdio(file: Option<&Path>, roots: &[PathBuf]) -> color_eyre::Result<()> {
-    let (doc, path) = match file {
-        Some(path) => (AniDoc::from(Project::open(path)?), Some(path.to_path_buf())),
+/// When the document cannot be read, a root does not exist, the editor cannot be reached, or the transport fails.
+pub fn serve(options: &ServeOptions) -> color_eyre::Result<()> {
+    use color_eyre::eyre::eyre;
+    if let Some(target) = &options.bridge {
+        if options.file.is_some() || !options.read_roots.is_empty() || !options.write_roots.is_empty() {
+            return Err(eyre!("--bridge drives the editor's own document and folders; do not combine it with --file, --root, --read-root or --write-root"));
+        }
+        let backend = bridge_backend(target)?;
+        eprintln!("anicraft-cli: bridged to {}", backend.description());
+        let mcp = anim_mcp::AnimMcp::new(backend, "anicraft-cli", VERSION).with_instructions(format!("{BRIDGE_INSTRUCTIONS}{INSTRUCTIONS}"));
+        return anim_mcp::run_stdio(mcp).map_err(|e| eyre!("{e}"));
+    }
+    let (doc, path) = match &options.file {
+        Some(path) => (AniDoc::from(Project::open(path)?), Some(path.clone())),
         None => (AniDoc::default(), None),
     };
     // Resolved here, so a bad root is reported before the client connects.
-    let confinement = Confinement::new(roots, roots).map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+    let confinement = Confinement::new(&options.read_roots, &options.write_roots).map_err(|e| eyre!("{e}"))?;
     let session = anim_mcp::spawn_headless(move || host(doc, path, confinement))?;
     let mcp = anim_mcp::AnimMcp::new(session.backend().clone(), "anicraft-cli", VERSION).with_instructions(INSTRUCTIONS);
-    anim_mcp::run_stdio(mcp).map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+    anim_mcp::run_stdio(mcp).map_err(|e| eyre!("{e}"))?;
     session.shutdown();
     Ok(())
 }
 
+/// Runs a headless MCP server on stdin and stdout; `roots` may be read and written.
+///
+/// # Errors
+/// As [`serve`].
+pub fn serve_stdio(file: Option<&Path>, roots: &[PathBuf]) -> color_eyre::Result<()> {
+    serve(&ServeOptions { file: file.map(Path::to_path_buf), read_roots: roots.to_vec(), write_roots: roots.to_vec(), bridge: None })
+}
+
+/// Said first when the server drives a window.
+pub const BRIDGE_INSTRUCTIONS: &str = "You are connected to the running AniCraft editor window: what you do appears on the person's screen, shares \
+their undo history and can be undone with Ctrl+Z. The screenshot tool captures the real window (optionally one panel: stage, timeline, library, \
+properties, tools); editor_goto moves the playhead. ";
+
 /// What the model is told when it connects.
 pub const INSTRUCTIONS: &str = "AniCraft edits Adobe Animate documents (.fla / XFL). Call session_status, then inspect_document (scenes, layers, \
-keyframes) and get_library. Scene and layer indices are 0-based with layer 0 on top; frame numbers are 1-based like Animate's timeline. Every editing \
-command is a tool and one undo step; run_batch applies several atomically. render_frame returns a PNG of any frame so you can look at the result; \
-export writes png-seq, gif, mp4, mov, svg, svg-anim, spritesheet or swf. open_document and save_document work inside the allowed folders only.";
+keyframes) and get_library; query_timeline gives the layer and frame table of a scene or symbol and query_element every property of one object. Scene \
+and layer indices are 0-based with layer 0 on top; frame numbers are 1-based like Animate's timeline. Every editing command is a tool and one undo step; \
+run_batch applies several atomically. Draw with draw_rectangle, draw_oval, draw_line, draw_path, draw_freehand and draw_text (right-to-left text such as \
+Hebrew or Arabic works; set direction rtl), then select_* and transform_* to arrange, modify_* to group or convert to a symbol, instance_* for colour \
+effects, filters and blend modes, timeline_* for keyframes, tweens, sounds and scripts, layer_* for layers and library_* to import and organise assets. \
+render_frame returns a PNG of any frame so you can look at the result; export writes png-seq, gif, mp4, mov, svg, svg-anim, spritesheet or swf. \
+open_document, save_document, library_import and export work inside the allowed folders only.";
 
 #[cfg(test)]
 mod tests {

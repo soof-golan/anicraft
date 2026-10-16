@@ -104,7 +104,7 @@ const LAYER_FRAME: &str = r#"{"type":"object","additionalProperties":false,"requ
 const LAYER_FRAME_COUNT: &str = r#"{"type":"object","additionalProperties":false,"required":["layer","frame","count"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"count":{"type":"integer","minimum":1}}}"#;
 
 /// Resolves the `scene` parameter against the document.
-fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandError> {
+pub(super) fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandError> {
     let last = doc.editor.document.scenes.len().saturating_sub(1);
     let index = scene.unwrap_or_else(|| doc.editor.document.current_timeline.min(last));
     if index < doc.editor.document.scenes.len() {
@@ -115,11 +115,11 @@ fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandErr
 }
 
 /// 1-based frame to 0-based.
-fn zero_based(frame: u32) -> Result<u32, CommandError> {
+pub(super) fn zero_based(frame: u32) -> Result<u32, CommandError> {
     frame.checked_sub(1).ok_or_else(|| CommandError::invalid_params("frames start at 1"))
 }
 
-fn parse_color(text: &str) -> Result<Rgba8, CommandError> {
+pub(super) fn parse_color(text: &str) -> Result<Rgba8, CommandError> {
     let digits = text.strip_prefix('#').unwrap_or(text);
     let byte = |i: usize| digits.get(i..i.saturating_add(2)).and_then(|s| u8::from_str_radix(s, 16).ok());
     match digits.len() {
