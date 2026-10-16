@@ -78,7 +78,7 @@ pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionS
         let id = id_of(index);
         layers.push(LayerRow {
             id,
-            name: layer.name.clone(),
+            name: anicraft_xfl::display_name(&layer.name).into_owned(),
             kind,
             depth,
             expanded: !collapsed.contains(&id),
@@ -123,6 +123,7 @@ pub fn library_rows(
     thumbs: &HashMap<String, egui::TextureId>,
 ) -> LibraryRows {
     let mut order: Vec<&LibraryItem> = doc.library.items.iter().collect();
+    // Sorted by the raw path so a folder stays right before its contents.
     order.sort_by_key(|item| item.name().to_lowercase());
     let needle = filter.to_lowercase();
     let mut items = Vec::new();
@@ -131,7 +132,7 @@ pub fn library_rows(
     for item in order {
         let name = item.name();
         if !needle.is_empty() {
-            if matches!(item, LibraryItem::Folder(_)) || !name.to_lowercase().contains(&needle) {
+            if matches!(item, LibraryItem::Folder(_)) || !anicraft_xfl::display_name(name).to_lowercase().contains(&needle) {
                 continue;
             }
         } else if hidden_by_collapsed(name, collapsed) {
@@ -155,7 +156,7 @@ pub fn library_rows(
         }
         items.push(LibraryItemView {
             id,
-            name: if needle.is_empty() { leaf(name).to_owned() } else { name.to_owned() },
+            name: anicraft_xfl::display_name(if needle.is_empty() { leaf(name) } else { name }).into_owned(),
             kind,
             depth: if needle.is_empty() { depth_of(name) } else { 0 },
             expanded: !collapsed.contains(name),
@@ -361,6 +362,18 @@ mod tests {
         assert_eq!(rows.names.len(), 2);
         let filtered = library_rows(&doc, &BTreeSet::new(), "WIN", None, &HashMap::new());
         assert_eq!(filtered.names, vec!["folder/wing".to_owned()]);
+    }
+
+    #[test]
+    fn library_rows_show_decoded_names_but_keep_the_raw_key() {
+        let mut doc = Document::default();
+        doc.add_symbol("Isolation Mode/&#060Clip Group&#062", SymbolKind::MovieClip).unwrap();
+        let rows = library_rows(&doc, &BTreeSet::new(), "", None, &HashMap::new());
+        let shown: Vec<&str> = rows.model.items.iter().map(|i| i.name.as_str()).collect();
+        assert!(shown.contains(&"<Clip Group>"), "{shown:?}");
+        assert!(rows.names.contains(&"Isolation Mode/&#060Clip Group&#062".to_owned()), "{:?}", rows.names);
+        let filtered = library_rows(&doc, &BTreeSet::new(), "<clip", None, &HashMap::new());
+        assert_eq!(filtered.model.items.first().map(|i| i.name.as_str()), Some("Isolation Mode/<Clip Group>"));
     }
 
     #[test]

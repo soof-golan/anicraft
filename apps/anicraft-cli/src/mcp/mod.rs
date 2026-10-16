@@ -205,8 +205,12 @@ fn element_json(index: usize, element: &anim_scene::Element) -> Value {
     use anim_scene::Element;
     match element {
         Element::Shape(_) => json!({ "index": index, "kind": "shape" }),
-        Element::SymbolInstance(i) => json!({ "index": index, "kind": "symbol", "item": i.library_item_name, "name": i.name }),
-        Element::Bitmap(b) => json!({ "index": index, "kind": "bitmap", "item": b.library_item_name }),
+        Element::SymbolInstance(i) => {
+            json!({ "index": index, "kind": "symbol", "item": i.library_item_name, "item_label": anicraft_xfl::display_name(&i.library_item_name), "name": i.name })
+        }
+        Element::Bitmap(b) => {
+            json!({ "index": index, "kind": "bitmap", "item": b.library_item_name, "item_label": anicraft_xfl::display_name(&b.library_item_name) })
+        }
         Element::Text(t) => json!({ "index": index, "kind": "text", "name": t.instance_name }),
         Element::Group(g) => json!({ "index": index, "kind": "group", "members": g.members.len() }),
         Element::Unknown(_) => json!({ "index": index, "kind": "unknown" }),
@@ -298,7 +302,7 @@ impl AppHooks<AniDoc> for AniHooks {
                         let mut row = keyframe_json(k);
                         if let Some(map) = row.as_object_mut() {
                             map.insert("layer".into(), json!(layer));
-                            map.insert("layer_name".into(), json!(timeline.layers.get(layer).map(|l| l.name.as_str())));
+                            map.insert("layer_name".into(), json!(timeline.layers.get(layer).map(|l| anicraft_xfl::display_name(&l.name))));
                         }
                         row
                     })
@@ -340,7 +344,7 @@ impl AppHooks<AniDoc> for AniHooks {
                     .enumerate()
                     .map(|(i, layer)| {
                         json!({
-                            "index": i, "name": layer.name, "kind": format!("{:?}", layer.kind), "parent": layer.parent_layer_index,
+                            "index": i, "name": anicraft_xfl::display_name(&layer.name), "kind": format!("{:?}", layer.kind), "parent": layer.parent_layer_index,
                             "visible": layer.visible, "locked": layer.locked, "outline": layer.outline,
                             "keyframes": layer.frames.iter().map(keyframe_json).collect::<Vec<_>>(),
                         })

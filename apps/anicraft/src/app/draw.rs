@@ -86,8 +86,10 @@ impl AniApp {
         let total = self.frame_count();
         let text = if self.ui.status.is_empty() { "Ready".to_owned() } else { self.ui.status.clone() };
         let scope = match &state.timeline {
-            anim_scene::TimelineId::Scene(i) => doc.document().scenes.get(*i).map_or_else(|| "Scene".to_owned(), |s| s.name.clone()),
-            anim_scene::TimelineId::Symbol(name) => format!("symbol {name}"),
+            anim_scene::TimelineId::Scene(i) => {
+                doc.document().scenes.get(*i).map_or_else(|| "Scene".to_owned(), |s| anicraft_xfl::display_name(&s.name).into_owned())
+            }
+            anim_scene::TimelineId::Symbol(name) => format!("symbol {}", anicraft_xfl::display_name(name)),
         };
         let zoom = (self.ui.stage.view.zoom * 100.0).round();
         let selected = state.selection.items.len();
@@ -128,8 +130,8 @@ impl AniApp {
         let tool_id = state.active_tool.toolbar_id().to_owned();
         let in_symbol = matches!(state.timeline, anim_scene::TimelineId::Symbol(_));
         let scope_name = match &state.timeline {
-            anim_scene::TimelineId::Scene(i) => doc.document().scenes.get(*i).map_or_else(String::new, |s| s.name.clone()),
-            anim_scene::TimelineId::Symbol(n) => n.clone(),
+            anim_scene::TimelineId::Scene(i) => doc.document().scenes.get(*i).map_or_else(String::new, |s| anicraft_xfl::display_name(&s.name).into_owned()),
+            anim_scene::TimelineId::Symbol(n) => anicraft_xfl::display_name(n).into_owned(),
         };
         let bg = doc.document().background_color;
         let selection = state.selection.items.clone();

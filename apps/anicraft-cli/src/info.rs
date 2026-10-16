@@ -112,6 +112,11 @@ pub struct InfoReport {
     pub validation: Vec<String>,
 }
 
+/// A name as a person reads it: character references decoded. The document keeps the original text.
+fn shown(name: &str) -> String {
+    anicraft_xfl::display_name(name).into_owned()
+}
+
 fn hex(c: Rgba8) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
 }
@@ -125,7 +130,7 @@ pub fn timeline_info(timeline: &Timeline) -> TimelineInfo {
         .enumerate()
         .map(|(index, layer)| LayerInfo {
             index,
-            name: layer.name.clone(),
+            name: shown(&layer.name),
             kind: format!("{:?}", layer.kind),
             parent: layer.parent_layer_index,
             visible: layer.visible,
@@ -135,8 +140,8 @@ pub fn timeline_info(timeline: &Timeline) -> TimelineInfo {
             sounds: layer.frames.iter().filter(|f| f.sound.is_some()).count(),
         })
         .collect();
-    let labels = timeline.labels().into_iter().map(|(frame, name)| (frame.saturating_add(1), name.to_owned())).collect();
-    TimelineInfo { name: timeline.name.clone(), frames: timeline.frame_count(), layers, labels }
+    let labels = timeline.labels().into_iter().map(|(frame, name)| (frame.saturating_add(1), shown(name))).collect();
+    TimelineInfo { name: shown(&timeline.name), frames: timeline.frame_count(), layers, labels }
 }
 
 /// Describes the library of a document.
@@ -148,17 +153,17 @@ pub fn library_info(doc: &Document) -> LibraryInfo {
         match item {
             LibraryItem::Symbol(s) if info.symbols.len() < MAX_LISTED_SYMBOLS => {
                 info.symbols.push(SymbolInfo {
-                    name: s.name.clone(),
+                    name: shown(&s.name),
                     kind: format!("{:?}", s.kind),
                     frames: s.timeline.frame_count(),
                     layers: s.timeline.layers.len(),
                 });
             }
             LibraryItem::Symbol(_) => info.symbols_not_listed = info.symbols_not_listed.saturating_add(1),
-            LibraryItem::Bitmap(b) => info.bitmaps.push(b.name.clone()),
-            LibraryItem::Sound(s) => info.sounds.push(s.name.clone()),
-            LibraryItem::Font(f) => info.fonts.push(f.name.clone()),
-            LibraryItem::Video(v) => info.videos.push(v.name.clone()),
+            LibraryItem::Bitmap(b) => info.bitmaps.push(shown(&b.name)),
+            LibraryItem::Sound(s) => info.sounds.push(shown(&s.name)),
+            LibraryItem::Font(f) => info.fonts.push(shown(&f.name)),
+            LibraryItem::Video(v) => info.videos.push(shown(&v.name)),
             LibraryItem::Folder(_) => info.folders = info.folders.saturating_add(1),
         }
     }
