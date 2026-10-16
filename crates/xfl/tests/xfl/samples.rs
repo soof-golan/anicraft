@@ -184,7 +184,7 @@ fn derwood_loads_text_and_sounds() {
     assert!(doc.publish_settings_xml.is_some());
 }
 
-/// The survey the ActionScript support is scoped from: how many frame scripts and component instances the samples
+/// The survey the scripting support is scoped from: how many frame scripts and component instances the samples
 /// hold. The numbers are printed with `--nocapture`.
 #[test]
 fn samples_script_and_component_survey() {
