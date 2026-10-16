@@ -81,6 +81,19 @@ pub struct Playback {
     pub token: u64,
 }
 
+/// A running Test Movie: the preview runtime and where the editor was when it started.
+pub struct TestMovie {
+    pub player: anim_script::Player,
+    /// When the playhead last moved.
+    pub last_tick: Instant,
+    /// The timeline and 0-based frame the editor was on, restored when the movie ends.
+    pub saved: (anim_scene::TimelineId, u32),
+    /// The instance the pointer is over.
+    pub hover: Option<String>,
+    /// The instance the primary button went down on.
+    pub pressed: Option<String>,
+}
+
 /// An export running on a worker.
 #[derive(Debug, Clone)]
 pub struct ExportStatus {
@@ -108,6 +121,8 @@ pub struct UiState {
     pub dialog: Option<Dialog>,
     pub looping: bool,
     pub playback: Option<Playback>,
+    /// The Test Movie that is running, if any.
+    pub test_movie: Option<TestMovie>,
     pub next_token: u64,
     pub clipboard: Vec<anim_scene::Element>,
     /// The frames Copy Frames / Cut Frames took, as the clip `timeline.paste_frames` accepts.
@@ -157,6 +172,7 @@ impl UiState {
             dialog: None,
             looping: true,
             playback: None,
+            test_movie: None,
             next_token: 1,
             clipboard: Vec::new(),
             frame_clip: None,

@@ -48,6 +48,10 @@ fn tool_key(key: egui::Key) -> Option<Key> {
 impl AniApp {
     /// A pointer event of the stage widget, as the tools see it.
     pub(super) fn stage_pointer(&mut self, p: &StagePointer) {
+        if self.ui.test_movie.is_some() {
+            self.test_movie_pointer(p);
+            return;
+        }
         if p.button != PointerButton::Primary && p.phase != PointerPhase::Move {
             return;
         }
@@ -217,6 +221,9 @@ impl AniApp {
         }
         // Application-level chords first.
         let action = match (modifiers.command, modifiers.shift, key) {
+            (false, false, K::Escape) if self.ui.test_movie.is_some() => Some(MenuAction::Doc(DocAction::TestMovie)),
+            (true, false, K::Enter) => Some(MenuAction::Doc(DocAction::TestMovie)),
+            (false, false, K::F9) => Some(MenuAction::Doc(DocAction::TogglePanel(crate::docs::ACTIONS_PANEL))),
             (true, false, K::E) => Some(MenuAction::EditSymbol),
             (false, true, K::F2) => Some(MenuAction::ToggleScenePanel),
             (true, false, K::N) => Some(MenuAction::New),

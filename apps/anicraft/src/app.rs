@@ -15,6 +15,7 @@ mod draw;
 mod fileops;
 mod input;
 mod library_preview;
+mod testmovie;
 mod toolui_events;
 
 use std::collections::HashMap;
@@ -312,6 +313,14 @@ impl AniApp {
                     self.refresh_problems();
                     self.doc_action(&ctx, DocAction::TogglePanel(crate::docs::ERRORS_PANEL));
                 }
+                "actions" | "testmovie" => {
+                    let script = "// Stop on the last frame, and jump to the label \"end\" when the button is clicked.\nstop();\nvar clicks = 0;\nbtn.addEventListener(MouseEvent.CLICK, function (e) {\n    clicks++;\n    trace(\"clicked \" + clicks);\n    gotoAndPlay(\"end\");\n});";
+                    self.run("timeline.set_script", &serde_json::json!({ "layer": 0, "frame": 1, "script": script }));
+                    if what == "testmovie" {
+                        self.toggle_test_movie();
+                    }
+                    self.doc_action(&ctx, DocAction::TogglePanel(crate::docs::ACTIONS_PANEL));
+                }
                 "tabs" => {
                     self.open_tab(AniDoc::default(), None);
                     self.open_tab(AniDoc::default(), None);
@@ -357,6 +366,7 @@ impl AniApp {
         self.poll_worker(ctx);
         self.poll_jobs();
         self.tick_playback(ctx);
+        self.tick_test_movie(ctx);
         let title = self.host.session().title("AniCraft");
         if title != self.title {
             ctx.send_viewport_cmd(ViewportCommand::Title(title.clone()));
@@ -422,8 +432,15 @@ impl AniApp {
         let size = self.ui.stage.desired_texture_size(ctx.pixels_per_point());
         let onion = (self.ui.onion.enabled && self.ui.playback.is_none()).then_some((self.ui.onion.before, self.ui.onion.after));
         let in_place = in_place_context(state, scenes);
-        let key =
-            RenderKey { revision: self.sync.revision, target: target.clone(), frame: state.frame, size, onion, playing: self.ui.playback.is_some(), in_place };
+        let key = RenderKey {
+            revision: self.sync.revision,
+            target: target.clone(),
+            frame: state.frame,
+            size,
+            onion,
+            playing: self.ui.playback.is_some() || self.ui.test_movie.is_some(),
+            in_place,
+        };
         if self.sync.requested.as_ref() != Some(&key) {
             self.sync.next_id = self.sync.next_id.saturating_add(1);
             let id = self.sync.next_id;

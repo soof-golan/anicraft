@@ -415,10 +415,40 @@ fn frame_label_and_tween_options() {
     assert!(apply(&mut doc, "tween.type", &PropValue::choice(1, &["None", "Classic", "Shape"])).is_err());
 }
 
+fn component_doc() -> AniDoc {
+    let mut doc = doc_with_instance();
+    if let Some(Element::SymbolInstance(i)) = element_mut(&mut doc.editor.document, &SCENE, &ElementRef::top_level(0, 0, 0)) {
+        i.component =
+            Some(anim_scene::ComponentInstance::from_params(&[("label", "Click", "String"), ("enabled", "true", "Boolean"), ("size", "3", "Number")]));
+    }
+    doc
+}
+
+#[test]
+fn component_parameters_are_rows_and_are_written_back_to_the_parameter_xml() {
+    let mut doc = component_doc();
+    let ids = rows(&doc);
+    for id in ["param.label", "param.enabled", "param.size"] {
+        assert!(ids.iter().any(|r| r == id), "{ids:?}");
+    }
+    let by_id = |doc: &AniDoc, id: &str| describe(doc).into_iter().find(|p| p.id == id).map(|p| p.value);
+    assert_eq!(by_id(&doc, "param.enabled"), Some(PropValue::Bool(true)));
+    set(&mut doc, "param.label", json!("Go & stop"));
+    set(&mut doc, "param.enabled", json!(false));
+    set(&mut doc, "param.size", json!(12));
+    let Element::SymbolInstance(i) = selected(&doc) else { panic!("not an instance") };
+    let component = i.component.as_ref().unwrap();
+    assert_eq!(component.param("label").as_deref(), Some("Go & stop"));
+    assert_eq!(component.param("enabled").as_deref(), Some("false"));
+    assert_eq!(component.param("size").as_deref(), Some("12"));
+    assert!(component.parameters_xml.contains("Go &amp; stop"), "{}", component.parameters_xml);
+    assert!(apply(&mut doc, "param.missing", &PropValue::Text("x".to_owned())).is_err());
+}
+
 #[test]
 fn every_row_the_panel_shows_can_be_set_to_its_own_value() {
     // A panel edit that commits the value a row already holds must never fail, whatever the selection.
-    let mut docs = vec![AniDoc::default(), doc_with_instance(), shape_doc(), text_doc("abc")];
+    let mut docs = vec![AniDoc::default(), doc_with_instance(), component_doc(), shape_doc(), text_doc("abc")];
     let mut with_filters = doc_with_instance();
     set(&mut with_filters, "filter.add", json!("Drop Shadow"));
     set(&mut with_filters, "effect", json!("Advanced"));

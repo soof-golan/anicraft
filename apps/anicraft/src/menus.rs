@@ -88,6 +88,8 @@ pub struct MenuView {
     pub can_undo: Option<String>,
     pub can_redo: Option<String>,
     pub playing: bool,
+    /// A Test Movie is running.
+    pub testing: bool,
     pub looping: bool,
     pub onion: bool,
     pub onion_outlines: bool,
@@ -416,6 +418,8 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
         ui.menu_button("Control", |ui| {
             push(item(ui, if view.playing { "Pause" } else { "Play" }, "Enter", true), MenuAction::Play);
             push(item(ui, "Stop", "", true), MenuAction::Stop);
+            ui.separator();
+            push(item(ui, if view.testing { "End Test Movie" } else { "Test Movie" }, "Ctrl+Enter", true), MenuAction::Doc(DocAction::TestMovie));
             ui.separator();
             push(item(ui, "Go to First Frame", "Home", true), MenuAction::GoStart);
             push(item(ui, "Go to Last Frame", "End", true), MenuAction::GoEnd);

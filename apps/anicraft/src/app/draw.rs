@@ -99,6 +99,7 @@ impl AniApp {
             can_undo: session.history().undo_label().map(str::to_owned),
             can_redo: session.history().redo_label().map(str::to_owned),
             playing: self.ui.playback.is_some(),
+            testing: self.ui.test_movie.is_some(),
             looping: self.ui.looping,
             onion: self.ui.onion.enabled,
             onion_outlines: self.ui.onion.outlines,
@@ -205,6 +206,18 @@ impl AniApp {
             let replayable = (0..labels.len()).map(|i| self.docs.steps.get(i).is_some()).collect();
             crate::docs_ui::HistoryView { labels, applied: history.undo_len(), replayable }
         };
+        let actions_view = crate::docs_ui::ActionsView {
+            target: doc.document().timeline(&state.timeline).and_then(|t| t.layers.get(state.layer)).and_then(|layer| {
+                let key = layer.frames.iter().rev().find(|f| f.index <= state.frame)?;
+                Some(crate::docs_ui::ActionsTarget {
+                    layer_name: layer.name.clone(),
+                    layer: state.layer,
+                    keyframe: key.index,
+                    script: key.actionscript.clone().unwrap_or_default(),
+                })
+            }),
+            testing: self.ui.test_movie.is_some(),
+        };
 
         let st = &mut self.ui;
         st.stage.grid_size = num::f64_to_f32(settings.snap.grid_size.clamp(1.0, 1000.0));
@@ -275,6 +288,9 @@ impl AniApp {
                 }
                 p if *p == crate::docs::HISTORY_PANEL => {
                     events.extend(crate::docs_ui::history_panel(ui, &history_view, &mut st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
+                }
+                p if *p == crate::docs::ACTIONS_PANEL => {
+                    events.extend(crate::docs_ui::actions_panel(ui, &actions_view, &mut st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
                 }
                 p if *p == crate::docs::ERRORS_PANEL => {
                     events.extend(crate::docs_ui::errors_panel(ui, &st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));

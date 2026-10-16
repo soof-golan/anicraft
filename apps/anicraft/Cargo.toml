@@ -29,6 +29,7 @@ anim-export = { workspace = true }
 anim-mcp = { workspace = true }
 anim-render = { workspace = true }
 anim-scene = { workspace = true }
+anim-script = { workspace = true }
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
 anim-timeline = { workspace = true }

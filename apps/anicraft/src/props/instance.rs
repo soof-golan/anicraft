@@ -29,6 +29,7 @@ const ADD_FILTER: [&str; 4] = ["Add filter...", "Blur", "Drop Shadow", "Glow"];
 /// Channel names of the advanced colour effect, in the order of [`ColorTransform`].
 const CHANNELS: [(&str, &str); 4] = [("r", "Red"), ("g", "Green"), ("b", "Blue"), ("a", "Alpha")];
 const INSTANCE: &str = "Instance";
+const COMPONENT: &str = "Component parameters";
 const LOOPING: &str = "Looping";
 const COLOR: &str = "Color effect";
 const DISPLAY: &str = "Display";
@@ -67,6 +68,16 @@ pub(super) fn describe(i: &SymbolInstance, library: &Library, out: &mut Vec<Prop
     out.push(Property::new("kind", "Type", PropValue::choice(kind_index, &kind_names)).in_section(INSTANCE));
     out.push(Property::new("visible", "Visible", PropValue::Bool(i.visible)).in_section(INSTANCE));
     out.push(Property::new("cache_as_bitmap", "Cache as bitmap", PropValue::Bool(i.cache_as_bitmap)).in_section(INSTANCE));
+    if let Some(component) = &i.component {
+        for p in component.params() {
+            let value = match p.kind.as_deref() {
+                Some("Boolean") => PropValue::Bool(p.value == "true"),
+                Some("Number") => PropValue::number(p.value.parse().unwrap_or(0.0)),
+                _ => PropValue::Text(p.value.clone()),
+            };
+            out.push(Property::new(&format!("param.{}", p.id), &p.id, value).in_section(COMPONENT));
+        }
+    }
     if matches!(kind, SymbolKind::Graphic) {
         let mode = match i.effective_loop_mode() {
             LoopMode::Loop => 0,
@@ -245,6 +256,17 @@ pub(super) fn apply(i: &mut SymbolInstance, id: &str, value: &PropValue) -> Resu
         _ => {
             if let Some(rest) = id.strip_prefix("3d.") {
                 return apply_3d(i, rest, value);
+            }
+            if let Some(param) = id.strip_prefix("param.") {
+                let text = if let Some(b) = boolean(value) {
+                    b.to_string()
+                } else if let Some(n) = number(value) {
+                    n.to_string()
+                } else {
+                    text(value).ok_or_else(wrong)?
+                };
+                let component = i.component.as_mut().ok_or_else(|| "this instance is not a component".to_owned())?;
+                return if component.set_param(param, &text) { Ok(()) } else { Err(format!("the component has no parameter {param:?}")) };
             }
             if let Some(rest) = id.strip_prefix("adv_") {
                 return advanced(i, rest, value);

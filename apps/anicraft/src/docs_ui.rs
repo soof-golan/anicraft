@@ -181,3 +181,111 @@ pub fn errors_panel(ui: &mut Ui, state: &DocsUi) -> Vec<DocAction> {
     });
     out
 }
+
+/// What the Actions panel shows: the keyframe whose script it edits.
+#[derive(Debug, Clone, Default)]
+pub struct ActionsView {
+    /// The layer name, the layer, the playhead (0-based) and the keyframe that holds the script; `None` when the
+    /// current layer has no keyframe at or before the playhead.
+    pub target: Option<ActionsTarget>,
+    /// Whether a test movie is running.
+    pub testing: bool,
+}
+
+/// The keyframe the Actions panel is on.
+#[derive(Debug, Clone)]
+pub struct ActionsTarget {
+    pub layer_name: String,
+    pub layer: usize,
+    /// 0-based index of the keyframe.
+    pub keyframe: u32,
+    /// The script stored on the document.
+    pub script: String,
+}
+
+/// The colour of a token kind in the script editor.
+fn token_colour(kind: anim_script::TokenKind, dark: bool) -> Color32 {
+    use anim_script::TokenKind as K;
+    match (kind, dark) {
+        (K::Keyword, true) => Color32::from_rgb(0xc5, 0x86, 0xc0),
+        (K::Keyword, false) => Color32::from_rgb(0xaf, 0x00, 0xdb),
+        (K::Builtin, true) => Color32::from_rgb(0x4e, 0xc9, 0xb0),
+        (K::Builtin, false) => Color32::from_rgb(0x26, 0x7f, 0x99),
+        (K::Number, true) => Color32::from_rgb(0xb5, 0xce, 0xa8),
+        (K::Number, false) => Color32::from_rgb(0x09, 0x86, 0x58),
+        (K::String, true) => Color32::from_rgb(0xce, 0x91, 0x78),
+        (K::String, false) => Color32::from_rgb(0xa3, 0x15, 0x15),
+        (K::Comment, true) => Color32::from_rgb(0x6a, 0x99, 0x55),
+        (K::Comment, false) => Color32::from_rgb(0x00, 0x80, 0x00),
+        (K::Error, _) => Color32::from_rgb(0xf4, 0x47, 0x47),
+        (K::Whitespace | K::Ident | K::Punct, true) => Color32::from_rgb(0xd4, 0xd4, 0xd4),
+        (K::Whitespace | K::Ident | K::Punct, false) => Color32::from_rgb(0x1f, 0x1f, 0x1f),
+    }
+}
+
+/// The text of a script as a syntax highlighted layout job.
+#[must_use]
+pub fn highlight(text: &str, font: egui::FontId, dark: bool, wrap: f32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    for token in anim_script::tokenize(text) {
+        job.append(token.text(text), 0.0, egui::TextFormat::simple(font.clone(), token_colour(token.kind, dark)));
+    }
+    job.wrap.max_width = wrap;
+    job
+}
+
+/// The Actions panel: the script of the selected keyframe, with syntax highlighting.
+///
+/// Edits are stored on the document when the editor loses focus, so one typing session is one undo step.
+pub fn actions_panel(ui: &mut Ui, view: &ActionsView, state: &mut DocsUi) -> Vec<DocAction> {
+    let mut out = Vec::new();
+    let Some(target) = &view.target else {
+        ui.label(RichText::new("Select a layer with a keyframe to write its script.").weak());
+        return out;
+    };
+    let key = (target.layer, target.keyframe);
+    let editor = &mut state.actions;
+    if editor.key != Some(key) || (!editor.dirty && editor.text != target.script) {
+        editor.text.clone_from(&target.script);
+        editor.key = Some(key);
+        editor.dirty = false;
+    }
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(crate::text(&format!("{} : frame {}", target.layer_name, target.keyframe.saturating_add(1)))).strong());
+        let label = if view.testing { "End Test Movie" } else { "Test Movie" };
+        if ui.button(label).on_hover_text("Run the frame scripts in the preview runtime (Ctrl+Enter)").clicked() {
+            out.push(DocAction::TestMovie);
+        }
+    });
+    ui.separator();
+    let dark = ui.visuals().dark_mode;
+    let font = egui::TextStyle::Monospace.resolve(ui.style());
+    let diagnostics = if editor.text.trim().is_empty() { Vec::new() } else { anim_script::parse(&editor.text).diagnostics };
+    let syntax = crate::docs::script_syntax_error(&editor.text);
+    let notes = f32::from(u8::try_from(diagnostics.len().min(4)).unwrap_or(4));
+    let height = notes.mul_add(-22.0, ui.available_height() - 24.0).max(60.0);
+    egui::ScrollArea::vertical().id_salt("actions-editor").max_height(height).auto_shrink([false, false]).show(ui, |ui| {
+        let mut layouter = |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| {
+            let job = highlight(text.as_str(), font.clone(), dark, wrap);
+            ui.ctx().fonts_mut(|f| f.layout_job(job))
+        };
+        let response = ui.add_sized(
+            [ui.available_width(), ui.available_height().max(height)],
+            egui::TextEdit::multiline(&mut editor.text).code_editor().hint_text("// ActionScript for this keyframe").lock_focus(true).layouter(&mut layouter),
+        );
+        if response.changed() {
+            editor.dirty = true;
+        }
+        if response.lost_focus() && editor.dirty {
+            editor.dirty = false;
+            out.push(DocAction::SetScript { layer: target.layer, frame: target.keyframe, script: editor.text.clone() });
+        }
+    });
+    if let Some(message) = syntax {
+        ui.label(RichText::new(crate::text(&message)).color(level_colour(Level::Error, ui)));
+    }
+    for d in diagnostics.iter().take(4) {
+        ui.label(RichText::new(crate::text(&format!("line {}: {}", d.line, d.message))).color(level_colour(Level::Warning, ui)));
+    }
+    out
+}

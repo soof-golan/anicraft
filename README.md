@@ -24,6 +24,12 @@ real Animate documents; see [Known gaps](#known-gaps).
 - **Drawing**: edge-based vector shapes with solid, gradient and bitmap fills and the XFL stroke kinds; pen, line,
   rectangle, oval, brush, selection, free transform, paint bucket and boolean path operations.
 - **Text**: static, dynamic and input text, with right-to-left scripts (Hebrew, Arabic) and mixed-direction text.
+- **ActionScript**: the Actions panel (F9) edits the script of the selected keyframe with syntax highlighting and
+  stores it in the file. Control > Test Movie (Ctrl+Enter) runs the main timeline in a small interpreter, and SWF
+  export compiles the same subset: `DoABC` with a document class that calls `addFrameScript` for ActionScript 3
+  documents, `DoAction` for ActionScript 2. See [ActionScript support](#actionscript-support) for exactly what runs.
+- **Components**: component instances keep their parameters, which show in the Properties panel, can be edited there
+  or with `timeline_set_component_param`, and are written back to the file. They draw from their library skins.
 - **Import**: PNG, JPEG, GIF, BMP, WebP, PSD, AI, PDF and SVG into the library.
 - **Export**: `SWF`, animated `GIF`, `MP4` (H.264, with AAC audio from sound layers), `MOV` (ProRes 4444), `PNG`
   sequences, still and animated `SVG`, sprite sheets.
@@ -94,10 +100,33 @@ Rust 1.99.1 is pinned in `rust-toolchain.toml`. On Linux install the development
 `.github/workflows/ci.yml` lists (ALSA, udev, xkbcommon, Wayland, X11, GL, GTK 3, fontconfig). The engine crates come
 from `anicraft-libs`, pinned by git rev in `Cargo.toml`.
 
+## ActionScript support
+
+AniCraft does not contain a general ActionScript virtual machine. Test Movie and SWF export share one parser and
+understand this subset (anything else is reported in the Actions panel and the export notes, and skipped):
+
+- Timeline control: `stop()`, `play()`, `gotoAndPlay` and `gotoAndStop` with a frame number or a frame label,
+  `nextFrame()`, `prevFrame()`, `nextScene()`, `prevScene()`, bare, on `this`, or on `root` / `_root`.
+- Reading `currentFrame`, `totalFrames`, `currentLabel`.
+- Button and clip events: `addEventListener` with `MouseEvent.CLICK`, `MOUSE_DOWN`, `MOUSE_UP`, `MOUSE_OVER`,
+  `MOUSE_OUT`, `ROLL_OVER`, `ROLL_OUT`, `DOUBLE_CLICK` and `Event.ENTER_FRAME`, and the ActionScript 2 `onPress`,
+  `onRelease`, `onRollOver`, `onRollOut`, `onEnterFrame` handlers.
+- `var` with numbers, strings and booleans, assignment, arithmetic, comparison, `&&`, `||`, `if` / `else`, functions
+  and function literals, `return`, `trace`.
+- Not supported: loops, `switch`, `try`, classes, `new`, arrays, objects, the rest of the Flash API. Scripts inside
+  movie clip and button symbols are kept in the file but neither run by Test Movie nor exported to SWF; Test Movie
+  plays child clips with their parent. Component skins are drawn, but component behaviour (what a Button component
+  does when clicked, a List component's data) is not emulated.
+
+In an exported ActionScript 3 SWF the frame scripts become methods of a `Main` class that extends `MovieClip` and is
+bound to the main timeline; the movie's `var`s and `function`s become members of that class. Frame labels are
+exported as `FrameLabel` tags so `gotoAndPlay("label")` works. The bytecode is read back and decoded in the tests with
+Ruffle's `swf` crate.
+
 ## Known gaps
 
-- Parts of the Animate format are kept in the file but not interpreted: components, 3D transforms, inverse kinematics
-  (armatures) and ActionScript. Dashed, dotted and hatched strokes render as solid.
+- Parts of the Animate format are kept in the file but not interpreted: 3D transforms and inverse kinematics
+  (armatures). Dashed, dotted and hatched strokes render as solid.
 - SWF output is checked against Ruffle's renderer on synthetic fixtures, and by parsing and round trips on the
   samples. It has not been checked in Adobe's Flash Player.
 - Large documents are slow to export (software rendering and encoding).

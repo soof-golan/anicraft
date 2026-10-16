@@ -230,6 +230,10 @@ impl AniApp {
                 self.ui.docs.settings = Some(SettingsState::of(self.host.session().doc().document()));
                 self.ui.dialog = Some(Dialog::DocumentSettings);
             }
+            DocAction::SetScript { layer, frame, script } => {
+                self.run("timeline.set_script", &json!({ "layer": layer, "frame": frame.saturating_add(1), "script": script }));
+            }
+            DocAction::TestMovie => self.toggle_test_movie(),
         }
         let _ = ctx;
     }

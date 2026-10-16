@@ -24,6 +24,8 @@ use crate::recovery::{Orphan, Recovery};
 pub const HISTORY_PANEL: PanelId = PanelId::Custom(200);
 /// The Compiler Errors panel.
 pub const ERRORS_PANEL: PanelId = PanelId::Custom(201);
+/// The Actions panel: the script of the selected keyframe.
+pub const ACTIONS_PANEL: PanelId = PanelId::Custom(202);
 
 /// The tab title of a panel the dock does not name itself.
 #[must_use]
@@ -31,12 +33,13 @@ pub fn panel_title(panel: PanelId) -> String {
     match panel {
         p if p == HISTORY_PANEL => "History".to_owned(),
         p if p == ERRORS_PANEL => "Compiler Errors".to_owned(),
+        p if p == ACTIONS_PANEL => "Actions".to_owned(),
         other => crate::toolui::panel_title(other),
     }
 }
 
 /// Panels this module adds to View > Show Panel.
-pub const DOC_PANELS: [PanelId; 3] = [HISTORY_PANEL, PanelId::Output, ERRORS_PANEL];
+pub const DOC_PANELS: [PanelId; 4] = [HISTORY_PANEL, PanelId::Output, ERRORS_PANEL, ACTIONS_PANEL];
 
 /// The order of the built-in template categories in the New Document dialog.
 pub const BUILTIN_CATEGORY_ORDER: [&str; 4] = ["Basic", "Animation", "Advertising", "Presentation"];
@@ -538,6 +541,14 @@ pub enum DocAction {
     GotoProblem(usize),
     /// Modify > Document...
     OpenSettings,
+    /// Actions panel: store `script` on the keyframe at (0-based) `frame` of `layer`.
+    SetScript {
+        layer: usize,
+        frame: u32,
+        script: String,
+    },
+    /// Control > Test Movie: start the movie in the preview runtime, or end it.
+    TestMovie,
 }
 
 /// A dialog of this module (the others are [`crate::state::Dialog`]).
@@ -593,6 +604,17 @@ pub struct DocsUi {
     pub commands: Vec<String>,
     pub templates: Vec<crate::templates::UserTemplate>,
     pub newdoc: Option<NewDocState>,
+    pub actions: ActionsUi,
+}
+
+/// The Actions panel's editing state: the text being typed and the keyframe it belongs to.
+#[derive(Debug, Clone, Default)]
+pub struct ActionsUi {
+    pub text: String,
+    /// The `(layer, keyframe)` `text` was loaded from.
+    pub key: Option<(usize, u32)>,
+    /// `text` was edited and not yet stored on the document.
+    pub dirty: bool,
 }
 
 impl DocsUi {
