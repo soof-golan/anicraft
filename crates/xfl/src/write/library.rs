@@ -6,10 +6,14 @@ use std::collections::HashSet;
 use anim_archive::names::{escape_filename, href_to_entry_name, is_safe_relative, normalize_name};
 use anim_core::Rgba8;
 use anim_scene::{BitmapCompression, BitmapItem, Document, LibraryItem, MediaId, MediaStore, SoundItem, Symbol, VideoItem};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use super::out::{Attrs, DOCUMENT_INDENT, XmlOut, fmt_rounded};
 use super::scene::timeline;
 use crate::media::{BitmapFormat, decode_bitmap_bytes, encode_lossless_bitmap, lossless_header, sniff_bitmap};
+
+/// Symbol files rendered at once by [`Plan::symbol_files`].
+const SYMBOL_BATCH: usize = 64;
 
 /// One `bin/` entry to write.
 #[derive(Debug)]
@@ -270,10 +274,21 @@ impl<'a> Plan<'a> {
     }
 
     /// The symbol files: entry name (`LIBRARY/...`) and text, in library order.
+    ///
+    /// The texts are produced in parallel, [`SYMBOL_BATCH`] files at a time, so that memory stays bounded while the
+    /// caller writes them out.
     pub fn symbol_files(&self) -> impl Iterator<Item = (String, String, Vec<String>)> + '_ {
-        self.symbols().zip(&self.symbol_hrefs).map(|(symbol, href)| {
-            let (xml, warnings) = symbol_xml(symbol);
-            (href_to_entry_name(href, "LIBRARY"), xml, warnings)
+        let pairs: Vec<(&Symbol, &String)> = self.symbols().zip(&self.symbol_hrefs).collect();
+        (0..pairs.len()).step_by(SYMBOL_BATCH).flat_map(move |start| {
+            let batch = pairs.get(start..start.saturating_add(SYMBOL_BATCH).min(pairs.len())).unwrap_or_default();
+            let files: Vec<_> = batch
+                .par_iter()
+                .map(|&(symbol, href)| {
+                    let (xml, warnings) = symbol_xml(symbol);
+                    (href_to_entry_name(href, "LIBRARY"), xml, warnings)
+                })
+                .collect();
+            files
         })
     }
 }

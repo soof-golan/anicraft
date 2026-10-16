@@ -5,6 +5,7 @@ use anim_core::Rect;
 use anim_scene::{
     BitmapCompression, BitmapItem, Extra, FolderItem, FontItem, Library, LibraryItem, Linkage, MediaId, MediaStore, SoundItem, Symbol, SymbolKind, VideoItem,
 };
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use roxmltree::Node;
 
 use crate::timeline::read_timeline;
@@ -160,26 +161,49 @@ fn read_font_item(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> FontItem {
 }
 
 /// Follows the `<symbols>` section: every `<Include href>` names a symbol file under `LIBRARY/`.
+///
+/// The symbol files are independent of each other, so they are read in parallel, each into a sink of its own that is
+/// merged back in document order: warnings and statistics come out as if the files had been read one after another.
 pub fn read_symbols(ctx: &mut Ctx<'_>, node: Node<'_, '_>, library: &mut Library, leftovers: &mut Extra, sources: &Sources<'_>) {
-    let mut count = 0usize;
+    struct Include {
+        href: String,
+        item_id: Option<String>,
+        /// Every other attribute of the element is kept on the symbol as is.
+        attrs: Vec<(String, String)>,
+    }
+    let mut includes = Vec::new();
+    let mut truncated = false;
     for c in element_children(node) {
         if c.tag_name().name() != "Include" {
             ctx.keep_child(leftovers, "symbols", c);
-            continue;
-        }
-        count = count.saturating_add(1);
-        if count > MAX_SYMBOLS {
-            ctx.warn("too many symbols, the rest are not read");
+        } else if includes.len() >= MAX_SYMBOLS {
+            truncated = true;
             break;
+        } else {
+            includes.push(Include {
+                href: c.attribute("href").unwrap_or_default().to_owned(),
+                item_id: c.attribute("itemID").map(str::to_owned),
+                attrs: c.attributes().filter(|a| a.name() != "href" && a.name() != "itemID").map(|a| (a.name().to_owned(), a.value().to_owned())).collect(),
+            });
         }
-        let href = c.attribute("href").unwrap_or_default().to_owned();
-        let item_id = c.attribute("itemID").map(str::to_owned);
-        // Every other attribute of the element is kept on the symbol as is.
-        let include_attrs: Vec<(String, String)> =
-            c.attributes().filter(|a| a.name() != "href" && a.name() != "itemID").map(|a| (a.name().to_owned(), a.value().to_owned())).collect();
-        if let Some(symbol) = read_symbol_file(ctx.sink, sources.container, &href, item_id, include_attrs) {
+    }
+    let container = sources.container;
+    let read: Vec<(Sink, Option<Symbol>)> = includes
+        .into_par_iter()
+        .map(|include| {
+            let mut sink = Sink::default();
+            let symbol = read_symbol_file(&mut sink, container, &include.href, include.item_id, include.attrs);
+            (sink, symbol)
+        })
+        .collect();
+    for (sink, symbol) in read {
+        ctx.sink.absorb(sink);
+        if let Some(symbol) = symbol {
             push_item(ctx, library, LibraryItem::Symbol(Box::new(symbol)));
         }
+    }
+    if truncated {
+        ctx.warn("too many symbols, the rest are not read");
     }
 }
 

@@ -19,6 +19,7 @@ anim-shape = { workspace = true }
 flate2 = { workspace = true }
 # JPEG (photo bitmaps) and PNG decoding with allocation limits.
 image = { workspace = true, features = ["jpeg"] }
+rayon = { workspace = true }
 roxmltree = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

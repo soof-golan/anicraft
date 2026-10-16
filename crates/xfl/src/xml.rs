@@ -75,6 +75,27 @@ impl Sink {
             self.dropped_warnings = self.dropped_warnings.saturating_add(1);
         }
     }
+
+    /// Appends what another sink collected, as if it had been reported here after everything already in this sink.
+    pub fn absorb(&mut self, other: Self) {
+        for warning in other.warnings {
+            if self.warnings.len() < MAX_WARNINGS {
+                self.warnings.push(warning);
+            } else {
+                self.dropped_warnings = self.dropped_warnings.saturating_add(1);
+            }
+        }
+        self.dropped_warnings = self.dropped_warnings.saturating_add(other.dropped_warnings);
+        for (key, count) in other.unknowns.attrs {
+            let slot = self.unknowns.attrs.entry(key).or_insert(0);
+            *slot = slot.saturating_add(count);
+        }
+        for (key, count) in other.unknowns.children {
+            let slot = self.unknowns.children.entry(key).or_insert(0);
+            *slot = slot.saturating_add(count);
+        }
+        self.unknowns.ui_state = self.unknowns.ui_state.saturating_add(other.unknowns.ui_state);
+    }
 }
 
 /// Reading context for one XML file.
