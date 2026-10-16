@@ -20,8 +20,11 @@ fn held(doc: &Document, timeline: &TimelineId, layer: usize, keyframe: u32, fram
 /// The element references a command reads, as the selection or its own targets.
 fn refs_of<'a>(state: &'a EditorState, command: &'a ToolCommand) -> Vec<&'a ElementRef> {
     match command {
-        ToolCommand::DeleteSelection | ToolCommand::DuplicateSelection | ToolCommand::TransformSelection { .. } => state.selection.items.iter().collect(),
+        ToolCommand::DeleteSelection | ToolCommand::DuplicateSelection | ToolCommand::TransformSelection { .. } | ToolCommand::Transform3DSelection { .. } => {
+            state.selection.items.iter().collect()
+        }
         ToolCommand::SetTransformationPoint { target, .. }
+        | ToolCommand::SetCenterPoint3D { target, .. }
         | ToolCommand::ReplaceShape { target, .. }
         | ToolCommand::InsertText { target, .. }
         | ToolCommand::DeleteText { target, .. } => vec![target],
@@ -74,6 +77,7 @@ pub fn prepare(doc: &mut Document, state: &mut EditorState, command: &ToolComman
     let mut rewritten = command.clone();
     match &mut rewritten {
         ToolCommand::SetTransformationPoint { target, .. }
+        | ToolCommand::SetCenterPoint3D { target, .. }
         | ToolCommand::ReplaceShape { target, .. }
         | ToolCommand::InsertText { target, .. }
         | ToolCommand::DeleteText { target, .. } => point_at_new(target),

@@ -8,7 +8,7 @@ use crate::event::{Key, ToolEvent};
 use crate::overlay::{Cursor, Overlay};
 use crate::tools::{
     BoneTool, BrushTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool,
-    PenTool, PencilTool, RectangleTool, SelectionTool, SubselectionTool, TextTool, ZoomTool, bone_under, bones_overlay,
+    PenTool, PencilTool, RectangleTool, Rotation3DTool, SelectionTool, SubselectionTool, TextTool, Translation3DTool, ZoomTool, bone_under, bones_overlay,
 };
 
 /// Every tool.
@@ -19,6 +19,8 @@ pub enum ToolId {
     Subselection,
     FreeTransform,
     GradientTransform,
+    Rotation3D,
+    Translation3D,
     Line,
     Rectangle,
     Oval,
@@ -37,11 +39,13 @@ pub enum ToolId {
 
 impl ToolId {
     /// All tools in toolbox order.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Selection,
         Self::Subselection,
         Self::FreeTransform,
         Self::GradientTransform,
+        Self::Rotation3D,
+        Self::Translation3D,
         Self::Pen,
         Self::Text,
         Self::Line,
@@ -66,6 +70,8 @@ impl ToolId {
             Self::Subselection => "subselect",
             Self::FreeTransform => "transform",
             Self::GradientTransform => "gradient_transform",
+            Self::Rotation3D => "rotation_3d",
+            Self::Translation3D => "translation_3d",
             Self::Line => "line",
             Self::Rectangle => "rect",
             Self::Oval => "oval",
@@ -97,6 +103,8 @@ impl ToolId {
             Self::Subselection => "Subselection Tool",
             Self::FreeTransform => "Free Transform Tool",
             Self::GradientTransform => "Gradient Transform Tool",
+            Self::Rotation3D => "3D Rotation Tool",
+            Self::Translation3D => "3D Translation Tool",
             Self::Line => "Line Tool",
             Self::Rectangle => "Rectangle Tool",
             Self::Oval => "Oval Tool",
@@ -128,6 +136,12 @@ impl ToolId {
             Self::GradientTransform => {
                 "Click a gradient or bitmap fill to show its handles: drag the centre to move it, the square to stretch it, the circles to scale or rotate it (shift snaps to 15 degrees), the triangle to move a radial focal point."
             }
+            Self::Rotation3D => {
+                "Select a movie clip, then drag the red line up or down to turn it about x, the green line sideways to turn it about y, the blue circle to turn it about z, or the outer ring to turn it about x and y (shift snaps to 15 degrees)."
+            }
+            Self::Translation3D => {
+                "Select a movie clip, then drag the x axis (right), the y axis (down) or the z axis (diagonal, away from the viewer) to move it in 3D."
+            }
             Self::Line => "Drag to draw a line; shift snaps to 45 degrees; alt draws from the centre.",
             Self::Rectangle => "Drag to draw a rectangle with the corner radius setting; shift makes a square; alt draws from the centre.",
             Self::Oval => "Drag to draw an oval; shift makes a circle; alt draws from the centre.",
@@ -155,6 +169,8 @@ impl ToolId {
             Self::Subselection => 'a',
             Self::FreeTransform => 'q',
             Self::GradientTransform => 'f',
+            Self::Rotation3D => 'w',
+            Self::Translation3D => 'g',
             Self::Line => 'n',
             Self::Rectangle => 'r',
             Self::Oval => 'o',
@@ -247,6 +263,8 @@ pub struct ToolSet {
     subselection: SubselectionTool,
     free_transform: FreeTransformTool,
     gradient_transform: GradientTransformTool,
+    rotation_3d: Rotation3DTool,
+    translation_3d: Translation3DTool,
     line: LineTool,
     rectangle: RectangleTool,
     oval: OvalTool,
@@ -281,6 +299,8 @@ impl ToolSet {
             subselection: SubselectionTool::default(),
             free_transform: FreeTransformTool::default(),
             gradient_transform: GradientTransformTool::default(),
+            rotation_3d: Rotation3DTool::default(),
+            translation_3d: Translation3DTool::default(),
             line: LineTool::default(),
             rectangle: RectangleTool::default(),
             oval: OvalTool::default(),
@@ -311,6 +331,8 @@ impl ToolSet {
             ToolId::Subselection => &mut self.subselection,
             ToolId::FreeTransform => &mut self.free_transform,
             ToolId::GradientTransform => &mut self.gradient_transform,
+            ToolId::Rotation3D => &mut self.rotation_3d,
+            ToolId::Translation3D => &mut self.translation_3d,
             ToolId::Line => &mut self.line,
             ToolId::Rectangle => &mut self.rectangle,
             ToolId::Oval => &mut self.oval,
@@ -334,6 +356,8 @@ impl ToolSet {
             ToolId::Subselection => &self.subselection,
             ToolId::FreeTransform => &self.free_transform,
             ToolId::GradientTransform => &self.gradient_transform,
+            ToolId::Rotation3D => &self.rotation_3d,
+            ToolId::Translation3D => &self.translation_3d,
             ToolId::Line => &self.line,
             ToolId::Rectangle => &self.rectangle,
             ToolId::Oval => &self.oval,

@@ -3,7 +3,7 @@
 //! Tools never touch the document; they return these and the editor applies them (see [`crate::apply`] for the
 //! reference implementation used by the app, the CLI and the MCP server).
 
-use anim_core::{Affine, Point, Rect, Vec2};
+use anim_core::{Affine, Matrix3D, Point, Rect, Vec2};
 use anim_scene::{ArmatureKind, Element, Pose};
 use anim_shape::{EdgeShape, FillStyle, StrokeStyle};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,13 @@ pub enum ToolCommand {
     /// Multiplies the matrices of the selected elements by `matrix` (in stage coordinates, applied after the
     /// element's own matrix).
     TransformSelection { matrix: Affine },
+    /// Applies a 3D matrix to the selected symbol instances (the 3D Rotation and 3D Translation tools). The matrix is
+    /// in stage coordinates (x right, y down, z away from the viewer); rotations in it are about the origin, so a
+    /// rotation about a centre point is `translate(-c) * rotate * translate(c)`.
+    Transform3DSelection { matrix: Matrix3D },
+    /// Moves the centre point the 3D tools rotate about (stage coordinates); `None` returns it to the instance's
+    /// own origin.
+    SetCenterPoint3D { target: ElementRef, point: Option<Point> },
     /// Moves the transformation point of an element (stage coordinates).
     SetTransformationPoint { target: ElementRef, point: Point },
     /// Draws a shape on a layer. In merge mode (`object_drawing` false) the shape merges with the layer's other
@@ -106,6 +113,8 @@ impl ToolCommand {
             Self::DeleteSelection
                 | Self::DuplicateSelection
                 | Self::TransformSelection { .. }
+                | Self::Transform3DSelection { .. }
+                | Self::SetCenterPoint3D { .. }
                 | Self::SetTransformationPoint { .. }
                 | Self::DrawShape { .. }
                 | Self::AddElement { .. }

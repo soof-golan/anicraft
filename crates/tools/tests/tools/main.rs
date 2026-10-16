@@ -11,3 +11,4 @@ mod scripts;
 mod selecting;
 mod styling;
 mod text;
+mod threed;

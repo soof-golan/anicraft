@@ -21,7 +21,7 @@
 //!   options, `tools_state` and `stage_elements` read back what is selected and on the stage.
 //! * **Typed façades** for the common jobs, so a model does not have to synthesise pointer events: `draw_rectangle`,
 //!   `draw_oval`, `draw_line`, `draw_path`, `draw_freehand`, `draw_text`, `select_at`, `select_rect`, `select_all`,
-//!   `select_none`, `transform_move`, `transform_scale`, `transform_rotate`, `transform_skew`, `transform_matrix`,
+//!   `select_none`, `transform_move`, `transform_scale`, `transform_rotate`, `transform_rotate_3d`, `transform_translate_3d`, `transform_skew`, `transform_matrix`,
 //!   `edit_delete`, `edit_duplicate`, `edit_enter`, `edit_exit`, `paint_bucket`, `paint_ink`, `paint_erase`,
 //!   `paint_eyedrop` and `editor_goto`. Each builds the events of the matching tool and runs them through
 //!   [`Editor::send`], so the façade and the mouse behave identically (merge-mode cutting, object drawing, hit
@@ -38,7 +38,7 @@
 
 use std::fmt::Display;
 
-use anim_core::{Affine, BezPath, Point, Rect, Rgba8, Vec2};
+use anim_core::{Affine, BezPath, Matrix3D, Point, Rect, Rgba8, Vec2};
 use anim_session::{CommandError, CommandSpec, SizeHint, parse_params};
 use anim_shape::{EdgeShape, FillStyle, PathInput, StrokeStyle};
 use serde::Deserialize;
@@ -802,6 +802,59 @@ fn transform_rotate<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, 
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Rotate3dParams {
+    #[serde(default)]
+    x_degrees: f64,
+    #[serde(default)]
+    y_degrees: f64,
+    #[serde(default)]
+    z_degrees: f64,
+    /// The centre the rotation turns about as stage `[x, y, z]`; the instances' centre point when absent.
+    origin: Option<[f64; 3]>,
+}
+
+fn transform_with_3d(editor: &mut Editor, matrix: Matrix3D) -> Result<Value, CommandError> {
+    atomic(editor, |ed| {
+        ed.run_commands(&[ToolCommand::Transform3DSelection { matrix }]).map_err(fail)?;
+        Ok(selection_json(ed))
+    })
+}
+
+fn transform_rotate_3d<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: Rotate3dParams = parse_params(params)?;
+    finite_all(&[p.x_degrees, p.y_degrees, p.z_degrees])?;
+    let editor = host.editor_mut();
+    let centre = match p.origin {
+        Some(o) => {
+            finite_all(&o)?;
+            o
+        }
+        None => editor.with_context(crate::tools::gizmo_centre).ok_or_else(|| CommandError::failed("select a movie clip or other symbol instance first"))?,
+    };
+    let rotation = Matrix3D::rotation_x(p.x_degrees).then(&Matrix3D::rotation_y(p.y_degrees)).then(&Matrix3D::rotation_z(p.z_degrees));
+    let matrix = Matrix3D::translation(-centre[0], -centre[1], -centre[2]).then(&rotation).then(&Matrix3D::translation(centre[0], centre[1], centre[2]));
+    transform_with_3d(editor, matrix)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Translate3dParams {
+    #[serde(default)]
+    x: f64,
+    #[serde(default)]
+    y: f64,
+    #[serde(default)]
+    z: f64,
+}
+
+fn transform_translate_3d<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: Translate3dParams = parse_params(params)?;
+    finite_all(&[p.x, p.y, p.z])?;
+    transform_with_3d(host.editor_mut(), Matrix3D::translation(p.x, p.y, p.z))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SkewParams {
     #[serde(default)]
     x_degrees: f64,
@@ -1138,7 +1191,7 @@ fn swatches_use<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Comm
 
 const SCHEMA_NONE: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
 
-const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
+const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","rotation_3d","translation_3d","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
 
 const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string"}},"additionalProperties":false}"#;
 const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, eraser_shape, eraser_faucet, bucket_gap, bucket_lock_fill, brush_mode, brush_shape, brush_smoothing, corner_radii, corner_lock, oval {start_angle, end_angle, inner_radius, close_path}, snap {objects, pixels, grid, guides, grid_size}, text, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
@@ -1158,6 +1211,9 @@ const SCHEMA_SELECT_RECT: &str = r#"{"type":"object","required":["x","y","width"
 const SCHEMA_MOVE: &str =
     r#"{"type":"object","required":["dx","dy"],"properties":{"dx":{"type":"number"},"dy":{"type":"number"}},"additionalProperties":false}"#;
 const SCHEMA_SCALE: &str = r#"{"type":"object","required":["sx"],"properties":{"sx":{"type":"number"},"sy":{"type":"number","description":"Defaults to sx"},"origin":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2,"description":"Fixed point; the selection centre by default"}},"additionalProperties":false}"#;
+const SCHEMA_ROTATE_3D: &str = r#"{"type":"object","properties":{"x_degrees":{"type":"number"},"y_degrees":{"type":"number"},"z_degrees":{"type":"number"},"origin":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3}},"additionalProperties":false}"#;
+const SCHEMA_TRANSLATE_3D: &str =
+    r#"{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"},"z":{"type":"number"}},"additionalProperties":false}"#;
 const SCHEMA_ROTATE: &str = r#"{"type":"object","required":["degrees"],"properties":{"degrees":{"type":"number"},"origin":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"additionalProperties":false}"#;
 const SCHEMA_SKEW: &str = r#"{"type":"object","properties":{"x_degrees":{"type":"number"},"y_degrees":{"type":"number"},"origin":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"additionalProperties":false}"#;
 const SCHEMA_MATRIX: &str = r#"{"type":"object","required":["a","b","c","d","e","f"],"properties":{"a":{"type":"number"},"b":{"type":"number"},"c":{"type":"number"},"d":{"type":"number"},"e":{"type":"number"},"f":{"type":"number"}},"additionalProperties":false,"description":"Stage-space matrix [a b c d e f] applied to the selection"}"#;
@@ -1227,6 +1283,12 @@ fn tool_commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
         CommandSpec::new("transform.rotate", "Rotate Selection", transform_rotate::<D>)
             .with_schema(SCHEMA_ROTATE)
             .describe("Rotate the selection clockwise by degrees about a fixed point (its centre by default)."),
+        CommandSpec::new("transform.rotate_3d", "3D Rotate Selection", transform_rotate_3d::<D>)
+            .with_schema(SCHEMA_ROTATE_3D)
+            .describe("Rotate the selected symbol instances in 3D about the stage axes (x_degrees, y_degrees, z_degrees) through a centre point (their centre point by default)."),
+        CommandSpec::new("transform.translate_3d", "3D Translate Selection", transform_translate_3d::<D>)
+            .with_schema(SCHEMA_TRANSLATE_3D)
+            .describe("Move the selected symbol instances in 3D by x, y and z stage pixels; z points away from the viewer."),
         CommandSpec::new("transform.skew", "Skew Selection", transform_skew::<D>).with_schema(SCHEMA_SKEW).describe("Skew the selection by angles along x and y."),
         CommandSpec::new("transform.matrix", "Transform Selection", transform_matrix::<D>)
             .with_schema(SCHEMA_MATRIX)

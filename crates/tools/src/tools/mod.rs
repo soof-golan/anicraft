@@ -10,6 +10,7 @@ mod selection;
 mod subselection;
 mod text;
 mod transform;
+mod transform3d;
 mod view;
 
 pub use bone::{BoneTool, bone_under, bones_overlay};
@@ -22,4 +23,5 @@ pub use selection::SelectionTool;
 pub use subselection::{PointKey, SubselectionTool, delete_anchors, move_points};
 pub use text::TextTool;
 pub use transform::FreeTransformTool;
+pub use transform3d::{Rotation3DTool, Translation3DTool, gizmo_centre};
 pub use view::{EyedropperTool, HandTool, ZoomTool};

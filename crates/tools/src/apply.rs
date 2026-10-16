@@ -4,7 +4,7 @@
 //! wherever it runs. The tools themselves never call it; the host does, once per command, and snapshots the
 //! document first when [`ToolCommand::edits_document`] says the command changes it.
 
-use anim_core::{Affine, Point};
+use anim_core::{Affine, Matrix3D, Point};
 use anim_scene::{Document, Element, SceneError, ShapeElement, TextRun, TimelineId, edit};
 use thiserror::Error;
 
@@ -109,6 +109,48 @@ fn transform_selection(doc: &mut Document, state: &EditorState, matrix: Affine) 
             return Err(ApplyError::BadMatrix);
         }
         element_mut(doc, &state.timeline, r)?.set_matrix(updated);
+    }
+    Ok(())
+}
+
+/// Applies a stage-space 3D matrix to the selected symbol instances: the instance's placement goes to the stage, the
+/// matrix acts there, and the result comes back to the instance's parent. Other elements are not 3D objects and are
+/// left alone.
+fn transform_selection_3d(doc: &mut Document, state: &EditorState, matrix: &Matrix3D) -> Result<(), ApplyError> {
+    if !matrix.is_finite() {
+        return Err(ApplyError::BadMatrix);
+    }
+    for r in &state.selection.items {
+        let resolved = resolve_ref(doc, &state.timeline, r).ok_or_else(|| no_element(r))?;
+        let Element::SymbolInstance(instance) = resolved.element else { continue };
+        let parent_to_stage = resolved.parent_to_stage;
+        let det = parent_to_stage.determinant();
+        if !det.is_finite() || det.abs() < 1.0e-12 {
+            continue;
+        }
+        let updated =
+            instance.placement_3d().then(&Matrix3D::from_affine(parent_to_stage)).then(matrix).then(&Matrix3D::from_affine(parent_to_stage.inverse()));
+        if !updated.is_finite() {
+            return Err(ApplyError::BadMatrix);
+        }
+        if let Element::SymbolInstance(instance) = element_mut(doc, &state.timeline, r)? {
+            instance.set_matrix_3d(updated);
+        }
+    }
+    Ok(())
+}
+
+fn set_center_point_3d(doc: &mut Document, state: &EditorState, target: &ElementRef, point: Option<Point>) -> Result<(), ApplyError> {
+    let resolved = resolve_ref(doc, &state.timeline, target).ok_or_else(|| no_element(target))?;
+    let to_stage = resolved.parent_to_stage;
+    let det = to_stage.determinant();
+    if !det.is_finite() || det.abs() < 1.0e-12 {
+        return Err(ApplyError::BadMatrix);
+    }
+    let in_parent = point.map(|p| to_stage.inverse() * p);
+    match element_mut(doc, &state.timeline, target)? {
+        Element::SymbolInstance(i) => i.center_point_3d = in_parent,
+        _ => return Err(ApplyError::WrongKind { expected: "symbol instance" }),
     }
     Ok(())
 }
@@ -347,6 +389,8 @@ fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
         }
         ToolCommand::DuplicateSelection => duplicate_selection(doc, state)?,
         ToolCommand::TransformSelection { matrix } => transform_selection(doc, state, *matrix)?,
+        ToolCommand::Transform3DSelection { matrix } => transform_selection_3d(doc, state, matrix)?,
+        ToolCommand::SetCenterPoint3D { target, point } => set_center_point_3d(doc, state, target, *point)?,
         ToolCommand::SetTransformationPoint { target, point } => changed = set_transformation_point(doc, state, target, *point)?,
         ToolCommand::DrawShape { layer, frame, shape, object_drawing } => draw_shape(doc, state, *layer, *frame, shape, *object_drawing)?,
         ToolCommand::AddElement { layer, frame, element } => {
