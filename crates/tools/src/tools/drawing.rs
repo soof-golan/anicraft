@@ -1,6 +1,6 @@
 //! Line, Rectangle and Oval: drag a gesture, get one shape.
 
-use anim_core::kurbo::{Ellipse, RoundedRect, Shape as _};
+use anim_core::kurbo::{Arc, Ellipse, PathEl, RoundedRect, RoundedRectRadii, Shape as _};
 use anim_core::{BezPath, Point, Vec2};
 use anim_shape::{EdgeShape, PathInput};
 
@@ -8,6 +8,7 @@ use crate::command::ToolCommand;
 use crate::context::ToolContext;
 use crate::event::{Key, Modifiers, PointerKind, ToolEvent};
 use crate::overlay::{Cursor, Overlay, Role};
+use crate::settings::{OvalSettings, ToolSettings};
 use crate::tool::{Tool, ToolId, ToolOutput};
 
 /// Smallest drag (stage pixels) that still makes a shape.
@@ -59,7 +60,50 @@ fn line_ends(g: &Gesture) -> (Point, Point) {
     if g.modifiers.alt { (g.start - d, g.start + d) } else { (g.start, g.start + d) }
 }
 
-fn gesture_path(kind: Kind, g: &Gesture, corner_radius: f64) -> BezPath {
+/// The rectangle with the given corner radii (top left, top right, bottom right, bottom left), each limited to
+/// half the shorter side.
+#[must_use]
+pub fn rounded_rect_path(rect: anim_core::Rect, radii: [f64; 4]) -> BezPath {
+    let limit = rect.width().min(rect.height()) / 2.0;
+    let [tl, tr, br, bl] = radii.map(|r| if r.is_finite() { r.max(0.0).min(limit) } else { 0.0 });
+    if tl + tr + br + bl > 0.0 { RoundedRect::from_rect(rect, RoundedRectRadii::new(tl, tr, br, bl)).to_path(0.1) } else { rect.to_path(0.1) }
+}
+
+/// An ellipse, or the arc, pie or ring segment the oval settings describe, inside `rect`.
+#[must_use]
+pub fn oval_path(rect: anim_core::Rect, oval: &OvalSettings) -> BezPath {
+    let centre = rect.center();
+    let radii = Vec2::new(rect.width() / 2.0, rect.height() / 2.0);
+    if oval.is_plain() {
+        return Ellipse::new(centre, radii, 0.0).to_path(0.1);
+    }
+    let start = oval.start_angle.to_radians();
+    let mut sweep = (oval.end_angle - oval.start_angle).rem_euclid(360.0).to_radians();
+    if sweep <= 0.0 {
+        sweep = std::f64::consts::TAU;
+    }
+    let inner = (oval.inner_radius / 100.0).clamp(0.0, 0.99);
+    let mut path = BezPath::new();
+    for el in Arc::new(centre, radii, start, sweep, 0.0).path_elements(0.05) {
+        path.push(el);
+    }
+    if inner > 0.0 {
+        let mut tail = Arc::new(centre, radii * inner, start + sweep, -sweep, 0.0).path_elements(0.05);
+        if let Some(PathEl::MoveTo(p)) = tail.next() {
+            path.line_to(p);
+        }
+        for el in tail {
+            path.push(el);
+        }
+        path.close_path();
+    } else if oval.close_path {
+        path.line_to(centre);
+        path.close_path();
+    }
+    path
+}
+
+fn gesture_path(kind: Kind, g: &Gesture, settings: &ToolSettings) -> BezPath {
     match kind {
         Kind::Line => {
             let (a, b) = line_ends(g);
@@ -70,14 +114,11 @@ fn gesture_path(kind: Kind, g: &Gesture, corner_radius: f64) -> BezPath {
         }
         Kind::Rectangle => {
             let (a, b) = corners(g);
-            let rect = anim_core::Rect::from_points(a, b);
-            let radius = corner_radius.max(0.0).min(rect.width().min(rect.height()) / 2.0);
-            if radius > 0.0 { RoundedRect::from_rect(rect, radius).to_path(0.1) } else { rect.to_path(0.1) }
+            rounded_rect_path(anim_core::Rect::from_points(a, b), settings.radii())
         }
         Kind::Oval => {
             let (a, b) = corners(g);
-            let rect = anim_core::Rect::from_points(a, b);
-            Ellipse::new(rect.center(), Vec2::new(rect.width() / 2.0, rect.height() / 2.0), 0.0).to_path(0.1)
+            oval_path(anim_core::Rect::from_points(a, b), &settings.oval)
         }
     }
 }
@@ -95,10 +136,13 @@ impl ShapeDrag {
     }
 
     fn build(&self, g: &Gesture, ctx: &ToolContext<'_>) -> Option<(BezPath, EdgeShape)> {
-        let path = gesture_path(self.kind, g, ctx.settings.corner_radius);
+        let path = gesture_path(self.kind, g, ctx.settings);
         let (fill, stroke) = match self.kind {
             Kind::Line => (None, Some(ctx.settings.stroke.clone())),
-            Kind::Rectangle | Kind::Oval => (ctx.settings.active_fill(), ctx.settings.active_stroke()),
+            Kind::Rectangle | Kind::Oval => {
+                let bounds = path.bounding_box();
+                (ctx.settings.active_fill().map(|f| crate::fillfit::fit_fill(&f, bounds)), ctx.settings.active_stroke())
+            }
         };
         if fill.is_none() && stroke.is_none() {
             return None;
@@ -155,7 +199,7 @@ impl ShapeDrag {
 
     fn overlay(&self, ctx: &ToolContext<'_>) -> Vec<Overlay> {
         let Some(g) = &self.gesture else { return Vec::new() };
-        let path = gesture_path(self.kind, g, ctx.settings.corner_radius);
+        let path = gesture_path(self.kind, g, ctx.settings);
         vec![Overlay::Path { path, role: Role::Preview, width: None, filled: false }]
     }
 }

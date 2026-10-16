@@ -2,6 +2,7 @@
 
 mod drawing;
 mod freehand;
+mod gradient;
 mod paint;
 mod pen;
 mod selection;
@@ -12,6 +13,7 @@ mod view;
 
 pub use drawing::{LineTool, OvalTool, RectangleTool};
 pub use freehand::{BrushTool, PencilTool};
+pub use gradient::GradientTransformTool;
 pub use paint::{EraserTool, InkBottleTool, PaintBucketTool};
 pub use pen::PenTool;
 pub use selection::SelectionTool;

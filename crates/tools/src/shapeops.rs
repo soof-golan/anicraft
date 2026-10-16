@@ -13,7 +13,8 @@ use anim_shape::{EdgeShape, FillStyle, Hit, PathInput, StrokeStyle, split_subpat
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops::{BoolOp, Shape as VShape, area, boolean, live_paint, unite_all};
 
-use crate::freehand::{BrushSample, brush_outline};
+use crate::freehand::{BrushSample, brush_outline_shaped};
+use crate::settings::{BrushMode, TipShape};
 
 /// Flattening tolerance when a stroke has to be cut, in pixels (one twip).
 const FLATTEN_TOLERANCE: f64 = 0.05;
@@ -239,11 +240,20 @@ pub fn face_at(parts: &Parts, p: Point, gap: f64) -> Option<BezPath> {
 /// Fills the area around `p` with `fill`. The area is the bounded region enclosed by the shape's fills and
 /// strokes; fills underneath are cut so the new fill replaces them. `None` when `p` is in no bounded area.
 #[must_use]
-pub fn paint_bucket(shape: &EdgeShape, p: Point, fill: &FillStyle, gap: f64) -> Option<EdgeShape> {
+pub fn paint_bucket(shape: &EdgeShape, p: Point, fill: &FillStyle, gap: f64, lock: bool) -> Option<EdgeShape> {
     let parts = decompose(shape);
     let face = face_at(&parts, p, gap)?;
     let face_data = PathData::from_bezpath(&face);
     let face_bounds = path_bounds(&face);
+    // Without lock fill a gradient or bitmap is placed on the area that is painted.
+    let placed;
+    let fill = match face_bounds {
+        Some(bounds) if !lock => {
+            placed = crate::fillfit::fit_fill(fill, bounds);
+            &placed
+        }
+        _ => fill,
+    };
     let mut out = Parts { fills: Vec::new(), strokes: parts.strokes.clone() };
     for (style, path) in &parts.fills {
         let touches = face_bounds.zip(path_bounds(path)).is_some_and(|(a, b)| overlaps(a, b));
@@ -299,6 +309,86 @@ pub fn ink_bottle(shape: &EdgeShape, p: Point, tolerance: f64, stroke: &StrokeSt
     Some(rebuild(&out))
 }
 
+/// Paints `outline` (in the shape's own coordinates) into `existing` with one of the brush modes other than
+/// paint normal. Strokes are never cut. `None` when the mode leaves nothing to paint.
+#[must_use]
+pub fn paint_clipped(existing: &EdgeShape, outline: &BezPath, fill: &FillStyle, mode: BrushMode, start: Point) -> Option<EdgeShape> {
+    let parts = decompose(existing);
+    let brush = PathData::from_bezpath(outline);
+    let union_of_fills = || {
+        let datas: Vec<PathData> = parts.fills.iter().map(|(_, p)| PathData::from_bezpath(p)).collect();
+        let refs: Vec<(&PathData, FillRule)> = datas.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+        unite_all(&refs)
+    };
+    let clip = match mode {
+        BrushMode::PaintNormal | BrushMode::PaintFills => brush,
+        BrushMode::PaintBehind => boolean(&brush, FillRule::NonZero, &union_of_fills(), FillRule::NonZero, BoolOp::Difference),
+        BrushMode::PaintSelection => boolean(&brush, FillRule::NonZero, &union_of_fills(), FillRule::NonZero, BoolOp::Intersect),
+        BrushMode::PaintInside => {
+            let face = face_at(&parts, start, 0.0)?;
+            boolean(&brush, FillRule::NonZero, &PathData::from_bezpath(&face), FillRule::NonZero, BoolOp::Intersect)
+        }
+    };
+    if clip.is_empty() {
+        return None;
+    }
+    let clip_path = clip.to_bezpath();
+    let bounds = path_bounds(&clip_path)?;
+    let mut out = Parts { fills: Vec::new(), strokes: parts.strokes.clone() };
+    for (style, path) in &parts.fills {
+        let cuts = mode != BrushMode::PaintBehind && path_bounds(path).is_some_and(|b| overlaps(b, bounds));
+        if cuts {
+            let rest = boolean(&PathData::from_bezpath(path), FillRule::EvenOdd, &clip, FillRule::NonZero, BoolOp::Difference);
+            if !rest.is_empty() {
+                out.fills.push((style.clone(), rest.to_bezpath()));
+            }
+        } else {
+            out.fills.push((style.clone(), path.clone()));
+        }
+    }
+    out.fills.push((fill.clone(), clip_path));
+    Some(rebuild(&out))
+}
+
+/// The eraser faucet: removes the whole stroke segment under `p`, or else the whole area of the fill under `p`.
+#[must_use]
+pub fn faucet(shape: &EdgeShape, p: Point, tolerance: f64, fills: bool, lines: bool) -> Erased {
+    if lines && let Some(Hit::Stroke { .. }) = shape.hit_test(p, tolerance) {
+        let mut best: Option<(usize, f64)> = None;
+        for (i, edge) in shape.edges.iter().enumerate().filter(|(_, e)| e.stroke_style != 0) {
+            for segment in &edge.segments {
+                let d = ParamCurveNearest::nearest(&segment.to_path_seg(1.0 / anim_shape::TWIPS_PER_PX), p, 1.0e-3).distance_sq.sqrt();
+                if best.is_none_or(|(_, bd)| d < bd) {
+                    best = Some((i, d));
+                }
+            }
+        }
+        let Some((index, _)) = best else { return Erased::Unchanged };
+        let mut out = shape.clone();
+        if let Some(edge) = out.edges.get_mut(index) {
+            edge.stroke_style = 0;
+            edge.forget_original();
+        }
+        out.edges.retain(|e| e.stroke_style != 0 || e.fill_style0 != 0 || e.fill_style1 != 0);
+        return if out.is_empty() { Erased::Gone } else { Erased::Changed(out) };
+    }
+    if !fills || shape.fill_at(p).is_none() {
+        return Erased::Unchanged;
+    }
+    let parts = decompose(shape);
+    let Some(face) = face_at(&parts, p, 0.0) else { return Erased::Unchanged };
+    let face_data = PathData::from_bezpath(&face);
+    let mut out = Parts { fills: Vec::new(), strokes: parts.strokes.clone() };
+    for (style, path) in &parts.fills {
+        let rest = boolean(&PathData::from_bezpath(path), FillRule::EvenOdd, &face_data, FillRule::NonZero, BoolOp::Difference);
+        if !rest.is_empty() {
+            out.fills.push((style.clone(), rest.to_bezpath()));
+        }
+    }
+    let rebuilt = rebuild(&out);
+    if rebuilt.is_empty() { Erased::Gone } else { Erased::Changed(rebuilt) }
+}
+
 /// What the eraser removes from one shape.
 #[derive(Debug, Clone, Copy)]
 pub struct EraseSpec<'a> {
@@ -306,6 +396,8 @@ pub struct EraseSpec<'a> {
     pub points: &'a [Point],
     /// Eraser radius in the shape's own coordinates.
     pub radius: f64,
+    /// The eraser tip.
+    pub tip: TipShape,
     pub fills: bool,
     pub lines: bool,
     /// Only erase the fill that covers this point (the press position).
@@ -331,7 +423,7 @@ pub fn erase(shape: &EdgeShape, spec: &EraseSpec<'_>) -> Erased {
         return Erased::Unchanged;
     }
     let samples: Vec<BrushSample> = spec.points.iter().map(|&pos| BrushSample { pos, radius: spec.radius }).collect();
-    let Some(eraser) = brush_outline(&samples) else { return Erased::Unchanged };
+    let Some(eraser) = brush_outline_shaped(&samples, spec.tip) else { return Erased::Unchanged };
     let eraser_data = PathData::from_bezpath(&eraser);
     let parts = decompose(shape);
     let only_style = spec.only_fill_at.and_then(|q| shape.fill_at(q));
@@ -473,10 +565,10 @@ mod tests {
     #[test]
     fn bucket_fills_an_area_enclosed_by_strokes() {
         let shape = rect_shape(0.0, 0.0, 100.0, 100.0, None, Some(2.0));
-        let filled = paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 0.0).expect("enclosed");
+        let filled = paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 0.0, false).expect("enclosed");
         assert_eq!(fill_color_at(&filled, Point::new(50.0, 50.0)), Some(blue()));
         assert!(filled.hit_test(Point::new(0.0, 50.0), 1.0).is_some());
-        assert!(paint_bucket(&shape, Point::new(300.0, 300.0), &FillStyle::Solid(blue()), 0.0).is_none());
+        assert!(paint_bucket(&shape, Point::new(300.0, 300.0), &FillStyle::Solid(blue()), 0.0, false).is_none());
     }
 
     #[test]
@@ -494,7 +586,7 @@ mod tests {
             Some(StrokeStyle::plain(2.0, Rgba8::BLACK)),
         )]);
         let both = merge(&shape, &divider);
-        let painted = paint_bucket(&both, Point::new(25.0, 50.0), &FillStyle::Solid(blue()), 0.0).expect("face");
+        let painted = paint_bucket(&both, Point::new(25.0, 50.0), &FillStyle::Solid(blue()), 0.0, false).expect("face");
         assert_eq!(fill_color_at(&painted, Point::new(25.0, 50.0)), Some(blue()));
         assert_eq!(fill_color_at(&painted, Point::new(75.0, 50.0)), Some(red()));
     }
@@ -508,8 +600,8 @@ mod tests {
         p.line_to((0.0, 100.0));
         p.line_to((0.0, 6.0));
         let shape = EdgeShape::from_paths(&[PathInput::new(p, None, Some(StrokeStyle::plain(2.0, Rgba8::BLACK)))]);
-        assert!(paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 0.0).is_none());
-        let filled = paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 8.0).expect("gap closed");
+        assert!(paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 0.0, false).is_none());
+        let filled = paint_bucket(&shape, Point::new(50.0, 50.0), &FillStyle::Solid(blue()), 8.0, false).expect("gap closed");
         assert_eq!(fill_color_at(&filled, Point::new(50.0, 50.0)), Some(blue()));
     }
 
@@ -529,7 +621,7 @@ mod tests {
     fn eraser_cuts_fills_and_strokes() {
         let shape = rect_shape(0.0, 0.0, 100.0, 100.0, Some(red()), Some(2.0));
         let path = [Point::new(-20.0, 50.0), Point::new(120.0, 50.0)];
-        let spec = EraseSpec { points: &path, radius: 10.0, fills: true, lines: true, only_fill_at: None };
+        let spec = EraseSpec { points: &path, radius: 10.0, tip: TipShape::Round, fills: true, lines: true, only_fill_at: None };
         let Erased::Changed(cut) = erase(&shape, &spec) else { panic!("expected a change") };
         assert!(cut.fill_at(Point::new(50.0, 50.0)).is_none());
         assert_eq!(fill_color_at(&cut, Point::new(50.0, 20.0)), Some(red()));
@@ -542,14 +634,60 @@ mod tests {
     fn eraser_modes_and_misses() {
         let shape = rect_shape(0.0, 0.0, 100.0, 100.0, Some(red()), Some(2.0));
         let path = [Point::new(50.0, 50.0)];
-        let lines_only = EraseSpec { points: &path, radius: 10.0, fills: false, lines: true, only_fill_at: None };
+        let lines_only = EraseSpec { points: &path, radius: 10.0, tip: TipShape::Round, fills: false, lines: true, only_fill_at: None };
         assert_eq!(erase(&shape, &lines_only), Erased::Unchanged);
         let far = [Point::new(500.0, 500.0)];
-        let spec = EraseSpec { points: &far, radius: 10.0, fills: true, lines: true, only_fill_at: None };
+        let spec = EraseSpec { points: &far, radius: 10.0, tip: TipShape::Round, fills: true, lines: true, only_fill_at: None };
         assert_eq!(erase(&shape, &spec), Erased::Unchanged);
         let all = [Point::new(50.0, 50.0)];
-        let big = EraseSpec { points: &all, radius: 200.0, fills: true, lines: true, only_fill_at: None };
+        let big = EraseSpec { points: &all, radius: 200.0, tip: TipShape::Round, fills: true, lines: true, only_fill_at: None };
         assert_eq!(erase(&shape, &big), Erased::Gone);
+    }
+
+    #[test]
+    fn square_eraser_reaches_the_corners_a_round_one_misses() {
+        let shape = rect_shape(0.0, 0.0, 100.0, 100.0, Some(red()), None);
+        let at = [Point::new(50.0, 50.0)];
+        let spot = Point::new(58.0, 58.0);
+        let round = EraseSpec { points: &at, radius: 10.0, tip: TipShape::Round, fills: true, lines: true, only_fill_at: None };
+        let square = EraseSpec { tip: TipShape::Square, ..round };
+        let Erased::Changed(a) = erase(&shape, &round) else { panic!("round") };
+        let Erased::Changed(b) = erase(&shape, &square) else { panic!("square") };
+        assert!(a.fill_at(spot).is_some());
+        assert!(b.fill_at(spot).is_none());
+    }
+
+    #[test]
+    fn faucet_removes_the_whole_area_or_one_stroke_segment() {
+        let shape = rect_shape(0.0, 0.0, 100.0, 100.0, Some(red()), Some(2.0));
+        let Erased::Changed(no_fill) = faucet(&shape, Point::new(50.0, 50.0), 2.0, true, true) else { panic!("fill") };
+        assert!(no_fill.fill_at(Point::new(50.0, 50.0)).is_none());
+        assert!(no_fill.hit_test(Point::new(0.0, 50.0), 1.0).is_some(), "the outline stays");
+        let Erased::Changed(no_edge) = faucet(&shape, Point::new(0.0, 50.0), 2.0, true, true) else { panic!("stroke") };
+        assert!(no_edge.hit_test(Point::new(0.0, 50.0), 1.0).is_none() || no_edge.fill_at(Point::new(50.0, 50.0)).is_some());
+        assert_eq!(faucet(&shape, Point::new(500.0, 500.0), 2.0, true, true), Erased::Unchanged);
+        assert_eq!(faucet(&shape, Point::new(50.0, 50.0), 2.0, false, true), Erased::Unchanged);
+    }
+
+    #[test]
+    fn brush_modes_clip_what_they_paint() {
+        let blue = FillStyle::Solid(Rgba8::opaque(0, 0, 255));
+        let shape = rect_shape(0.0, 0.0, 100.0, 100.0, Some(red()), None);
+        let mut brush = BezPath::new();
+        brush.move_to(Point::new(80.0, 40.0));
+        brush.line_to(Point::new(140.0, 40.0));
+        brush.line_to(Point::new(140.0, 60.0));
+        brush.line_to(Point::new(80.0, 60.0));
+        brush.close_path();
+        let behind = paint_clipped(&shape, &brush, &blue, BrushMode::PaintBehind, Point::new(100.0, 50.0)).expect("behind");
+        assert_eq!(fill_color_at(&behind, Point::new(90.0, 50.0)), Some(red()), "existing paint stays on top");
+        assert_eq!(fill_color_at(&behind, Point::new(120.0, 50.0)), Some(Rgba8::opaque(0, 0, 255)));
+        let inside = paint_clipped(&shape, &brush, &blue, BrushMode::PaintInside, Point::new(90.0, 50.0)).expect("inside");
+        assert_eq!(fill_color_at(&inside, Point::new(90.0, 50.0)), Some(Rgba8::opaque(0, 0, 255)));
+        assert!(inside.fill_at(Point::new(120.0, 50.0)).is_none(), "nothing is painted outside the fill");
+        let selection = paint_clipped(&shape, &brush, &blue, BrushMode::PaintSelection, Point::new(90.0, 50.0)).expect("selection");
+        assert_eq!(fill_color_at(&selection, Point::new(90.0, 50.0)), Some(Rgba8::opaque(0, 0, 255)));
+        assert!(selection.fill_at(Point::new(120.0, 50.0)).is_none());
     }
 
     #[test]

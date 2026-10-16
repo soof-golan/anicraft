@@ -7,8 +7,8 @@ use crate::context::ToolContext;
 use crate::event::{Key, ToolEvent};
 use crate::overlay::{Cursor, Overlay};
 use crate::tools::{
-    BrushTool, EraserTool, EyedropperTool, FreeTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool, PenTool, PencilTool, RectangleTool,
-    SelectionTool, SubselectionTool, TextTool, ZoomTool,
+    BrushTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool, PenTool,
+    PencilTool, RectangleTool, SelectionTool, SubselectionTool, TextTool, ZoomTool,
 };
 
 /// Every tool.
@@ -18,6 +18,7 @@ pub enum ToolId {
     Selection,
     Subselection,
     FreeTransform,
+    GradientTransform,
     Line,
     Rectangle,
     Oval,
@@ -35,10 +36,11 @@ pub enum ToolId {
 
 impl ToolId {
     /// All tools in toolbox order.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Selection,
         Self::Subselection,
         Self::FreeTransform,
+        Self::GradientTransform,
         Self::Pen,
         Self::Text,
         Self::Line,
@@ -61,6 +63,7 @@ impl ToolId {
             Self::Selection => "select",
             Self::Subselection => "subselect",
             Self::FreeTransform => "transform",
+            Self::GradientTransform => "gradient_transform",
             Self::Line => "line",
             Self::Rectangle => "rect",
             Self::Oval => "oval",
@@ -90,6 +93,7 @@ impl ToolId {
             Self::Selection => "Selection Tool",
             Self::Subselection => "Subselection Tool",
             Self::FreeTransform => "Free Transform Tool",
+            Self::GradientTransform => "Gradient Transform Tool",
             Self::Line => "Line Tool",
             Self::Rectangle => "Rectangle Tool",
             Self::Oval => "Oval Tool",
@@ -117,6 +121,9 @@ impl ToolId {
             Self::FreeTransform => {
                 "Drag handles to scale (shift keeps proportions, alt scales about the transformation point), outside a corner to rotate (shift snaps to 15 degrees), along an edge to skew, the circle to move the transformation point."
             }
+            Self::GradientTransform => {
+                "Click a gradient or bitmap fill to show its handles: drag the centre to move it, the square to stretch it, the circles to scale or rotate it (shift snaps to 15 degrees), the triangle to move a radial focal point."
+            }
             Self::Line => "Drag to draw a line; shift snaps to 45 degrees; alt draws from the centre.",
             Self::Rectangle => "Drag to draw a rectangle with the corner radius setting; shift makes a square; alt draws from the centre.",
             Self::Oval => "Drag to draw an oval; shift makes a circle; alt draws from the centre.",
@@ -140,6 +147,7 @@ impl ToolId {
             Self::Selection => 'v',
             Self::Subselection => 'a',
             Self::FreeTransform => 'q',
+            Self::GradientTransform => 'f',
             Self::Line => 'n',
             Self::Rectangle => 'r',
             Self::Oval => 'o',
@@ -230,6 +238,7 @@ pub struct ToolSet {
     selection: SelectionTool,
     subselection: SubselectionTool,
     free_transform: FreeTransformTool,
+    gradient_transform: GradientTransformTool,
     line: LineTool,
     rectangle: RectangleTool,
     oval: OvalTool,
@@ -260,6 +269,7 @@ impl ToolSet {
             selection: SelectionTool::default(),
             subselection: SubselectionTool::default(),
             free_transform: FreeTransformTool::default(),
+            gradient_transform: GradientTransformTool::default(),
             line: LineTool::default(),
             rectangle: RectangleTool::default(),
             oval: OvalTool::default(),
@@ -287,6 +297,7 @@ impl ToolSet {
             ToolId::Selection => &mut self.selection,
             ToolId::Subselection => &mut self.subselection,
             ToolId::FreeTransform => &mut self.free_transform,
+            ToolId::GradientTransform => &mut self.gradient_transform,
             ToolId::Line => &mut self.line,
             ToolId::Rectangle => &mut self.rectangle,
             ToolId::Oval => &mut self.oval,
@@ -308,6 +319,7 @@ impl ToolSet {
             ToolId::Selection => &self.selection,
             ToolId::Subselection => &self.subselection,
             ToolId::FreeTransform => &self.free_transform,
+            ToolId::GradientTransform => &self.gradient_transform,
             ToolId::Line => &self.line,
             ToolId::Rectangle => &self.rectangle,
             ToolId::Oval => &self.oval,
@@ -386,6 +398,13 @@ impl ToolSet {
             }
         }
         let id = self.active;
+        let snapped;
+        let event = if crate::snap::tool_snaps(id) && matches!(event, ToolEvent::Pointer(_)) {
+            snapped = crate::snap::snap_event(event, ctx);
+            &snapped
+        } else {
+            event
+        };
         let mut out = self.tool_mut(id).handle(event, ctx);
         let switches: Vec<ToolId> = out.commands.iter().filter_map(|c| if let ToolCommand::ActivateTool { tool } = c { Some(*tool) } else { None }).collect();
         for tool in switches {

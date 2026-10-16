@@ -368,6 +368,36 @@ fn arb_json() -> BoxedStrategy<Value> {
     proptest::collection::vec((key, value), 0..6).prop_map(|entries| Value::Object(entries.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())).boxed()
 }
 
+#[test]
+fn colour_and_swatch_commands_edit_the_toolbox_the_selection_and_the_palette() {
+    let mut c = Client::new();
+    c.ok("draw_rectangle", json!({ "x": 10, "y": 10, "width": 80, "height": 40, "fill": "#ff0000" }));
+    c.ok("select_all", json!({}));
+    let applied = c.ok("colour_apply", json!({ "fill": { "LinearGradient": {
+        "matrix": [1, 0, 0, 1, 0, 0],
+        "stops": [{ "offset": 0.0, "color": { "r": 0, "g": 0, "b": 0, "a": 255 } }, { "offset": 1.0, "color": { "r": 255, "g": 255, "b": 255, "a": 255 } }],
+        "spread": "Pad", "interpolation": "Rgb", "focal": 0.0 } } }));
+    assert_eq!(applied["updated"], json!(1), "{applied}");
+    assert!(c.stage()[0].to_string().to_lowercase().contains("gradient"), "{:?}", c.stage());
+
+    c.ok("colour_defaults", json!({}));
+    let swapped = c.ok("colour_swap", json!({}));
+    assert_eq!(swapped["fill"], json!({ "Solid": { "r": 0, "g": 0, "b": 0, "a": 255 } }));
+
+    let before = c.ok("swatches_list", json!({}))["swatches"].as_array().unwrap().len();
+    c.ok("swatches_add", json!({}));
+    c.ok("swatches_add", json!({ "fill": { "Solid": { "r": 1, "g": 2, "b": 3, "a": 255 } } }));
+    let after = c.ok("swatches_list", json!({}))["swatches"].as_array().unwrap().len();
+    assert_eq!(after, before + 1, "the toolbox fill was already a swatch");
+    c.ok("swatches_delete", json!({ "index": 0 }));
+    c.ok("swatches_set", json!({ "swatches": ["#102030", "#405060"] }));
+    let list = c.ok("swatches_list", json!({}));
+    assert_eq!(list["swatches"].as_array().unwrap().len(), 2);
+    c.ok("swatches_use", json!({ "index": 1 }));
+    assert_eq!(c.editor().state.settings.fill.solid_color().map(anim_core::Rgba8::to_hex_rgb), Some("#405060".to_owned()));
+    c.err("swatches_delete", json!({ "index": 9 }));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
 

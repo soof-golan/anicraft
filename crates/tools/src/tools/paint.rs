@@ -65,7 +65,7 @@ impl Tool for PaintBucketTool {
             }
             let local = target.to_local * p.pos;
             let gap = ctx.settings.bucket_gap.pixels() * scale_of(target.to_local);
-            if let Some(shape) = shapeops::paint_bucket(target.shape, local, &ctx.settings.fill, gap) {
+            if let Some(shape) = shapeops::paint_bucket(target.shape, local, &ctx.settings.fill, gap, ctx.settings.bucket_lock_fill) {
                 return ToolOutput::with(Cursor::Bucket, vec![ToolCommand::ReplaceShape { target: target.candidate.element_ref, shape }]);
             }
         }
@@ -140,13 +140,33 @@ impl EraserTool {
         };
         let mut replaced = Vec::new();
         let mut gone = Vec::new();
+        if ctx.settings.eraser_faucet {
+            let Some(&press) = self.points.first() else { return replaced };
+            for target in shape_targets(ctx) {
+                if mode == EraserMode::SelectedFills && !ctx.selection.contains(&target.candidate.element_ref) {
+                    continue;
+                }
+                let local = target.to_local * press;
+                let tolerance = ctx.tolerance() * scale_of(target.to_local);
+                match shapeops::faucet(target.shape, local, tolerance, fills, lines) {
+                    Erased::Unchanged => continue,
+                    Erased::Changed(shape) => replaced.push(ToolCommand::ReplaceShape { target: target.candidate.element_ref, shape }),
+                    Erased::Gone => gone.push(target.candidate.element_ref),
+                }
+                break;
+            }
+            if !gone.is_empty() {
+                replaced.push(ToolCommand::DeleteElements { targets: gone });
+            }
+            return replaced;
+        }
         for target in shape_targets(ctx) {
             if mode == EraserMode::SelectedFills && !ctx.selection.contains(&target.candidate.element_ref) {
                 continue;
             }
             let local: Vec<Point> = self.points.iter().map(|&p| target.to_local * p).collect();
             let only_fill_at = (mode == EraserMode::Inside).then(|| local.first().copied()).flatten();
-            let spec = EraseSpec { points: &local, radius: radius * scale_of(target.to_local), fills, lines, only_fill_at };
+            let spec = EraseSpec { points: &local, radius: radius * scale_of(target.to_local), tip: ctx.settings.eraser_shape, fills, lines, only_fill_at };
             match shapeops::erase(target.shape, &spec) {
                 Erased::Unchanged => {}
                 Erased::Changed(shape) => replaced.push(ToolCommand::ReplaceShape { target: target.candidate.element_ref, shape }),

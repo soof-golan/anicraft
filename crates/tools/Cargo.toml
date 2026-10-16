@@ -12,12 +12,14 @@ workspace = true
 
 [dependencies]
 anim-core = { workspace = true }
+anim-display = { workspace = true }
 anim-scene = { workspace = true }
 # The command registry the MCP tools are registered in (see `mcp`).
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+roxmltree = { workspace = true }
 thiserror = { workspace = true }
 # Grapheme-aware backspace and delete in the text tool (right-to-left and combining marks).
 unicode-segmentation = "1.13"
@@ -26,7 +28,6 @@ vectorcraft-pathops = { workspace = true }
 
 [dev-dependencies]
 # The demo example renders tool results to a PNG.
-anim-display = { workspace = true }
 anim-render = { workspace = true }
 anim-text = { workspace = true }
 anim-timeline = { workspace = true }

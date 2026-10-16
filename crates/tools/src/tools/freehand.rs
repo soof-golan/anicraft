@@ -1,13 +1,17 @@
 //! Pencil and Brush: freehand strokes.
 
-use anim_core::{BezPath, Point};
+use anim_core::{Affine, BezPath, Point};
+use anim_scene::Element;
 use anim_shape::{EdgeShape, PathInput};
 
 use crate::command::ToolCommand;
 use crate::context::ToolContext;
 use crate::event::{Key, PointerKind, ToolEvent};
-use crate::freehand::{BrushSample, brush_outline, fit_polyline, thin_samples};
+use crate::freehand::{BrushSample, brush_outline_shaped, fit_polyline, smooth_samples, thin_samples};
 use crate::overlay::{Cursor, Overlay, Role};
+use crate::selection::ElementRef;
+use crate::settings::BrushMode;
+use crate::shapeops;
 use crate::tool::{Tool, ToolId, ToolOutput};
 
 /// Distance in screen points within which the end of a pencil stroke closes it.
@@ -188,11 +192,59 @@ impl BrushTool {
         if !ctx.layer_editable(ctx.layer) {
             return Vec::new();
         }
-        let Some(outline) = brush_outline(samples) else { return Vec::new() };
+        let smoothed = smooth_samples(samples, ctx.settings.brush_smoothing);
+        let Some(outline) = brush_outline_shaped(&smoothed, ctx.settings.brush_shape) else { return Vec::new() };
+        let mode = ctx.settings.brush_mode;
+        if mode != BrushMode::PaintNormal && !ctx.settings.object_drawing {
+            let start = samples.first().map_or(Point::ZERO, |s| s.pos);
+            return Self::commit_in_mode(&outline, start, mode, ctx);
+        }
         let shape = EdgeShape::from_paths(&[PathInput::new(outline, Some(ctx.settings.fill.clone()), None)]);
         if shape.is_empty() {
             return Vec::new();
         }
         vec![ToolCommand::DrawShape { layer: ctx.layer, frame: ctx.frame, shape, object_drawing: ctx.settings.object_drawing }]
+    }
+
+    /// Paint fills, behind, selection and inside: the stroke is clipped against what is already on the layer.
+    fn commit_in_mode(outline: &BezPath, start: Point, mode: BrushMode, ctx: &ToolContext<'_>) -> Vec<ToolCommand> {
+        let fill = &ctx.settings.fill;
+        if mode == BrushMode::PaintSelection {
+            let mut commands = Vec::new();
+            for r in &ctx.selection.items {
+                let Some(resolved) = ctx.resolve(r) else { continue };
+                let Element::Shape(s) = resolved.element else { continue };
+                let to_stage = resolved.local_to_stage();
+                if to_stage.determinant().abs() < 1.0e-12 {
+                    continue;
+                }
+                let local = to_stage.inverse() * outline.clone();
+                if let Some(shape) = shapeops::paint_clipped(&s.shape, &local, fill, mode, to_stage.inverse() * start) {
+                    commands.push(ToolCommand::ReplaceShape { target: r.clone(), shape });
+                }
+            }
+            return commands;
+        }
+        let Some(keyframe) = ctx.layer_ref(ctx.layer).and_then(|l| l.keyframe_at(ctx.frame)) else { return Self::fallback(outline, ctx) };
+        let found = keyframe.elements.iter().enumerate().find_map(|(i, e)| match e {
+            Element::Shape(s) if !s.is_drawing_object && s.matrix == Affine::IDENTITY => Some((i, s)),
+            _ => None,
+        });
+        let Some((index, existing)) = found else { return Self::fallback(outline, ctx) };
+        shapeops::paint_clipped(&existing.shape, outline, fill, mode, start)
+            .map(|shape| vec![ToolCommand::ReplaceShape { target: ElementRef::top_level(ctx.layer, keyframe.index, index), shape }])
+            .unwrap_or_default()
+    }
+
+    /// Nothing is on the layer: behind and fills paint like normal, inside and selection paint nothing.
+    fn fallback(outline: &BezPath, ctx: &ToolContext<'_>) -> Vec<ToolCommand> {
+        if matches!(ctx.settings.brush_mode, BrushMode::PaintInside | BrushMode::PaintSelection) {
+            return Vec::new();
+        }
+        let shape = EdgeShape::from_paths(&[PathInput::new(outline.clone(), Some(ctx.settings.fill.clone()), None)]);
+        if shape.is_empty() {
+            return Vec::new();
+        }
+        vec![ToolCommand::DrawShape { layer: ctx.layer, frame: ctx.frame, shape, object_drawing: false }]
     }
 }

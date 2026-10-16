@@ -60,6 +60,35 @@ fn rectangle_corner_radius_rounds_the_corners() {
 }
 
 #[test]
+fn unlocked_corner_radii_round_only_their_corners() {
+    let mut e = editor();
+    e.state.settings.corner_lock = false;
+    e.state.settings.corner_radii = [40.0, 0.0, 0.0, 0.0];
+    drag(&mut e, ToolId::Rectangle, (50.0, 50.0), (250.0, 150.0));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.fill_at(Point::new(52.0, 52.0)).is_none(), "the top left corner is cut away");
+    assert!(shape.fill_at(Point::new(248.0, 52.0)).is_some(), "the top right corner stays square");
+    assert!(shape.fill_at(Point::new(52.0, 148.0)).is_some(), "the bottom left corner stays square");
+}
+
+#[test]
+fn oval_arc_settings_draw_pies_and_rings() {
+    let mut e = editor();
+    e.state.settings.oval = anicraft_tools::settings::OvalSettings { start_angle: 0.0, end_angle: 90.0, inner_radius: 0.0, close_path: true };
+    drag(&mut e, ToolId::Oval, (100.0, 100.0), (300.0, 300.0));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.fill_at(Point::new(250.0, 250.0)).is_some(), "the quarter between three and six o'clock is filled");
+    assert!(shape.fill_at(Point::new(150.0, 150.0)).is_none(), "the opposite quarter is empty");
+
+    let mut e = editor();
+    e.state.settings.oval = anicraft_tools::settings::OvalSettings { start_angle: 0.0, end_angle: 0.0, inner_radius: 50.0, close_path: true };
+    drag(&mut e, ToolId::Oval, (100.0, 100.0), (300.0, 300.0));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.fill_at(Point::new(200.0, 200.0)).is_none(), "the hole is empty");
+    assert!(shape.fill_at(Point::new(200.0, 120.0)).is_some(), "the ring is filled");
+}
+
+#[test]
 fn shift_and_alt_constrain_the_rectangle() {
     let mut e = editor();
     e.select_tool(ToolId::Rectangle);

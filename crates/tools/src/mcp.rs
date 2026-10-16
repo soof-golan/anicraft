@@ -223,6 +223,17 @@ fn element_json(ctx: &ToolContext<'_>, r: &ElementRef) -> Value {
             out.insert("drawing_object".into(), json!(s.is_drawing_object));
             let fills: Vec<String> = s.shape.fills.iter().filter_map(|f| f.solid_color().map(Rgba8::to_hex_rgb)).collect();
             out.insert("fills".into(), json!(fills));
+            let kinds: Vec<String> = s
+                .shape
+                .fills
+                .iter()
+                .map(|f| match serde_json::to_value(f) {
+                    Ok(Value::Object(o)) => o.keys().next().cloned().unwrap_or_default(),
+                    Ok(Value::String(name)) => name,
+                    _ => String::new(),
+                })
+                .collect();
+            out.insert("fill_kinds".into(), json!(kinds));
             out.insert("strokes".into(), json!(s.shape.strokes.len()));
         }
         Element::Text(t) => {
@@ -978,12 +989,159 @@ fn paint_eyedrop<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Com
 // Registration
 // ---------------------------------------------------------------------------------------------------------------
 
-const SCHEMA_NONE: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
+// ---------------------------------------------------------------------------------------------------------------
+// Colour and swatches
+// ---------------------------------------------------------------------------------------------------------------
 
-const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","line","rectangle","oval","pen","pencil","brush","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ColourApplyParams {
+    fill: Option<FillStyle>,
+    stroke: Option<StrokeStyle>,
+    /// Also switch the fill (stroke) on in the toolbox. On by default.
+    #[serde(default = "yes")]
+    toolbox: bool,
+}
+
+const fn yes() -> bool {
+    true
+}
+
+/// Loads a fill and/or stroke into the toolbox and applies them to the selected shapes (the Colour panel).
+fn colour_apply<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: ColourApplyParams = parse_params(params)?;
+    atomic(host.editor_mut(), |ed| {
+        let updated = crate::colour::apply(ed, p.fill.as_ref(), p.stroke.as_ref(), p.toolbox).map_err(fail)?;
+        Ok(json!({ "updated": updated, "fill": ed.state.settings.fill, "stroke": ed.state.settings.stroke }))
+    })
+}
+
+/// Swaps the fill and stroke colours of the toolbox.
+#[allow(clippy::unnecessary_wraps, reason = "must match the RunFn signature")]
+fn colour_swap<D: ToolHost>(host: &mut D, _: &Value) -> Result<Value, CommandError> {
+    let ed = host.editor_mut();
+    crate::colour::swap(ed);
+    let s = &ed.state.settings;
+    Ok(json!({ "fill": s.fill, "stroke": s.stroke, "fill_enabled": s.fill_enabled, "stroke_enabled": s.stroke_enabled }))
+}
+
+/// Black stroke, white fill, as the toolbox's default colours button.
+#[allow(clippy::unnecessary_wraps, reason = "must match the RunFn signature")]
+fn colour_defaults<D: ToolHost>(host: &mut D, _: &Value) -> Result<Value, CommandError> {
+    let ed = host.editor_mut();
+    crate::colour::defaults(ed);
+    Ok(json!({ "fill": ed.state.settings.fill, "stroke": ed.state.settings.stroke }))
+}
+
+fn swatch_list(editor: &Editor) -> Value {
+    json!({ "swatches": crate::swatches::read(&editor.document) })
+}
+
+#[allow(clippy::unnecessary_wraps, reason = "must match the RunFn signature")]
+fn swatches_list<D: ToolHost>(host: &mut D, _: &Value) -> Result<Value, CommandError> {
+    Ok(swatch_list(host.editor()))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SwatchAddParams {
+    /// The fill to add; the toolbox fill by default.
+    fill: Option<FillStyle>,
+}
+
+fn swatches_add<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: SwatchAddParams = parse_params(params)?;
+    let ed = host.editor_mut();
+    let fill = p.fill.unwrap_or_else(|| ed.state.settings.fill.clone());
+    if matches!(fill, FillStyle::Bitmap(_)) {
+        return Err(CommandError::invalid_params("a bitmap fill cannot be a swatch"));
+    }
+    let mut list = crate::swatches::read(&ed.document);
+    if list.len() >= crate::swatches::MAX_SWATCHES {
+        return Err(CommandError::failed("the palette is full"));
+    }
+    if !list.contains(&fill) {
+        list.push(fill);
+    }
+    crate::swatches::write(&mut ed.document, &list);
+    Ok(swatch_list(ed))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SwatchIndexParams {
+    /// 0-based position in the palette.
+    index: usize,
+}
+
+fn swatches_delete<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: SwatchIndexParams = parse_params(params)?;
+    let ed = host.editor_mut();
+    let mut list = crate::swatches::read(&ed.document);
+    if p.index >= list.len() {
+        return Err(CommandError::invalid_params("there is no swatch at that index"));
+    }
+    list.remove(p.index);
+    crate::swatches::write(&mut ed.document, &list);
+    Ok(swatch_list(ed))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SwatchSetParams {
+    /// The whole palette: fills (solid colours as `{"Solid": {...}}`) or colours as hex text.
+    swatches: Vec<Value>,
+    /// Append to the palette instead of replacing it.
+    #[serde(default)]
+    append: bool,
+}
+
+fn swatches_set<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: SwatchSetParams = parse_params(params)?;
+    let ed = host.editor_mut();
+    let mut list = if p.append { crate::swatches::read(&ed.document) } else { Vec::new() };
+    for v in &p.swatches {
+        let fill = match v.as_str() {
+            Some(text) => FillStyle::Solid(parse_color(text)?),
+            None => serde_json::from_value(v.clone()).map_err(|e| CommandError::invalid_params(e.to_string()))?,
+        };
+        if !matches!(fill, FillStyle::Bitmap(_)) {
+            list.push(fill);
+        }
+    }
+    list.truncate(crate::swatches::MAX_SWATCHES);
+    crate::swatches::write(&mut ed.document, &list);
+    Ok(swatch_list(ed))
+}
+
+/// Puts a swatch into the toolbox fill (or stroke colour) and applies it to the selection.
+fn swatches_use<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct UseParams {
+        index: usize,
+        #[serde(default)]
+        stroke: bool,
+    }
+    let p: UseParams = parse_params(params)?;
+    let list = crate::swatches::read(&host.editor().document);
+    let fill = list.get(p.index).cloned().ok_or_else(|| CommandError::invalid_params("there is no swatch at that index"))?;
+    let args = if p.stroke {
+        let mut stroke = host.editor().state.settings.stroke.clone();
+        stroke.solid_mut().fill = fill;
+        json!({ "stroke": stroke })
+    } else {
+        json!({ "fill": fill })
+    };
+    colour_apply(host, &args)
+}
+
+const SCHEMA_NONE: &str =r#"{"type":"object","properties":{},"additionalProperties":false}"#;
+
+const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","line","rectangle","oval","pen","pencil","brush","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
 
 const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string"}},"additionalProperties":false}"#;
-const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, bucket_gap, text, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
+const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, eraser_shape, eraser_faucet, bucket_gap, bucket_lock_fill, brush_mode, brush_shape, brush_smoothing, corner_radii, corner_lock, oval {start_angle, end_angle, inner_radius, close_path}, snap {objects, pixels, grid, guides, grid_size}, text, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
 const SCHEMA_ELEMENTS: &str = r#"{"type":"object","properties":{"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based; the playhead by default"}},"additionalProperties":false}"#;
 const SCHEMA_GOTO: &str = r#"{"type":"object","properties":{"scene":{"type":"integer","minimum":0},"symbol":{"type":"string","description":"Library name of a symbol to edit"},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based playhead position"}},"additionalProperties":false}"#;
 
@@ -1087,6 +1245,39 @@ pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
             .transient()
             .with_schema(SCHEMA_POINT)
             .describe("Load the fill or stroke at a point into the tool options and switch to the bucket or ink bottle."),
+    ]
+    .into_iter()
+    .chain(colour_commands::<D>())
+    .collect()
+}
+
+/// The Colour and Swatches panel commands.
+fn colour_commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
+    vec![
+        CommandSpec::new("colour.apply", "Apply Colour", colour_apply::<D>)
+            .with_schema(r#"{"type":"object","properties":{"fill":{"description":"A fill style: {\"Solid\":{r,g,b,a}}, {\"LinearGradient\":{...}}, {\"RadialGradient\":{...}} or {\"Bitmap\":{...}}"},"stroke":{"description":"A stroke style, {\"Solid\":{weight,fill,caps,joints,miter_limit,scale_mode,pixel_hinting}}"},"toolbox":{"type":"boolean","description":"Also load them into the toolbox (default true)"}},"additionalProperties":false}"#)
+            .describe("The Colour panel: load a solid, gradient or bitmap fill and/or a stroke style into the toolbox and apply it to the selected shapes. Gradients are fitted to each shape."),
+        CommandSpec::new("colour.swap", "Swap Fill and Stroke Colours", colour_swap::<D>)
+            .transient()
+            .with_schema(SCHEMA_NONE)
+            .describe("Swap the toolbox's fill and stroke colours."),
+        CommandSpec::new("colour.defaults", "Default Colours", colour_defaults::<D>)
+            .transient()
+            .with_schema(SCHEMA_NONE)
+            .describe("Reset the toolbox to a black stroke and a white fill."),
+        CommandSpec::new("swatches.list", "List Swatches", swatches_list::<D>).transient().with_schema(SCHEMA_NONE).describe("The document's swatches (default swatches when it has none)."),
+        CommandSpec::new("swatches.add", "Add Swatch", swatches_add::<D>)
+            .with_schema(r#"{"type":"object","properties":{"fill":{"description":"The fill style to add; the toolbox fill by default"}},"additionalProperties":false}"#)
+            .describe("Add a solid or gradient fill to the document's swatches."),
+        CommandSpec::new("swatches.delete", "Delete Swatch", swatches_delete::<D>)
+            .with_schema(r#"{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0}},"additionalProperties":false}"#)
+            .describe("Delete the swatch at a 0-based index."),
+        CommandSpec::new("swatches.set", "Set Swatches", swatches_set::<D>)
+            .with_schema(r#"{"type":"object","required":["swatches"],"properties":{"swatches":{"type":"array","items":{"description":"A colour as hex text, or a fill style"}},"append":{"type":"boolean"}},"additionalProperties":false}"#)
+            .describe("Replace (or append to) the document's swatches; also how a .aco or .act colour table is loaded."),
+        CommandSpec::new("swatches.use", "Use Swatch", swatches_use::<D>)
+            .with_schema(r#"{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0},"stroke":{"type":"boolean","description":"Use it as the stroke colour instead of the fill"}},"additionalProperties":false}"#)
+            .describe("Click a swatch: make it the toolbox fill (or stroke colour) and apply it to the selected shapes."),
     ]
 }
 

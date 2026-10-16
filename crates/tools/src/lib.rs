@@ -35,10 +35,12 @@
 
 pub mod apply;
 mod autokey;
+pub mod colour;
 pub mod command;
 pub mod context;
 pub mod editor;
 pub mod event;
+pub mod fillfit;
 pub mod freehand;
 pub mod hit;
 pub mod mcp;
@@ -47,7 +49,9 @@ pub mod script;
 pub mod selection;
 pub mod settings;
 pub mod shapeops;
+pub mod snap;
 pub mod state;
+pub mod swatches;
 pub mod tool;
 pub mod tools;
 
@@ -61,6 +65,6 @@ pub use mcp::{ToolHost, commands as mcp_commands};
 pub use overlay::{Compass, Cursor, Marker, Node, Overlay, Role};
 pub use script::{ScriptReport, ScriptStep, ToolInfo, ToolScript, catalog, run_script};
 pub use selection::{ElementRef, Selection};
-pub use settings::{EraserMode, GapSize, PencilMode, TextSettings, ToolSettings};
+pub use settings::{BrushMode, EraserMode, GapSize, OvalSettings, PencilMode, SnapSettings, TextSettings, TipShape, ToolSettings};
 pub use state::{EditorState, View};
 pub use tool::{Tool, ToolId, ToolOutput, ToolSet};
