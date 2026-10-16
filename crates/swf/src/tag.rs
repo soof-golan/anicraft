@@ -58,7 +58,17 @@ const fn must_be_long(tag_code: u16) -> bool {
 /// # Errors
 /// [`SwfError::TooLarge`] when the body is longer than `u32::MAX` bytes.
 pub fn write_tag(out: &mut Vec<u8>, tag_code: u16, body: &[u8]) -> Result<(), SwfError> {
-    let len = u32::try_from(body.len()).map_err(|_| SwfError::TooLarge(body.len()))?;
+    write_tag_after(out, tag_code, &[], body)
+}
+
+/// Like [`write_tag`] for a body that is `prefix` followed by `rest`, without joining them first (definition tags
+/// start with their character id).
+///
+/// # Errors
+/// [`SwfError::TooLarge`] when the body is longer than `u32::MAX` bytes.
+pub fn write_tag_after(out: &mut Vec<u8>, tag_code: u16, prefix: &[u8], rest: &[u8]) -> Result<(), SwfError> {
+    let total = prefix.len().saturating_add(rest.len());
+    let len = u32::try_from(total).map_err(|_| SwfError::TooLarge(total))?;
     let code_bits = (tag_code & 0x3ff).wrapping_shl(6);
     if len < 0x3f && !must_be_long(tag_code) {
         out.put_u16(code_bits | u16::try_from(len).unwrap_or(0));
@@ -66,7 +76,8 @@ pub fn write_tag(out: &mut Vec<u8>, tag_code: u16, body: &[u8]) -> Result<(), Sw
         out.put_u16(code_bits | 0x3f);
         out.put_u32(len);
     }
-    out.extend_from_slice(body);
+    out.extend_from_slice(prefix);
+    out.extend_from_slice(rest);
     Ok(())
 }
 

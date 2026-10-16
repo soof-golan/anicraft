@@ -3,10 +3,9 @@
 //! [`Movie`] appends tags in order, so definitions can be interleaved with frames (a frame by frame export defines
 //! new shapes just before the frame that first uses them). Identical shapes and sprites are written once.
 
-use std::collections::HashMap;
-
 use anim_core::{FrameRate, Rgba8, num};
 use anim_display::Image;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::bitmap::{define_bits_jpeg2_body, define_bits_jpeg3_body, define_bits_lossless2_body, zlib};
@@ -17,7 +16,7 @@ use crate::morph::MorphShapeDef;
 use crate::place::{Placement, remove_object2_body};
 use crate::shape::ShapeDef;
 use crate::sound::{SoundInfo, define_sound_mp3_body, define_sound_pcm_body, resample_pcm, start_sound_body, swf_pcm_rate};
-use crate::tag::{code, write_tag};
+use crate::tag::{code, write_tag, write_tag_after};
 use crate::types::{CharacterId, Rect, put_rgb, to_twips};
 
 /// SWF version written by default (Flash Player 19).
@@ -153,6 +152,14 @@ fn encode_frame(out: &mut Vec<u8>, frame: &Frame) -> Result<(), SwfError> {
     write_tag(out, code::SHOW_FRAME, &[])
 }
 
+/// Which of the movie's tables of already defined characters a definition belongs to.
+#[derive(Clone, Copy)]
+enum Dedup {
+    Shape,
+    Morph,
+    Sprite,
+}
+
 /// A SWF under construction.
 #[derive(Debug)]
 pub struct Movie {
@@ -161,9 +168,9 @@ pub struct Movie {
     body: Vec<u8>,
     next_id: u32,
     frames: u32,
-    shapes: HashMap<Vec<u8>, CharacterId>,
-    morphs: HashMap<Vec<u8>, CharacterId>,
-    sprites: HashMap<Vec<u8>, CharacterId>,
+    shapes: FxHashMap<Vec<u8>, CharacterId>,
+    morphs: FxHashMap<Vec<u8>, CharacterId>,
+    sprites: FxHashMap<Vec<u8>, CharacterId>,
     scenes: Vec<(u32, String)>,
     labels: Vec<(u32, String)>,
     exports: Vec<(CharacterId, String)>,
@@ -187,9 +194,9 @@ impl Movie {
             body: Vec::new(),
             next_id: 1,
             frames: 0,
-            shapes: HashMap::new(),
-            morphs: HashMap::new(),
-            sprites: HashMap::new(),
+            shapes: FxHashMap::default(),
+            morphs: FxHashMap::default(),
+            sprites: FxHashMap::default(),
             scenes: Vec::new(),
             labels: Vec::new(),
             exports: Vec::new(),
@@ -235,15 +242,24 @@ impl Movie {
     /// See [`ShapeDef::encode`] and [`SwfError::TooManyCharacters`].
     pub fn define_shape(&mut self, shape: &ShapeDef) -> Result<CharacterId, SwfError> {
         let encoded = shape.encode()?;
-        if let Some(id) = self.shapes.get(&encoded) {
+        self.define_once(Dedup::Shape, code::DEFINE_SHAPE4, encoded)
+    }
+
+    /// Writes the definition tag `tag_code` for `encoded` (the body after the character id) unless the same bytes were
+    /// defined before in the same table; returns the character either way.
+    fn define_once(&mut self, table: Dedup, tag_code: u16, encoded: Vec<u8>) -> Result<CharacterId, SwfError> {
+        let known = match table {
+            Dedup::Shape => &mut self.shapes,
+            Dedup::Morph => &mut self.morphs,
+            Dedup::Sprite => &mut self.sprites,
+        };
+        if let Some(id) = known.get(&encoded) {
             return Ok(*id);
         }
-        let id = self.alloc_id()?;
-        let mut body = Vec::with_capacity(encoded.len().saturating_add(2));
-        body.put_u16(id.0);
-        body.extend_from_slice(&encoded);
-        write_tag(&mut self.body, code::DEFINE_SHAPE4, &body)?;
-        self.shapes.insert(encoded, id);
+        let id = u16::try_from(self.next_id).map(CharacterId).map_err(|_| SwfError::TooManyCharacters)?;
+        self.next_id = self.next_id.saturating_add(1);
+        write_tag_after(&mut self.body, tag_code, &id.0.to_le_bytes(), &encoded)?;
+        known.insert(encoded, id);
         Ok(id)
     }
 
@@ -253,16 +269,7 @@ impl Movie {
     /// See [`MorphShapeDef::encode`] and [`SwfError::TooManyCharacters`].
     pub fn define_morph_shape(&mut self, morph: &MorphShapeDef) -> Result<CharacterId, SwfError> {
         let encoded = morph.encode()?;
-        if let Some(id) = self.morphs.get(&encoded) {
-            return Ok(*id);
-        }
-        let id = self.alloc_id()?;
-        let mut body = Vec::with_capacity(encoded.len().saturating_add(2));
-        body.put_u16(id.0);
-        body.extend_from_slice(&encoded);
-        write_tag(&mut self.body, code::DEFINE_MORPH_SHAPE2, &body)?;
-        self.morphs.insert(encoded, id);
-        Ok(id)
+        self.define_once(Dedup::Morph, code::DEFINE_MORPH_SHAPE2, encoded)
     }
 
     /// Defines a button (`DefineButton2`).
@@ -271,11 +278,7 @@ impl Movie {
     /// See [`ButtonDef::encode`] and [`SwfError::TooManyCharacters`].
     pub fn define_button(&mut self, button: &ButtonDef) -> Result<CharacterId, SwfError> {
         let id = self.alloc_id()?;
-        let encoded = button.encode()?;
-        let mut body = Vec::with_capacity(encoded.len().saturating_add(2));
-        body.put_u16(id.0);
-        body.extend_from_slice(&encoded);
-        write_tag(&mut self.body, code::DEFINE_BUTTON2, &body)?;
+        write_tag_after(&mut self.body, code::DEFINE_BUTTON2, &id.0.to_le_bytes(), &button.encode()?)?;
         Ok(id)
     }
 
@@ -348,16 +351,7 @@ impl Movie {
             encode_frame(&mut content, frame)?;
         }
         write_tag(&mut content, code::END, &[])?;
-        if let Some(id) = self.sprites.get(&content) {
-            return Ok(*id);
-        }
-        let id = self.alloc_id()?;
-        let mut body = Vec::with_capacity(content.len().saturating_add(2));
-        body.put_u16(id.0);
-        body.extend_from_slice(&content);
-        write_tag(&mut self.body, code::DEFINE_SPRITE, &body)?;
-        self.sprites.insert(content, id);
-        Ok(id)
+        self.define_once(Dedup::Sprite, code::DEFINE_SPRITE, content)
     }
 
     /// Names a character for `attachMovie` style access (`ExportAssets`).

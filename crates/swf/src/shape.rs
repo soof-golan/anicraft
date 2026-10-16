@@ -81,7 +81,8 @@ impl ShapeDef {
                 return Err(SwfError::TooManyStyles(count));
             }
         }
-        let mut out = Vec::new();
+        // a record takes a few bytes; styles and the two rectangles add a little
+        let mut out = Vec::with_capacity(self.records.len().saturating_mul(4).saturating_add(64));
         self.bounds.write(&mut out);
         self.edge_bounds.write(&mut out);
         let non_scaling = self.lines.iter().any(|l| l.no_h_scale || l.no_v_scale);
