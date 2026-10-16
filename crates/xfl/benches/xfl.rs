@@ -27,12 +27,6 @@ fn sample(name: &str) -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
-fn digest(bytes: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    hasher.finish()
-}
-
 /// A polygon with `n` line segments and a few quadratic curves, in XFL edge syntax.
 fn edge_text(n: usize, seed: usize) -> String {
     let mut text = String::from("!0 0");
@@ -133,20 +127,37 @@ fn write_folder(files: &[(String, String)]) -> tempfile::TempDir {
 
 fn report(label: &str, loaded: &Loaded) {
     let summary = loaded.summary(0);
-    let (bytes, _) = write_fla_bytes(&loaded.document, &loaded.media, &loaded.sidecars, &WriteOptions::default()).unwrap();
+    // The XML the writer would put in the archive; deflating it is not needed to see that the output is unchanged.
+    let mut hasher = DefaultHasher::new();
+    let mut length = 0usize;
+    let (document, _) = anicraft_xfl::write::document_xml(&loaded.document, &loaded.media);
+    length += document.len();
+    document.hash(&mut hasher);
+    for symbol in loaded.document.library.symbols() {
+        let (xml, _) = anicraft_xfl::write::symbol_xml(symbol);
+        length += xml.len();
+        xml.hash(&mut hasher);
+    }
     println!(
-        "checksum {label}: {} layers, {} keyframes, {} elements, {} symbols, {} warnings, written {} bytes digest {:016x}",
+        "checksum {label}: {} layers, {} keyframes, {} elements, {} symbols, {} warnings, written xml {length} bytes digest {:016x}",
         summary.layers,
         summary.keyframes,
         summary.elements,
         summary.symbols,
         summary.warnings,
-        bytes.len(),
-        digest(&bytes)
+        hasher.finish()
     );
 }
 
+/// `XFL_BENCH_GROUP=samples|synthetic` runs one group only, so that a profile does not include the other's setup.
+fn enabled(group: &str) -> bool {
+    std::env::var("XFL_BENCH_GROUP").is_ok_and(|only| only == group) || std::env::var_os("XFL_BENCH_GROUP").is_none()
+}
+
 fn samples(c: &mut Criterion) {
+    if !enabled("samples") {
+        return;
+    }
     let mut group = c.benchmark_group("samples");
     group.sample_size(10);
     for name in ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"] {
@@ -167,6 +178,9 @@ fn samples(c: &mut Criterion) {
 }
 
 fn synthetic_cases(c: &mut Criterion) {
+    if !enabled("synthetic") {
+        return;
+    }
     let mut group = c.benchmark_group("synthetic");
     group.sample_size(20);
     // 60 symbols x 12 layers x 40 keyframes, 120 edge points each, nested in a chain; the scene places them 12 x 40 times.
@@ -184,6 +198,14 @@ fn synthetic_cases(c: &mut Criterion) {
         b.iter(|| black_box(write_fla_bytes(&loaded.document, &loaded.media, &loaded.sidecars, &WriteOptions::default()).unwrap()));
     });
     group.bench_function("document_xml", |b| b.iter(|| black_box(anicraft_xfl::write::document_xml(&loaded.document, &loaded.media))));
+    // The writer without the deflate: every symbol file as text.
+    group.bench_function("symbols_xml", |b| {
+        b.iter(|| {
+            for symbol in loaded.document.library.symbols() {
+                black_box(anicraft_xfl::write::symbol_xml(symbol));
+            }
+        });
+    });
     group.finish();
 }
 
