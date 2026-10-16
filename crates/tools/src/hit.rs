@@ -78,7 +78,7 @@ pub fn candidates<'a>(ctx: &ToolContext<'a>) -> Vec<Candidate<'a>> {
             && let Element::Group(g) = resolved.element
         {
             let to_stage = resolved.parent_to_stage * g.matrix;
-            for (i, element) in g.members.iter().enumerate().rev() {
+            for (i, element) in g.members.iter().enumerate().rev().filter(|(_, e)| !crate::lock::is_locked(e)) {
                 out.push(Candidate { element_ref: scope.child(i), element, parent_to_stage: to_stage });
             }
         }
@@ -99,7 +99,7 @@ pub fn candidates<'a>(ctx: &ToolContext<'a>) -> Vec<Candidate<'a>> {
             None => layer.keyframe_at(ctx.frame).into_iter().collect(),
         };
         for frame in frames {
-            for (i, element) in frame.elements.iter().enumerate().rev() {
+            for (i, element) in frame.elements.iter().enumerate().rev().filter(|(_, e)| !crate::lock::is_locked(e)) {
                 out.push(Candidate { element_ref: ElementRef::top_level(li, frame.index, i), element, parent_to_stage: Affine::IDENTITY });
             }
         }

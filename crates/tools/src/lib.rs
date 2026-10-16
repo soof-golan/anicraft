@@ -44,6 +44,7 @@ pub mod event;
 pub mod fillfit;
 pub mod freehand;
 pub mod hit;
+pub mod lock;
 pub mod mcp;
 mod mcp_armature;
 pub mod modify;
