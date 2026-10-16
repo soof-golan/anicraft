@@ -60,12 +60,7 @@ fn out_dir() -> PathBuf {
 
 fn save(name: &str, image: &Rendered) {
     let path = out_dir().join(format!("{name}.png"));
-    let Ok(file) = std::fs::File::create(path) else { return };
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap());
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let Ok(mut writer) = encoder.write_header() else { return };
-    let _ = writer.write_image_data(&image.pixels);
+    let _ = anim_testkit::write_png(&path, u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap(), &image.pixels);
 }
 
 /// Compares an `anim-render` picture with the checked-in golden `tests/fixtures/visual/golden/<name>.png` (a few
@@ -74,20 +69,14 @@ fn save(name: &str, image: &Rendered) {
 fn golden(name: &str, image: &Rendered) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/visual/golden").join(format!("{name}.png"));
     if std::env::var_os("ANICRAFT_UPDATE_GOLDEN").is_some() {
-        let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let file = std::fs::File::create(&path).unwrap();
-        let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap());
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header().unwrap().write_image_data(&image.pixels).unwrap();
+        anim_testkit::write_png(&path, u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap(), &image.pixels).unwrap();
         return;
     }
-    let Ok(file) = std::fs::File::open(&path) else { return };
-    let mut reader = png::Decoder::new(std::io::BufReader::new(file)).read_info().unwrap();
-    let mut buffer = vec![0; reader.output_buffer_size().unwrap()];
-    let info = reader.next_frame(&mut buffer).unwrap();
-    buffer.truncate(info.buffer_size());
-    let want = Rendered { width: info.width as usize, height: info.height as usize, pixels: buffer };
+    if !path.exists() {
+        return;
+    }
+    let golden = anim_testkit::read_png(&path).unwrap();
+    let want = Rendered { width: golden.width as usize, height: golden.height as usize, pixels: golden.rgba };
     assert_eq!((want.width, want.height), (image.width, image.height), "{name}: golden size");
     let share = differing_share(&want, image, 4);
     assert!(share < 0.002, "{name}: {:.3}% of the pixels differ from the golden {}", share * 100.0, path.display());

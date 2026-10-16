@@ -207,10 +207,7 @@ fn bridge_options_are_validated_before_the_protocol_starts() {
 }
 
 fn tiny_png(path: &Path) {
-    let mut encoder = png::Encoder::new(std::fs::File::create(path).unwrap(), 4, 4);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header().unwrap().write_image_data(&[200_u8; 64]).unwrap();
+    anim_testkit::write_png(path, 4, 4, &[200_u8; 64]).unwrap();
 }
 
 #[test]

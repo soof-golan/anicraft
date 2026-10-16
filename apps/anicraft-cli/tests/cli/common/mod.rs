@@ -53,12 +53,8 @@ impl Pixels {
 
 /// Decodes PNG bytes into RGBA8.
 pub fn decode_png(bytes: &[u8]) -> Pixels {
-    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    assert_eq!(info.color_type, png::ColorType::Rgba, "exports are RGBA");
-    buf.truncate(info.buffer_size());
-    Pixels { width: info.width, height: info.height, rgba: buf }
+    let png = anim_testkit::decode_png(bytes).unwrap();
+    Pixels { width: png.width, height: png.height, rgba: png.rgba }
 }
 
 pub fn read_png(path: &Path) -> Pixels {

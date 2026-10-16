@@ -53,5 +53,5 @@ anim-shape = { workspace = true }
 base64 = "0.22"
 flate2 = { workspace = true }
 criterion = { version = "0.8", default-features = false }
-png = { workspace = true }
+anim-testkit = { workspace = true }
 tempfile = "3"

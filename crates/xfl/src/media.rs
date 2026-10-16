@@ -23,6 +23,7 @@
 
 use std::io::{Cursor, Read};
 
+use anim_archive::bytes::le_u16 as le16;
 use anim_display::Image;
 use anim_scene::{MediaId, MediaStore, SoundItem};
 use flate2::read::ZlibDecoder;
@@ -77,11 +78,6 @@ pub fn decode_bitmap_bytes(bytes: &[u8]) -> Result<Image, XflError> {
         BitmapFormat::Jpeg | BitmapFormat::Png => decode_with_image_crate(bytes),
         BitmapFormat::Unknown => Err(XflError::Bitmap(format!("unknown bitmap format (starts with {:02x?})", bytes.get(..4).unwrap_or(bytes)))),
     }
-}
-
-fn le16(bytes: &[u8], at: usize) -> Option<u16> {
-    let pair = bytes.get(at..at.checked_add(2)?)?;
-    Some(u16::from_le_bytes([*pair.first()?, *pair.get(1)?]))
 }
 
 /// The header of a lossless bitmap blob.
@@ -361,14 +357,7 @@ mod tests {
 
     #[test]
     fn png_and_garbage() {
-        let mut png_bytes = Vec::new();
-        {
-            let mut encoder = png::Encoder::new(&mut png_bytes, 1, 1);
-            encoder.set_color(png::ColorType::Rgba);
-            encoder.set_depth(png::BitDepth::Eight);
-            let mut writer = encoder.write_header().unwrap();
-            writer.write_image_data(&[255, 0, 0, 128]).unwrap();
-        }
+        let png_bytes = anim_testkit::encode_png(1, 1, &[255, 0, 0, 128]).unwrap();
         let image = decode_bitmap_bytes(&png_bytes).unwrap();
         assert_eq!(image.premultiplied_rgba, vec![128, 0, 0, 128]);
         assert!(decode_bitmap_bytes(b"not an image").is_err());

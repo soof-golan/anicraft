@@ -31,12 +31,8 @@ pub fn exporter() -> Option<PathBuf> {
 }
 
 fn decode(path: &std::path::Path) -> Rendered {
-    let decoder = png::Decoder::new(std::io::Cursor::new(std::fs::read(path).unwrap()));
-    let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
-    let info = reader.next_frame(&mut buf).unwrap();
-    assert_eq!(info.color_type, png::ColorType::Rgba);
-    Rendered { width: usize::try_from(info.width).unwrap(), height: usize::try_from(info.height).unwrap(), pixels: buf }
+    let png = anim_testkit::read_png(path).unwrap();
+    Rendered { width: usize::try_from(png.width).unwrap(), height: usize::try_from(png.height).unwrap(), pixels: png.rgba }
 }
 
 fn scratch_dir() -> PathBuf {

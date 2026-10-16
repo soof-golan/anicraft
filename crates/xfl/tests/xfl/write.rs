@@ -192,14 +192,7 @@ fn archive_comparison_of_the_fixture_is_clean_apart_from_what_the_reader_dropped
 
 #[test]
 fn imported_png_becomes_a_lossless_dat_and_new_names_are_generated() {
-    let mut png = Vec::new();
-    {
-        let mut encoder = png::Encoder::new(&mut png, 3, 2);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder.write_header().unwrap();
-        writer.write_image_data(&[255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255]).unwrap();
-    }
+    let png = anim_testkit::encode_png(3, 2, &[255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255]).unwrap();
     let mut store = MediaStore::new();
     let png_id = store.insert(png).unwrap();
     let sound_id = store.insert(vec![5; 40]).unwrap();

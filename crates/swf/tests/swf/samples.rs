@@ -16,7 +16,6 @@
     clippy::suboptimal_flops
 )]
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use anicraft_swf::edge::{NoBitmaps, shape_from_edges};
@@ -38,36 +37,11 @@ fn sample_files() -> Vec<PathBuf> {
     ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"].into_iter().map(|n| dir.join(n)).filter(|p| p.exists()).collect()
 }
 
-/// The library XML documents of an FLA, read through the local file headers (the central directory of Animate's zips
-/// is 54 bytes short).
+/// The library XML documents of an FLA (the central directory of Animate's zips is 54 bytes short; anim-archive
+/// copes).
 fn library_xml(path: &Path) -> Vec<(String, String)> {
-    let bytes = std::fs::read(path).unwrap();
-    let le16 = |at: usize| usize::from(u16::from_le_bytes([bytes[at], bytes[at + 1]]));
-    let le32 = |at: usize| usize::try_from(u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])).unwrap();
-    let mut out = Vec::new();
-    let mut pos = 0;
-    while bytes.get(pos..pos + 4) == Some(&[0x50, 0x4B, 0x03, 0x04]) {
-        let method = le16(pos + 8);
-        let compressed = le32(pos + 18);
-        let (name_len, extra_len) = (le16(pos + 26), le16(pos + 28));
-        let name = String::from_utf8_lossy(&bytes[pos + 30..pos + 30 + name_len]).into_owned();
-        let start = pos + 30 + name_len + extra_len;
-        pos = start + compressed;
-        let is_xml = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("xml"));
-        if !is_xml || !name.starts_with("LIBRARY/") {
-            continue;
-        }
-        let data = &bytes[start..pos];
-        let text = if method == 8 {
-            let mut inflated = Vec::new();
-            flate2::read::DeflateDecoder::new(data).read_to_end(&mut inflated).unwrap();
-            inflated
-        } else {
-            data.to_vec()
-        };
-        out.push((name, String::from_utf8_lossy(&text).into_owned()));
-    }
-    out
+    anim_testkit::archive_texts(path, |name| Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case("xml")) && name.starts_with("LIBRARY/"))
+        .unwrap()
 }
 
 fn child<'a, 'i>(node: roxmltree::Node<'a, 'i>, name: &str) -> Option<roxmltree::Node<'a, 'i>> {

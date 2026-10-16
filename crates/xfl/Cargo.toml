@@ -32,7 +32,7 @@ harness = false
 # Only the `render_frame` example uses the rasteriser, to look at what the reader produced.
 anim-render = { workspace = true }
 criterion = { version = "0.8", default-features = false }
-png = { workspace = true }
+anim-testkit = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
 tempfile = "3"

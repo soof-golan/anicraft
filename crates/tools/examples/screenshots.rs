@@ -17,8 +17,6 @@
 )]
 
 use std::error::Error;
-use std::fs::File;
-use std::io::BufWriter;
 
 use anicraft_tools::{Editor, Key, KeyEvent, Modifiers, Node as OverlayNode, Overlay, PointerEvent, Role, ToolEvent, ToolId, mcp_commands};
 use anim_core::kurbo::{Circle, Shape as _};
@@ -571,10 +569,7 @@ fn main() -> Result<()> {
     let options = RenderOptions::for_stage(sheet.size).with_view(Affine::scale(SCALE)).with_antialias(true);
     let options = RenderOptions { width: options.width.saturating_mul(2), height: options.height.saturating_mul(2), ..options };
     let image = Renderer::new().render(&sheet, &anim_display::ImageStore::new(), &options)?;
-    let mut encoder = png::Encoder::new(BufWriter::new(File::create(&out)?), image.width, image.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header()?.write_image_data(&straight_rgba(&image))?;
+    anim_testkit::write_png(std::path::Path::new(&out), image.width, image.height, &straight_rgba(&image))?;
     println!("wrote {out} ({}x{})", image.width, image.height);
     Ok(())
 }

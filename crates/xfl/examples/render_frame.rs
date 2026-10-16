@@ -106,18 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let list = DisplayList { size: Size::new(doc.width, doc.height), background: Some(doc.background_color), nodes };
     let options = RenderOptions::fit_stage(list.size, 960, 540);
     let image = render(&list, &images, &options)?;
-    let mut straight = Vec::with_capacity(image.premultiplied_rgba.len());
-    for px in image.premultiplied_rgba.chunks_exact(4) {
-        if let [r, g, b, a] = *px {
-            let un = |c: u8| if a == 0 { 0 } else { u8::try_from((u32::from(c) * 255 + u32::from(a) / 2) / u32::from(a)).unwrap_or(255) };
-            straight.extend_from_slice(&[un(r), un(g), un(b), a]);
-        }
-    }
-    let file = std::io::BufWriter::new(std::fs::File::create(&out)?);
-    let mut encoder = png::Encoder::new(file, image.width, image.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header()?.write_image_data(&straight)?;
+    anim_testkit::write_png(&out, image.width, image.height, &anim_render::straight_rgba(&image))?;
     println!("wrote {} ({}x{}, scene {scene}, frame {frame})", out.display(), image.width, image.height);
     Ok(())
 }

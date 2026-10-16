@@ -50,18 +50,7 @@ fn render(name: &str, args: &[&str], tag: &str) -> Pixels {
 
 /// Crops `(x, y, w, h)` and scales it up by `k` with nearest neighbour, so single pixels stay visible.
 fn save_zoom(img: &Pixels, (x0, y0, w, h): (u32, u32, u32, u32), k: u32, path: &Path) {
-    let (w, h) = (w.min(img.width.saturating_sub(x0)), h.min(img.height.saturating_sub(y0)));
-    let mut rgba = Vec::new();
-    for y in 0..h * k {
-        for x in 0..w * k {
-            rgba.extend_from_slice(&img.at(x0 + x / k, y0 + y / k));
-        }
-    }
-    let file = std::fs::File::create(path).unwrap();
-    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w * k, h * k);
-    enc.set_color(png::ColorType::Rgba);
-    enc.set_depth(png::BitDepth::Eight);
-    enc.write_header().unwrap().write_image_data(&rgba).unwrap();
+    anim_testkit::crop_zoom(&img.rgba, img.width, x0, y0, w, h, k).save(path).unwrap();
 }
 
 #[track_caller]

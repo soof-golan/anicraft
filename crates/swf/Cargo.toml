@@ -33,7 +33,7 @@ anicraft-xfl = { workspace = true }
 anim-scene = { workspace = true }
 anim-timeline = { workspace = true }
 criterion = { version = "0.8", default-features = false }
-png = { workspace = true }
+anim-testkit = { workspace = true }
 proptest = { workspace = true }
 # The sample-gated tests (tests/samples.rs) read library XML out of the FLA zips.
 roxmltree = { workspace = true }
