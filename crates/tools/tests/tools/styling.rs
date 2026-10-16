@@ -14,12 +14,12 @@
     clippy::suboptimal_flops
 )]
 
-mod common;
-
 use anicraft_tools::{BrushMode, EraserMode, TipShape, ToolId};
 use anim_core::{Affine, Point, Rgba8};
 use anim_display::{GradientStop, Interpolation, Spread};
 use anim_shape::{FillStyle, GradientFill};
+
+use crate::common;
 use common::*;
 
 fn two_stop_gradient() -> GradientFill {

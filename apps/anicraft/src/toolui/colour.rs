@@ -84,9 +84,9 @@ pub fn convert_fill(fill: &FillStyle, to: FillKind, bitmap: Option<&str>) -> Opt
         FillKind::Radial => Some(FillStyle::RadialGradient(gradient_of(fill))),
         FillKind::Bitmap => match fill {
             FillStyle::Bitmap(_) => Some(fill.clone()),
-            _ => bitmap.map(|path| {
-                FillStyle::Bitmap(BitmapFill { path: path.to_owned(), matrix: Affine::scale(BITMAP_FULL), clipped: false, smoothing: true })
-            }),
+            _ => {
+                bitmap.map(|path| FillStyle::Bitmap(BitmapFill { path: path.to_owned(), matrix: Affine::scale(BITMAP_FULL), clipped: false, smoothing: true }))
+            }
         },
     }
 }
@@ -371,17 +371,29 @@ fn colour_fields(ui: &mut Ui, st: &mut ToolUi, c: Rgba8) -> Option<(Rgba8, bool)
             ui.end_row();
         }
         ui.label("H");
-        let r = ui.add(egui::Slider::new(&mut hsb[0], 0.0..=1.0).custom_formatter(|v, _| format!("{:.0}", v * 360.0)).custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 360.0)));
+        let r = ui.add(
+            egui::Slider::new(&mut hsb[0], 0.0..=1.0)
+                .custom_formatter(|v, _| format!("{:.0}", v * 360.0))
+                .custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 360.0)),
+        );
         hsb_changed |= r.changed();
         commit |= r.drag_stopped() || r.lost_focus();
         ui.end_row();
         ui.label("S");
-        let r = ui.add(egui::Slider::new(&mut hsb[1], 0.0..=1.0).custom_formatter(|v, _| format!("{:.0}", v * 100.0)).custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 100.0)));
+        let r = ui.add(
+            egui::Slider::new(&mut hsb[1], 0.0..=1.0)
+                .custom_formatter(|v, _| format!("{:.0}", v * 100.0))
+                .custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 100.0)),
+        );
         hsb_changed |= r.changed();
         commit |= r.drag_stopped() || r.lost_focus();
         ui.end_row();
         ui.label("B");
-        let r = ui.add(egui::Slider::new(&mut hsb[2], 0.0..=1.0).custom_formatter(|v, _| format!("{:.0}", v * 100.0)).custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 100.0)));
+        let r = ui.add(
+            egui::Slider::new(&mut hsb[2], 0.0..=1.0)
+                .custom_formatter(|v, _| format!("{:.0}", v * 100.0))
+                .custom_parser(|t| t.parse::<f64>().ok().map(|v| v / 100.0)),
+        );
         hsb_changed |= r.changed();
         commit |= r.drag_stopped() || r.lost_focus();
         ui.end_row();
@@ -450,7 +462,11 @@ fn gradient_editor(ui: &mut Ui, st: &mut ToolUi, g: &GradientFill, radial: bool)
         let top = bar.bottom() + 1.0;
         let tri = vec![pos2(x, top), pos2(x - 5.0, top + MARKER_HEIGHT), pos2(x + 5.0, top + MARKER_HEIGHT)];
         let selected = i == st.stop;
-        ui.painter().add(egui::Shape::convex_polygon(tri, to_color32(stop.color).to_opaque(), Stroke::new(if selected { 2.0 } else { 1.0 }, if selected { p.accent } else { p.text })));
+        ui.painter().add(egui::Shape::convex_polygon(
+            tri,
+            to_color32(stop.color).to_opaque(),
+            Stroke::new(if selected { 2.0 } else { 1.0 }, if selected { p.accent } else { p.text }),
+        ));
     }
     let offset_at = |x: f32| ((x - bar.left()) / bar.width().max(1.0)).clamp(0.0, 1.0);
     let pointer = response.interact_pointer_pos();

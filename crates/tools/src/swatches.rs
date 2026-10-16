@@ -77,14 +77,8 @@ pub fn default_swatches() -> Vec<FillStyle> {
         out.push(FillStyle::Solid(Rgba8::opaque(r, g, b)));
     }
     let stops = |a: Rgba8, b: Rgba8| vec![GradientStop { offset: 0.0, color: a }, GradientStop { offset: 1.0, color: b }];
-    out.push(FillStyle::LinearGradient(GradientFill {
-        stops: stops(Rgba8::opaque(255, 255, 255), Rgba8::opaque(0, 0, 0)),
-        ..GradientFill::default()
-    }));
-    out.push(FillStyle::RadialGradient(GradientFill {
-        stops: stops(Rgba8::opaque(255, 255, 0), Rgba8::opaque(255, 0, 0)),
-        ..GradientFill::default()
-    }));
+    out.push(FillStyle::LinearGradient(GradientFill { stops: stops(Rgba8::opaque(255, 255, 255), Rgba8::opaque(0, 0, 0)), ..GradientFill::default() }));
+    out.push(FillStyle::RadialGradient(GradientFill { stops: stops(Rgba8::opaque(255, 255, 0), Rgba8::opaque(255, 0, 0)), ..GradientFill::default() }));
     out
 }
 
@@ -283,10 +277,7 @@ mod tests {
             FillStyle::Solid(Rgba8::opaque(255, 0, 0)),
             FillStyle::Solid(Rgba8::new(0, 128, 255, 128)),
             FillStyle::LinearGradient(GradientFill {
-                stops: vec![
-                    GradientStop { offset: 0.0, color: Rgba8::opaque(0, 0, 0) },
-                    GradientStop { offset: 1.0, color: Rgba8::opaque(255, 255, 255) },
-                ],
+                stops: vec![GradientStop { offset: 0.0, color: Rgba8::opaque(0, 0, 0) }, GradientStop { offset: 1.0, color: Rgba8::opaque(255, 255, 255) }],
                 spread: Spread::Pad,
                 interpolation: Interpolation::Rgb,
                 ..GradientFill::default()

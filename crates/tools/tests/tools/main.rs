@@ -8,4 +8,5 @@ mod mcp;
 mod painting;
 mod scripts;
 mod selecting;
+mod styling;
 mod text;

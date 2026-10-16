@@ -60,7 +60,9 @@ fn tool_buttons(ui: &mut Ui, tools: &[ToolItem], active: &str, st: &mut ToolUi, 
             let shown = members.iter().find(|t| t.id == current).unwrap_or(first);
             let grouped = members.len() > 1;
             let (response, on_corner) = group_button(ui, shown, members.iter().any(|t| t.id == active), grouped);
-            let long = grouped && response.is_pointer_button_down_on() && ui.input(|i| i.pointer.press_start_time()).is_some_and(|t| ui.input(|i| i.time) - t > LONG_PRESS);
+            let long = grouped
+                && response.is_pointer_button_down_on()
+                && ui.input(|i| i.pointer.press_start_time()).is_some_and(|t| ui.input(|i| i.time) - t > LONG_PRESS);
             if grouped && (response.secondary_clicked() || long || (response.clicked() && on_corner)) {
                 open_at = Some(head);
             } else if response.clicked() && shown.enabled {
@@ -94,7 +96,11 @@ fn group_button(ui: &mut Ui, tool: &ToolItem, active: bool, grouped: bool) -> (R
         paint_tool(painter, rect.shrink(BUTTON * 0.2), tool, colour);
         if grouped {
             let corner = rect.right_bottom();
-            painter.add(egui::Shape::convex_polygon(vec![corner - vec2(1.0, 6.0), corner - vec2(6.0, 1.0), corner - vec2(1.0, 1.0)], p.text_weak, Stroke::NONE));
+            painter.add(egui::Shape::convex_polygon(
+                vec![corner - vec2(1.0, 6.0), corner - vec2(6.0, 1.0), corner - vec2(1.0, 1.0)],
+                p.text_weak,
+                Stroke::NONE,
+            ));
         }
     }
     let tip = tool.shortcut.map_or_else(|| tool.label.clone(), |c| format!("{} ({})", tool.label, c.to_ascii_uppercase()));
@@ -325,7 +331,9 @@ fn chip_popup(ui: &Ui, target: ColourTarget, swatches: &[FillStyle], st: &mut To
         let key = if target == ColourTarget::Fill { "fill_enabled" } else { "stroke_enabled" };
         events.push(ToolUiEvent::options(json!({ key: false })));
         st.chip_popup = None;
-    } else if ctx.input(|i| i.pointer.any_pressed()) && !ctx.input(|i| i.pointer.interact_pos()).is_some_and(|p: Pos2| area.response.rect.contains(p) || p.x < anchor.x) {
+    } else if ctx.input(|i| i.pointer.any_pressed())
+        && !ctx.input(|i| i.pointer.interact_pos()).is_some_and(|p: Pos2| area.response.rect.contains(p) || p.x < anchor.x)
+    {
         st.chip_popup = None;
     }
 }
@@ -345,14 +353,28 @@ fn switches(ui: &mut Ui, s: &ToolSettings, events: &mut Vec<ToolUiEvent>) {
             let s = Stroke::new(2.0, c);
             painter.line_segment([r.center_top() + vec2(-5.0, 3.0), r.center_top() + vec2(-5.0, 9.0)], s);
             painter.line_segment([r.center_top() + vec2(5.0, 3.0), r.center_top() + vec2(5.0, 9.0)], s);
-            painter.add(egui::Shape::line(vec![pos2(r.center().x - 5.0, r.top() + 9.0), pos2(r.center().x - 5.0, r.bottom() - 5.0), pos2(r.center().x + 5.0, r.bottom() - 5.0), pos2(r.center().x + 5.0, r.top() + 9.0)], s));
+            painter.add(egui::Shape::line(
+                vec![
+                    pos2(r.center().x - 5.0, r.top() + 9.0),
+                    pos2(r.center().x - 5.0, r.bottom() - 5.0),
+                    pos2(r.center().x + 5.0, r.bottom() - 5.0),
+                    pos2(r.center().x + 5.0, r.top() + 9.0),
+                ],
+                s,
+            ));
         }),
         ("Snap to Pixels", s.snap.pixels, "pixels", |painter, r, c| {
             let s = Stroke::new(1.0, c);
             for i in 1..4_u8 {
                 let t = f32::from(i) / 4.0;
-                painter.line_segment([pos2(r.left() + 3.0 + (r.width() - 6.0) * t, r.top() + 3.0), pos2(r.left() + 3.0 + (r.width() - 6.0) * t, r.bottom() - 3.0)], s);
-                painter.line_segment([pos2(r.left() + 3.0, r.top() + 3.0 + (r.height() - 6.0) * t), pos2(r.right() - 3.0, r.top() + 3.0 + (r.height() - 6.0) * t)], s);
+                painter.line_segment(
+                    [pos2(r.left() + 3.0 + (r.width() - 6.0) * t, r.top() + 3.0), pos2(r.left() + 3.0 + (r.width() - 6.0) * t, r.bottom() - 3.0)],
+                    s,
+                );
+                painter.line_segment(
+                    [pos2(r.left() + 3.0, r.top() + 3.0 + (r.height() - 6.0) * t), pos2(r.right() - 3.0, r.top() + 3.0 + (r.height() - 6.0) * t)],
+                    s,
+                );
             }
         }),
     ];

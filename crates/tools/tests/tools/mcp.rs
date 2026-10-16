@@ -373,10 +373,13 @@ fn colour_and_swatch_commands_edit_the_toolbox_the_selection_and_the_palette() {
     let mut c = Client::new();
     c.ok("draw_rectangle", json!({ "x": 10, "y": 10, "width": 80, "height": 40, "fill": "#ff0000" }));
     c.ok("select_all", json!({}));
-    let applied = c.ok("colour_apply", json!({ "fill": { "LinearGradient": {
+    let applied = c.ok(
+        "colour_apply",
+        json!({ "fill": { "LinearGradient": {
         "matrix": [1, 0, 0, 1, 0, 0],
         "stops": [{ "offset": 0.0, "color": { "r": 0, "g": 0, "b": 0, "a": 255 } }, { "offset": 1.0, "color": { "r": 255, "g": 255, "b": 255, "a": 255 } }],
-        "spread": "Pad", "interpolation": "Rgb", "focal": 0.0 } } }));
+        "spread": "Pad", "interpolation": "Rgb", "focal": 0.0 } } }),
+    );
     assert_eq!(applied["updated"], json!(1), "{applied}");
     assert!(c.stage()[0].to_string().to_lowercase().contains("gradient"), "{:?}", c.stage());
 

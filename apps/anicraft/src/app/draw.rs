@@ -70,9 +70,9 @@ impl AniApp {
             PanelId::Custom(toolui::COLOUR_PANEL),
             PanelId::Custom(toolui::SWATCHES_PANEL),
         ]
-            .into_iter()
-            .filter(|p| !self.ui.layout.contains(p))
-            .collect();
+        .into_iter()
+        .filter(|p| !self.ui.layout.contains(p))
+        .collect();
         MenuView {
             enabled,
             can_undo: session.history().undo_label().map(str::to_owned),

@@ -31,9 +31,9 @@ impl AniApp {
             };
             let result = if has_shape {
                 let key = format!("colour:{}", self.prop_gesture);
-                self.host.session_mut().edit("Change Colour", Some(&key), |doc| {
-                    anicraft_tools::colour::apply(&mut doc.editor, edit.fill.as_ref(), edit.stroke.as_ref(), true)
-                })
+                self.host
+                    .session_mut()
+                    .edit("Change Colour", Some(&key), |doc| anicraft_tools::colour::apply(&mut doc.editor, edit.fill.as_ref(), edit.stroke.as_ref(), true))
             } else {
                 anicraft_tools::colour::apply(&mut self.host.session_mut().doc_mut().editor, edit.fill.as_ref(), edit.stroke.as_ref(), true)
             };

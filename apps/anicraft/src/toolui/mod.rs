@@ -111,14 +111,8 @@ pub struct ToolUi {
 }
 
 /// Tools the toolbox groups under another tool's button, as `(tool, group's first tool)`.
-const GROUPS: [(&str, &str); 6] = [
-    ("gradient_transform", "transform"),
-    ("oval", "rect"),
-    ("rect_primitive", "rect"),
-    ("oval_primitive", "rect"),
-    ("polystar", "rect"),
-    ("ink", "bucket"),
-];
+const GROUPS: [(&str, &str); 6] =
+    [("gradient_transform", "transform"), ("oval", "rect"), ("rect_primitive", "rect"), ("oval_primitive", "rect"), ("polystar", "rect"), ("ink", "bucket")];
 
 /// The toolbar items plus the tools that the shared toolbar has no button for yet.
 #[must_use]
