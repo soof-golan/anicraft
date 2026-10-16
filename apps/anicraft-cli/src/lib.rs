@@ -21,6 +21,7 @@ pub mod export;
 pub mod import;
 pub mod info;
 pub mod mcp;
+pub mod parallel;
 pub mod project;
 
 pub use error::{CliError, Result};

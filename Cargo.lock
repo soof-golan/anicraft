@@ -313,6 +313,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "criterion",
+ "crossbeam-channel",
  "png",
  "regex",
  "serde",

@@ -10,14 +10,15 @@ use std::path::{Path, PathBuf};
 use anim_core::{Affine, FrameRate, Size, num};
 use anim_display::Image;
 use anim_export::{AnimatedSvgOptions, ExportBackground, GifOptions, PngSequenceOptions, Progress, RasterOptions, SheetOptions, SvgOptions, VecFrameSource};
-use anim_render::{Background, RenderOptions, Renderer};
+use anim_render::{Background, RenderOptions};
 use anim_scene::{Document, MediaStore};
 use anim_timeline::Evaluator;
-use anim_video::{AudioTrack, Codec, H264Rate, VideoSettings};
+use anim_video::{AudioTrack, Codec, H264Rate, SegmentEncoder, VideoSettings};
 use serde::Serialize;
 
 use crate::audio;
 use crate::error::{CliError, Result};
+use crate::parallel;
 use crate::project::{evaluator_for, frame_plan, one_based};
 
 /// Called with `(done, total)` before each unit of work; returning false cancels the export.
@@ -233,21 +234,27 @@ fn png_sequence(job: &ExportJob<'_>, plan: &[u32], spec: RenderSpec, progress: P
     fs::create_dir_all(&job.out).map_err(|e| CliError::io(&job.out, e))?;
     let names = PngSequenceOptions::default();
     let total = u32::try_from(plan.len()).unwrap_or(u32::MAX);
-    let mut ev = evaluator_for(job.doc, job.media, true);
-    let mut renderer = Renderer::new();
     let mut bytes = 0_u64;
-    for (ordinal, frame) in (0_u32..).zip(plan) {
-        if !progress(ordinal, total) {
-            return Err(anim_export::ExportError::Cancelled.into());
-        }
-        let list = ev.frame(job.scene, *frame);
-        let image = renderer.render(&list, ev.images(), &render_options(list.size, spec, false))?;
-        let png = anim_export::encode_png(image.width, image.height, &anim_render::straight_rgba(&image))?;
-        let path = job.out.join(names.file_name(ordinal, total));
-        bytes = bytes.saturating_add(u64::try_from(png.len()).unwrap_or(u64::MAX));
-        fs::write(&path, png).map_err(|e| CliError::io(path, e))?;
-        renderer.recycle(image);
-    }
+    // Workers render, encode and write their own files; the sink only adds up sizes in order.
+    parallel::run_ordered(
+        (job.doc, job.media),
+        plan,
+        || Ok(()),
+        |worker, ordinal, frame| {
+            let list = worker.ev.frame(job.scene, frame);
+            let image = worker.renderer.render(&list, worker.ev.images(), &render_options(list.size, spec, false))?;
+            let png = anim_export::encode_png(image.width, image.height, &anim_render::straight_rgba(&image))?;
+            let path = job.out.join(names.file_name(ordinal, total));
+            fs::write(&path, &png).map_err(|e| CliError::io(path, e))?;
+            worker.renderer.recycle(image);
+            Ok(u64::try_from(png.len()).unwrap_or(u64::MAX))
+        },
+        &mut *progress,
+        |_, len| {
+            bytes = bytes.saturating_add(len);
+            Ok(())
+        },
+    )?;
     progress(total, total);
     Ok(ExportOutcome { format: job.format, frames: total, files: vec![job.out.clone()], bytes, notes: Vec::new() })
 }
@@ -259,7 +266,8 @@ fn video(job: &ExportJob<'_>, plan: &[u32], out_fps: f64, spec: RenderSpec, prog
     let mp4 = job.format == Format::Mp4;
     let options = render_options(size, spec, mp4);
     let codec = if mp4 { Codec::H264 { rate: H264Rate::default() } } else { Codec::ProRes4444 { alpha: spec.transparent } };
-    let mut settings = VideoSettings::new(options.width, options.height, FrameRate::from_f64(out_fps), codec);
+    let picture = VideoSettings::new(options.width, options.height, FrameRate::from_f64(out_fps), codec);
+    let mut settings = picture.clone();
     let mut notes = Vec::new();
     let soundtrack = audio::soundtrack(job.doc, job.media, job.scene, &job.span)?;
     notes.extend(soundtrack.notes);
@@ -269,16 +277,36 @@ fn video(job: &ExportJob<'_>, plan: &[u32], out_fps: f64, spec: RenderSpec, prog
     if let Some(parent) = job.out.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|e| CliError::io(parent, e))?;
     }
-    let mut handle = anim_video::start(&job.out, settings)?;
-    let mut renderer = Renderer::new();
     let total = u32::try_from(plan.len()).unwrap_or(u32::MAX);
-    for (ordinal, frame) in (0_u32..).zip(plan) {
-        if !progress(ordinal, total) {
-            handle.cancel();
-            return Err(anim_export::ExportError::Cancelled.into());
-        }
-        let list = ev.frame(job.scene, *frame);
-        handle.send_frame(renderer.render(&list, ev.images(), &options)?)?;
+    // The video is cut into segments that start with a key frame. Each worker renders a segment's frames and encodes
+    // them itself, so rendering, colour conversion and encoding all scale with the cores; the encoder thread behind
+    // `handle` only muxes the finished segments in order.
+    let cores = std::thread::available_parallelism().map_or(1, usize::from);
+    let segments = picture.segment_plan(u64::from(total), cores);
+    let per_segment = usize::try_from(segments.frames_per_segment).unwrap_or(usize::MAX).max(1);
+    let order: Vec<u32> = (0..u32::try_from(segments.segments).unwrap_or(u32::MAX)).collect();
+    let mut handle = anim_video::start(&job.out, settings)?;
+    let sent = parallel::run_ordered(
+        (job.doc, job.media),
+        &order,
+        || Ok(SegmentEncoder::new(&picture, segments.threads_each)?),
+        |worker, ordinal, _| {
+            let first = num::u32_to_usize(ordinal).saturating_mul(per_segment);
+            worker.state.start(u64::try_from(first).unwrap_or(u64::MAX))?;
+            for frame in plan.iter().skip(first).take(per_segment) {
+                let list = worker.ev.frame(job.scene, *frame);
+                let image = worker.renderer.render(&list, worker.ev.images(), &options)?;
+                worker.state.push(&image)?;
+                worker.renderer.recycle(image);
+            }
+            Ok(worker.state.finish()?)
+        },
+        |done, _| progress(u32::try_from(num::u32_to_usize(done).saturating_mul(per_segment)).unwrap_or(total).min(total), total),
+        |_, segment| Ok(handle.send_segment(segment)?),
+    );
+    if let Err(e) = sent {
+        handle.cancel();
+        return Err(e);
     }
     let summary = handle.finish()?;
     progress(total, total);

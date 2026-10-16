@@ -148,6 +148,23 @@ fn every_export_format_writes_a_valid_file() {
 }
 
 #[test]
+fn parallel_png_sequence_matches_single_frame_renders_in_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let fixture = mover();
+    let f = fixture.to_str().unwrap();
+    // Every frame is rendered on whichever worker is free: any reordering or shared state between workers would change a
+    // file relative to rendering that frame alone.
+    let seq = path(&dir, "seq");
+    cli_ok(&["export", f, "--format", "png-seq", "-o", &seq, "-q"]);
+    for frame in 1..=12 {
+        let single = path(&dir, "single.png");
+        cli_ok(&["render", f, "--frame", &frame.to_string(), "-o", &single]);
+        let from_sequence = dir.path().join("seq").join(format!("frame_{frame:04}.png"));
+        assert_eq!(std::fs::read(from_sequence).unwrap(), std::fs::read(dir.path().join("single.png")).unwrap(), "frame {frame}");
+    }
+}
+
+#[test]
 fn export_resamples_to_another_frame_rate() {
     let dir = tempfile::tempdir().unwrap();
     let seq = path(&dir, "seq");
