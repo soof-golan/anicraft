@@ -300,20 +300,6 @@ pub struct ArchiveDiff {
     pub unreadable: Vec<String>,
 }
 
-impl ArchiveDiff {
-    /// True when the documents and symbols are semantically equal and every shared binary entry is identical.
-    #[must_use]
-    pub const fn content_equal(&self) -> bool {
-        self.document.is_empty() && self.symbols.is_empty() && self.bytes_differ.is_empty() && self.unreadable.is_empty()
-    }
-
-    /// Total number of semantic differences in `DOMDocument.xml` and the symbols.
-    #[must_use]
-    pub fn xml_total(&self) -> u64 {
-        self.symbols.iter().fold(self.document.total, |acc, (_, d)| acc.saturating_add(d.total))
-    }
-}
-
 /// Compares two archives (zips or folders).
 ///
 /// `DOMDocument.xml` and every symbol file are compared semantically, everything else byte for byte. Entries are
