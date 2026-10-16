@@ -389,7 +389,7 @@ dependencies = [
 [[package]]
 name = "anim-archive"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "crc32fast",
  "encoding_rs",
@@ -402,7 +402,7 @@ dependencies = [
 [[package]]
 name = "anim-artwork"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "anim-audio"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "cpal",
@@ -434,7 +434,7 @@ dependencies = [
 [[package]]
 name = "anim-core"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "filmcraft-time",
  "kurbo",
@@ -445,7 +445,7 @@ dependencies = [
 [[package]]
 name = "anim-display"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "kurbo",
@@ -456,7 +456,7 @@ dependencies = [
 [[package]]
 name = "anim-export"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -472,7 +472,7 @@ dependencies = [
 [[package]]
 name = "anim-mcp"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-session",
  "axum",
@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "anim-morph"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -504,7 +504,7 @@ dependencies = [
 [[package]]
 name = "anim-render"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -517,7 +517,7 @@ dependencies = [
 [[package]]
 name = "anim-scene"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -529,7 +529,7 @@ dependencies = [
 [[package]]
 name = "anim-session"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "craft-atomic",
  "craft-settings",
@@ -542,7 +542,7 @@ dependencies = [
 [[package]]
 name = "anim-shape"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -554,7 +554,7 @@ dependencies = [
 [[package]]
 name = "anim-text"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -569,7 +569,7 @@ dependencies = [
 [[package]]
 name = "anim-timeline"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -584,7 +584,7 @@ dependencies = [
 [[package]]
 name = "anim-ui"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "craft-ui",
@@ -598,7 +598,7 @@ dependencies = [
 [[package]]
 name = "anim-video"
 version = "0.1.0"
-source = "git+https://github.com/soof-golan/anicraft-libs?rev=7b3bc39d02c9b062a832f4b130e506cd317db748#7b3bc39d02c9b062a832f4b130e506cd317db748"
+source = "git+https://github.com/soof-golan/anicraft-libs?rev=972e5655da30493b616e4631be6f880a994e128e#972e5655da30493b616e4631be6f880a994e128e"
 dependencies = [
  "anim-core",
  "anim-display",
@@ -676,7 +676,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "x11rb",
 ]
 
@@ -1740,7 +1740,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2063,7 +2063,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2282,9 +2282,9 @@ dependencies = [
 
 [[package]]
 name = "fontique"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6688bc1294fe7117d788937b6c53480169b29c566954af490830d4c09da9516a"
+checksum = "bbf1df16263783918b7da396077521f92b729ef7c429444dfcf03581f1448b77"
 dependencies = [
  "hashbrown 0.17.1",
  "linebender_resource_handle",
@@ -4135,29 +4135,52 @@ checksum = "73072a9470554c8e794778acece2312661218aaabb635600957d952cf01c716e"
 
 [[package]]
 name = "parley"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22d2ff88bd3f7d68d1d9b09c7e6209f9a8e8c05088295140a2bcf2e9b17038c5"
+checksum = "61bd0c0c1737f0b3d3726dc06b225083af213b61913e4fbae1670613a106c6ce"
+dependencies = [
+ "fontique",
+ "hashbrown 0.17.1",
+ "linebender_resource_handle",
+ "parlance",
+ "parley_engine",
+ "smallvec",
+]
+
+[[package]]
+name = "parley_data"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c43b63f808f6cc8f4a3b07de0d62a977bddd2e0bb5c232bd9e93ba8ef92e5e4b"
+dependencies = [
+ "icu_collections",
+ "icu_properties",
+]
+
+[[package]]
+name = "parley_emoji"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c4482d912d7671a7cd2089794f90ef3bb5f5f8c738230fb0fcd50fa020f0ed3"
+
+[[package]]
+name = "parley_engine"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b74c0d373e462e504ad4436710a39f099e18e848e1ee711f70cd2dcd5a69b290"
 dependencies = [
  "fontique",
  "harfrust 0.12.0",
  "hashbrown 0.17.1",
+ "icu_locale_core",
  "icu_normalizer",
  "icu_properties",
  "icu_segmenter",
  "linebender_resource_handle",
  "parlance",
  "parley_data",
+ "parley_emoji",
  "skrifa 0.44.0",
-]
-
-[[package]]
-name = "parley_data"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1567535334d6ba2d3cde19221ba9a7bd0fabb3cbd99046ddfb10ae061cfcc889"
-dependencies = [
- "icu_properties",
 ]
 
 [[package]]
@@ -4810,7 +4833,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5509,7 +5532,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6766,7 +6789,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
