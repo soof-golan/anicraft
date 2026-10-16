@@ -1,7 +1,7 @@
 //! `<DOMShape>`: fill and stroke styles plus the `<Edge>` list.
 
 use anim_core::{Affine, Rgba8};
-use anim_scene::ShapeElement;
+use anim_scene::{Primitive, PrimitiveKind, ShapeElement};
 use anim_shape::{BitmapFill, FillStyle, GradientFill, SolidStroke, StrokeStyle, XflName};
 
 use super::out::{Attrs, XmlOut};
@@ -9,6 +9,10 @@ use super::scene::{matrix, point};
 
 /// Writes a shape element.
 pub fn write_shape(out: &mut XmlOut, shape: &ShapeElement) {
+    if let Some(primitive) = &shape.primitive {
+        write_primitive(out, shape, primitive);
+        return;
+    }
     out.open("DOMShape", &Attrs::new().b_unless("isDrawingObject", shape.is_drawing_object, false).extra(&shape.extra));
     // Merge-mode shapes carry no matrix in XFL; the reader gives them the identity.
     if shape.matrix != Affine::IDENTITY {
@@ -52,6 +56,59 @@ pub fn write_shape(out: &mut XmlOut, shape: &ShapeElement) {
     }
     for child in &shape.extra.children {
         out.raw("DOMShape", child);
+    }
+    out.close();
+}
+
+/// Writes a Rectangle or Oval Primitive as `<DOMRectangleObject>` or `<DOMOvalObject>`.
+fn write_primitive(out: &mut XmlOut, shape: &ShapeElement, primitive: &Primitive) {
+    let (tag, attrs) = match &primitive.kind {
+        PrimitiveKind::Rectangle(r) => {
+            let [tl, tr, br, bl] = r.radii;
+            let attrs = Attrs::new()
+                .f("objectWidth", r.width)
+                .f("objectHeight", r.height)
+                .f_unless("topLeftRadius", tl, 0.0)
+                .f_unless("topRightRadius", tr, 0.0)
+                .f_unless("bottomRightRadius", br, 0.0)
+                .f_unless("bottomLeftRadius", bl, 0.0)
+                .b_unless("lockFlag", r.lock, true);
+            ("DOMRectangleObject", attrs)
+        }
+        PrimitiveKind::Oval(o) => {
+            let attrs = Attrs::new()
+                .f("objectWidth", o.width)
+                .f("objectHeight", o.height)
+                .f_unless("startAngle", o.start_angle, 0.0)
+                .f_unless("endAngle", o.end_angle, 0.0)
+                .f_unless("innerRadius", o.inner_radius, 0.0)
+                .b_unless("closePath", o.close_path, true);
+            ("DOMOvalObject", attrs)
+        }
+    };
+    out.open(tag, &attrs.extra(&shape.extra));
+    if shape.matrix != Affine::IDENTITY {
+        matrix(out, shape.matrix);
+    }
+    if let Some(p) = shape.transformation_point {
+        point(out, "transformationPoint", p);
+    }
+    if let Some(fill) = &primitive.fill {
+        out.open("fill", &Attrs::new());
+        out.open("FillStyle", &Attrs::new().u("index", 1));
+        fill_content(out, fill);
+        out.close();
+        out.close();
+    }
+    if let Some(stroke) = &primitive.stroke {
+        out.open("stroke", &Attrs::new());
+        out.open("StrokeStyle", &Attrs::new().u("index", 1));
+        stroke_content(out, stroke);
+        out.close();
+        out.close();
+    }
+    for child in &shape.extra.children {
+        out.raw(tag, child);
     }
     out.close();
 }
@@ -150,5 +207,44 @@ mod tests {
         assert_eq!(shape, again, "{written}");
         assert!(written.contains("<weird a=\"1\"/>"));
         assert!(written.contains("foo=\"bar\""));
+    }
+
+    fn primitive_round_trip(text: &str, oval: bool) -> (ShapeElement, String) {
+        let doc = roxmltree::Document::parse(text).unwrap();
+        let mut sink = Sink::default();
+        let shape = {
+            let mut ctx = Ctx::new(text, "t.xml", &mut sink);
+            crate::shape::read_primitive(&mut ctx, doc.root_element(), oval)
+        };
+        let mut out = XmlOut::new();
+        write_shape(&mut out, &shape);
+        (shape, out.finish().0)
+    }
+
+    #[test]
+    fn a_rectangle_primitive_keeps_its_parameters() {
+        let source = r##"<DOMRectangleObject objectWidth="80" objectHeight="40" topLeftRadius="6" lockFlag="false" foo="1"><matrix><Matrix tx="10" ty="20"/></matrix>
+        <fill><FillStyle index="1"><SolidColor color="#FF0000"/></FillStyle></fill>
+        <stroke><StrokeStyle index="1"><SolidStroke weight="2"><fill><SolidColor color="#000000"/></fill></SolidStroke></StrokeStyle></stroke></DOMRectangleObject>"##;
+        let (shape, written) = primitive_round_trip(source, false);
+        assert!(written.starts_with("<DOMRectangleObject"), "{written}");
+        let (again, _) = primitive_round_trip(&written, false);
+        assert_eq!(shape, again, "{written}");
+        let Some(p) = &shape.primitive else { panic!("no primitive") };
+        let PrimitiveKind::Rectangle(r) = &p.kind else { panic!("not a rectangle") };
+        assert_eq!(r.radii, [6.0, 0.0, 0.0, 0.0]);
+        assert!(!r.lock);
+        assert!(!shape.shape.is_empty());
+        assert!(shape.is_drawing_object);
+    }
+
+    #[test]
+    fn an_oval_primitive_keeps_its_angles() {
+        let source = r##"<DOMOvalObject objectWidth="50" objectHeight="50" startAngle="30" endAngle="200" innerRadius="40" closePath="false"><fill><FillStyle index="1"><SolidColor color="#00FF00"/></FillStyle></fill></DOMOvalObject>"##;
+        let (shape, written) = primitive_round_trip(source, true);
+        assert!(written.starts_with("<DOMOvalObject"), "{written}");
+        let (again, _) = primitive_round_trip(&written, true);
+        assert_eq!(shape, again, "{written}");
+        assert!(written.contains("startAngle=\"30\"") && written.contains("closePath=\"false\""));
     }
 }

@@ -2,7 +2,7 @@
 
 use anim_core::{Affine, Rgba8};
 use anim_display::{Cap, GradientStop, Interpolation, Join, Spread, StrokeScale};
-use anim_scene::{Extra, ShapeElement};
+use anim_scene::{Extra, OvalPrimitive, Primitive, PrimitiveKind, RectPrimitive, ShapeElement};
 use anim_shape::{BitmapFill, EdgeShape, FillStyle, GradientFill, OtherStroke, SolidStroke, StrokeKind, StrokeStyle, XflEdge, XflName};
 use roxmltree::Node;
 
@@ -39,6 +39,54 @@ pub fn read_shape(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> ShapeElement {
         ctx.warn(format!("DOMShape: {error}"));
     }
     shape.shape = edge_shape;
+    shape.extra = extra;
+    shape
+}
+
+/// Reads a `<DOMRectangleObject>` (`oval` false) or `<DOMOvalObject>` (`oval` true) into a drawing object that
+/// carries its primitive parameters.
+pub fn read_primitive(ctx: &mut Ctx<'_>, node: Node<'_, '_>, oval: bool) -> ShapeElement {
+    let tag = node.tag_name().name();
+    let mut attrs = Attrs::new(node);
+    let width = attrs.f64(ctx, "objectWidth").unwrap_or(0.0).max(0.0);
+    let height = attrs.f64(ctx, "objectHeight").unwrap_or(0.0).max(0.0);
+    let kind = if oval {
+        PrimitiveKind::Oval(OvalPrimitive {
+            width,
+            height,
+            start_angle: attrs.f64(ctx, "startAngle").unwrap_or(0.0),
+            end_angle: attrs.f64(ctx, "endAngle").unwrap_or(0.0),
+            inner_radius: attrs.f64(ctx, "innerRadius").unwrap_or(0.0),
+            close_path: attrs.bool(ctx, "closePath").unwrap_or(true),
+        })
+    } else {
+        let radii = [
+            attrs.f64(ctx, "topLeftRadius").unwrap_or(0.0),
+            attrs.f64(ctx, "topRightRadius").unwrap_or(0.0),
+            attrs.f64(ctx, "bottomRightRadius").unwrap_or(0.0),
+            attrs.f64(ctx, "bottomLeftRadius").unwrap_or(0.0),
+        ];
+        PrimitiveKind::Rectangle(RectPrimitive { width, height, radii, lock: attrs.bool(ctx, "lockFlag").unwrap_or(true) })
+    };
+    let mut extra = Extra::new();
+    attrs.rest(ctx, &mut extra);
+    let mut matrix = Affine::IDENTITY;
+    let mut transformation_point = None;
+    let mut fill = None;
+    let mut stroke = None;
+    for c in element_children(node) {
+        match c.tag_name().name() {
+            "matrix" => matrix = read_matrix(ctx, c),
+            "transformationPoint" => transformation_point = Some(read_point(ctx, c)),
+            "fill" => fill = element_children(c).find(|n| n.tag_name().name() == "FillStyle").map(|n| read_fill_content(ctx, n)),
+            "stroke" => stroke = element_children(c).find(|n| n.tag_name().name() == "StrokeStyle").map(|n| read_stroke_content(ctx, n)),
+            _ => ctx.keep_child(&mut extra, tag, c),
+        }
+    }
+    let mut shape = ShapeElement::from_primitive(Primitive { kind, fill, stroke }, matrix);
+    if transformation_point.is_some() {
+        shape.transformation_point = transformation_point;
+    }
     shape.extra = extra;
     shape
 }

@@ -32,6 +32,8 @@ pub fn read_elements(ctx: &mut Ctx<'_>, list: Node<'_, '_>, depth: usize) -> Vec
 fn read_element(ctx: &mut Ctx<'_>, node: Node<'_, '_>, depth: usize) -> Element {
     match node.tag_name().name() {
         "DOMShape" => Element::Shape(read_shape(ctx, node)),
+        "DOMRectangleObject" => Element::Shape(crate::shape::read_primitive(ctx, node, false)),
+        "DOMOvalObject" => Element::Shape(crate::shape::read_primitive(ctx, node, true)),
         "DOMSymbolInstance" | "DOMComponentInstance" => Element::SymbolInstance(Box::new(read_symbol_instance(ctx, node))),
         "DOMBitmapInstance" => Element::Bitmap(read_bitmap_instance(ctx, node)),
         "DOMStaticText" => Element::Text(Box::new(read_text(ctx, node, TextKind::Static))),
