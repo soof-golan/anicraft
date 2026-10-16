@@ -197,7 +197,6 @@ fn node() -> BoxedStrategy<Node> {
                         filters,
                         children,
                         key: None,
-                        projection: None,
                     })
                 })
                 .boxed()
