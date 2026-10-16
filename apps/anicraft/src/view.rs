@@ -86,7 +86,7 @@ pub fn timeline_model(
                     },
                     has_script: f.actionscript.as_deref().is_some_and(|s| !s.trim().is_empty()),
                     sound: None,
-                    preview: if previews { preview_boxes(doc, &bounds, f, layer.color) } else { Vec::new() },
+                    preview: if previews { preview_boxes(doc, bounds, f, layer.color) } else { Vec::new() },
                 }
             })
             .collect();
@@ -109,12 +109,12 @@ pub fn timeline_model(
 }
 
 /// The boxes of a keyframe's content in stage fractions, for the Frame View previews.
-fn preview_boxes(doc: &Document, bounds: &anicraft_tools::LibraryBounds<'_>, frame: &anim_scene::Frame, color: Rgba8) -> Vec<PreviewBox> {
+fn preview_boxes(doc: &Document, bounds: anicraft_tools::LibraryBounds<'_>, frame: &anim_scene::Frame, color: Rgba8) -> Vec<PreviewBox> {
     let (w, h) = (doc.width.max(1.0), doc.height.max(1.0));
     frame
         .elements
         .iter()
-        .filter_map(|e| anicraft_tools::hit::bounds_in_parent(bounds, e, 0))
+        .filter_map(|e| anicraft_tools::hit::bounds_in_parent(&bounds, e, 0))
         .map(|r| PreviewBox {
             x: num::f64_to_f32(r.x0 / w),
             y: num::f64_to_f32(r.y0 / h),

@@ -37,7 +37,7 @@ pub enum Dialog {
 }
 
 /// What the Layer Properties dialog edits.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayerProps {
     pub index: usize,
     pub name: String,
@@ -52,7 +52,7 @@ pub struct LayerProps {
 }
 
 /// What the Frame Properties dialog edits: the keyframe at `frame` (0-based) of `layer`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameProps {
     pub layer: usize,
     pub frame: u32,

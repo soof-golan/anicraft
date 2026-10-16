@@ -586,14 +586,22 @@ impl AniApp {
             FrameAction::InsertKeyframe => self.frame_op(FrameOp::InsertKeyframe),
             FrameAction::InsertBlankKeyframe => self.frame_op(FrameOp::InsertBlankKeyframe),
             FrameAction::ClearKeyframe => self.frame_op(FrameOp::ClearKeyframe),
-            FrameAction::ConvertToKeyframes => self.frame_range_command("timeline.convert_to_keyframes", json!({})),
-            FrameAction::ConvertToBlankKeyframes => self.frame_range_command("timeline.convert_to_keyframes", json!({ "blank": true })),
-            FrameAction::ClearFrames => self.frame_range_command("timeline.clear_frames", json!({})),
+            FrameAction::ConvertToKeyframes => {
+                self.frame_range_command("timeline.convert_to_keyframes", json!({}));
+            }
+            FrameAction::ConvertToBlankKeyframes => {
+                self.frame_range_command("timeline.convert_to_keyframes", json!({ "blank": true }));
+            }
+            FrameAction::ClearFrames => {
+                self.frame_range_command("timeline.clear_frames", json!({}));
+            }
             FrameAction::CreateClassicTween => self.frame_op(FrameOp::ClassicTween),
             FrameAction::CreateShapeTween => self.frame_op(FrameOp::ShapeTween),
             FrameAction::RemoveTween => self.frame_op(FrameOp::RemoveTween),
             FrameAction::CreateMotionTween => self.status("motion tweens are not supported yet; use a classic tween"),
-            FrameAction::ReverseFrames => self.frame_range_command("timeline.reverse_frames", json!({})),
+            FrameAction::ReverseFrames => {
+                self.frame_range_command("timeline.reverse_frames", json!({}));
+            }
             FrameAction::CopyFrames => self.copy_frames(false),
             FrameAction::CutFrames => self.copy_frames(true),
             FrameAction::PasteFrames => self.paste_frames(false),
@@ -770,7 +778,6 @@ impl AniApp {
         let idx = |l: u64| usize::try_from(l).unwrap_or(usize::MAX);
         match event {
             LayerEvent::Select { id: layer, .. } => self.set_current_layer(layer),
-            LayerEvent::AddKind(_) | LayerEvent::AddMotionGuide(_) | LayerEvent::Convert { .. } => self.status("not supported yet"),
             LayerEvent::ToggleVisible(l) => self.layer_flag(&id, idx(l), "Toggle Layer Visibility", |layer| layer.visible = !layer.visible),
             LayerEvent::ToggleLocked(l) => self.layer_flag(&id, idx(l), "Toggle Layer Lock", |layer| layer.locked = !layer.locked),
             LayerEvent::ToggleOutline(l) => self.layer_flag(&id, idx(l), "Toggle Layer Outline", |layer| layer.outline = !layer.outline),

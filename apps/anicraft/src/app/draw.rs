@@ -467,7 +467,7 @@ impl AniApp {
                 ui.end_row();
                 for (index, (name, kind, parent)) in rows.iter().enumerate() {
                     ui.label(format!("{} {}", kind_glyph(*kind), crate::text(name)));
-                    let current = parent.and_then(|p| rows.get(p)).map_or_else(|| "None".to_owned(), |(n, ..)| crate::text(n).to_string());
+                    let current = parent.and_then(|p| rows.get(p)).map_or_else(|| "None".to_owned(), |(n, ..)| crate::text(n));
                     egui::ComboBox::from_id_salt(("parent", index)).selected_text(current).show_ui(ui, |ui| {
                         if ui.selectable_label(parent.is_none(), "None").clicked() {
                             out.push(UiEvent::Menu(MenuAction::Command { id: "layer.set_parent", params: serde_json::json!({ "layer": index }) }));
