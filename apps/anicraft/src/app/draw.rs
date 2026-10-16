@@ -61,6 +61,7 @@ impl AniApp {
         events.extend(self.dialogs(&ctx));
         events.extend(self.scene_panel(&ctx));
         events.extend(self.parenting_view(&ctx));
+        events.extend(self.motion_editor(&ctx));
         self.doc_dialogs(&ctx);
 
         for event in events {
@@ -111,6 +112,7 @@ impl AniApp {
             recent: self.recent_paths(),
             dirty: session.is_dirty(),
             scene_panel: self.ui.scene_panel,
+            motion_editor: self.ui.motion.open,
             parenting_view: self.ui.parenting_view,
             edit_multiple: self.ui.timeline.edit_multiple,
             auto_keyframe: self.ui.timeline.auto_keyframe,
@@ -229,6 +231,7 @@ impl AniApp {
         if overlays.is_empty() {
             overlays.extend(rects.iter().map(|r| view::selection_box(*r, accent, to_stage)));
         }
+        overlays.extend(crate::motion_ui::overlays(doc, st.motion.drag, accent));
         st.stage.overlays = overlays;
         let texture = self.stage_tex.as_ref();
         let panel_rects = &mut st.panel_rects;
@@ -505,6 +508,24 @@ impl AniApp {
         });
         self.ui.scene_panel = open;
         out
+    }
+
+    /// The Motion Editor (Window > Motion Editor): the tween under the playhead with its property tracks, eases,
+    /// presets, shape hints and the custom ease curve editor.
+    fn motion_editor(&mut self, ctx: &Context) -> Vec<UiEvent> {
+        if !self.ui.motion.open {
+            return Vec::new();
+        }
+        let view = crate::motion_ui::tween_view(self.host.session().doc());
+        let mut open = true;
+        let mut commands = Vec::new();
+        egui::Window::new("Motion Editor").open(&mut open).default_width(460.0).resizable(true).show(ctx, |ui| {
+            egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+                commands = crate::motion_ui::editor(ui, view.as_ref(), &mut self.ui.motion);
+            });
+        });
+        self.ui.motion.open = open;
+        commands.into_iter().map(|(id, params)| UiEvent::Menu(MenuAction::Command { id, params })).collect()
     }
 
     /// The Parenting view: every layer with the folder, mask or guide layer it hangs under, to change.

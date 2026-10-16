@@ -331,6 +331,15 @@ impl AniApp {
                     self.request_close(vec![id], crate::docs::After::CloseTabs);
                 }
                 "revert" => self.ui.docs.dialog = Some(DocDialog::Revert),
+                "motion" => self.ui.motion.open = true,
+                "motion-curve" => {
+                    self.ui.motion.open = true;
+                    self.ui.motion.curve = Some(crate::motion_ui::CurveEdit {
+                        target: crate::motion_ui::CurveTarget::Tween(anim_scene::EaseTarget::All),
+                        p1: [0.25, 0.0],
+                        p2: [0.75, 1.15],
+                    });
+                }
                 _ => {}
             }
         }

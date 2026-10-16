@@ -74,6 +74,8 @@ pub enum MenuAction {
     /// Edit a library symbol on its own stage (Edit > Edit Symbols).
     EditSymbol,
     ToggleScenePanel,
+    /// Opens or closes the Motion Editor (also how the custom ease editor is reached from the Modify menu).
+    ToggleMotionEditor,
     ToggleParentingView,
     ToggleEditMultiple,
     ToggleAutoKeyframe,
@@ -101,6 +103,7 @@ pub struct MenuView {
     pub recent: Vec<PathBuf>,
     pub dirty: bool,
     pub scene_panel: bool,
+    pub motion_editor: bool,
     pub parenting_view: bool,
     pub edit_multiple: bool,
     pub auto_keyframe: bool,
@@ -376,6 +379,7 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             ui.separator();
             push(item(ui, "Classic Tween", "", true), command("timeline.create_classic_tween"));
             push(item(ui, "Shape Tween", "", true), command("timeline.create_shape_tween"));
+            push(item(ui, "Motion Tween", "", true), command("timeline.create_motion_tween"));
             push(item(ui, "Remove Tween", "", true), command("timeline.remove_tween"));
         });
         ui.menu_button("Modify", |ui| {
@@ -398,6 +402,13 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                     push(item(ui, "Flip Horizontal", "", true), MenuAction::Command { id: "modify.flip", params: json!({ "axis": "horizontal" }) });
                     push(item(ui, "Flip Vertical", "", true), MenuAction::Command { id: "modify.flip", params: json!({ "axis": "vertical" }) });
                 });
+            });
+            ui.separator();
+            ui.menu_button("Shape", |ui| {
+                push(item(ui, "Add Shape Hint", "Ctrl+Shift+H", true), command("shape.add_hint"));
+                push(item(ui, "Remove All Hints", "", true), command("shape.remove_hint"));
+                ui.separator();
+                push(item(ui, "Custom Ease...", "", true), MenuAction::ToggleMotionEditor);
             });
             ui.separator();
             ui.menu_button("Timeline", |ui| {
@@ -434,6 +445,7 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
         });
         ui.menu_button("Window", |ui| {
             push(check(ui, "Scene", "Shift+F2", view.scene_panel), MenuAction::ToggleScenePanel);
+            push(check(ui, "Motion Editor", "", view.motion_editor), MenuAction::ToggleMotionEditor);
             push(check(ui, "Parenting View", "", view.parenting_view), MenuAction::ToggleParentingView);
         });
         ui.menu_button("Help", |ui| {

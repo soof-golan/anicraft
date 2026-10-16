@@ -31,6 +31,7 @@ pub mod files;
 pub mod macros;
 pub mod mcp;
 pub mod menus;
+pub mod motion_ui;
 pub mod prefs;
 pub mod preview;
 pub mod props;

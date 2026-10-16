@@ -46,6 +46,38 @@ fn tool_key(key: egui::Key) -> Option<Key> {
 }
 
 impl AniApp {
+    /// Motion path points and shape hints on the stage are grabbed before any tool sees the pointer. Returns true
+    /// when the event was theirs.
+    fn motion_pointer(&mut self, p: &StagePointer) -> bool {
+        use crate::motion_ui::{Drag, drop_command, handles, pick, tween_view};
+        match p.phase {
+            PointerPhase::Down => {
+                let items = handles(self.host.session().doc());
+                match pick(&items, p.origin, p.zoom) {
+                    Some(handle) => {
+                        self.ui.motion.drag = Some(Drag { handle, pos: p.pos });
+                        true
+                    }
+                    None => false,
+                }
+            }
+            PointerPhase::Drag => self.ui.motion.drag.as_mut().is_some_and(|d| {
+                d.pos = p.pos;
+                true
+            }),
+            PointerPhase::Up => {
+                let Some(drag) = self.ui.motion.drag.take() else { return false };
+                if let Some(view) = tween_view(self.host.session().doc()) {
+                    let (id, params) = drop_command(&view, drag.handle, p.pos);
+                    self.run(id, &params);
+                }
+                true
+            }
+            PointerPhase::Click | PointerPhase::DoubleClick => pick(&handles(self.host.session().doc()), p.pos, p.zoom).is_some(),
+            PointerPhase::Move => false,
+        }
+    }
+
     /// A pointer event of the stage widget, as the tools see it.
     pub(super) fn stage_pointer(&mut self, p: &StagePointer) {
         if self.ui.test_movie.is_some() {
@@ -53,6 +85,9 @@ impl AniApp {
             return;
         }
         if p.button != PointerButton::Primary && p.phase != PointerPhase::Move {
+            return;
+        }
+        if self.motion_pointer(p) {
             return;
         }
         let modifiers = tool_modifiers(p.modifiers);
@@ -258,6 +293,7 @@ impl AniApp {
             (true, false, K::B) => Some(MenuAction::Command { id: "modify.break_apart", params: json!({}) }),
             (true, false, K::G) => Some(MenuAction::Command { id: "modify.group", params: json!({}) }),
             (true, true, K::G) => Some(MenuAction::Command { id: "modify.ungroup", params: json!({}) }),
+            (true, true, K::H) => Some(MenuAction::Command { id: "shape.add_hint", params: json!({}) }),
             (false, false, K::Enter) if !busy => Some(MenuAction::Play),
             (false, false, K::Home) => Some(MenuAction::GoStart),
             (false, false, K::End) => Some(MenuAction::GoEnd),

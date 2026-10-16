@@ -131,6 +131,8 @@ pub struct UiState {
     pub scene_panel: bool,
     /// The Parenting view is open.
     pub parenting_view: bool,
+    /// The Motion Editor window, the custom ease editor and the stage handles of motion paths and shape hints.
+    pub motion: crate::motion_ui::MotionUi,
     pub panel_rects: HashMap<String, Rect>,
     pub export: Option<ExportStatus>,
     /// Pointer drag in progress: the document as it was before the first edit of the gesture.
@@ -178,6 +180,7 @@ impl UiState {
             frame_clip: None,
             scene_panel: false,
             parenting_view: false,
+            motion: crate::motion_ui::MotionUi::default(),
             panel_rects: HashMap::new(),
             export: None,
             drag_base: None,

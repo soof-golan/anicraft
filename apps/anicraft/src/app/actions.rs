@@ -46,6 +46,21 @@ const fn scene_kind(kind: anim_ui::timeline::LayerKind) -> LayerKind {
 }
 
 /// The name `layer.set_kind` knows a layer type by.
+/// Create Motion Tween the way Animate does it: a keyframe that lasts one frame grows to one second first.
+fn create_motion_tween(document: &mut anim_scene::Document, id: &TimelineId, layer: usize, frame: u32) -> Result<(), anim_scene::SceneError> {
+    let (start, duration) = edit::keyframe_mut(document, id, layer, frame).map(|k| (k.index, k.duration))?;
+    if duration < 2 {
+        let extra = num::round_f64_to_u32(document.frame_rate).max(2).saturating_sub(1);
+        let has_next = document.timeline(id).and_then(|t| t.layers.get(layer)).is_some_and(|l| l.next_keyframe_after(start).is_some());
+        if has_next {
+            edit::insert_frames(document, id, layer, start.saturating_add(1), extra)?;
+        } else {
+            edit::keyframe_mut(document, id, layer, frame)?.duration = duration.saturating_add(extra);
+        }
+    }
+    anim_scene::motion::create_motion_tween(document, id, layer, frame)
+}
+
 const fn kind_name(kind: LayerKind) -> &'static str {
     match kind {
         LayerKind::Guide => "guide",
@@ -65,6 +80,7 @@ pub enum FrameOp {
     ClearKeyframe,
     ClassicTween,
     ShapeTween,
+    MotionTween,
     RemoveTween,
 }
 
@@ -78,6 +94,7 @@ impl FrameOp {
             Self::ClearKeyframe => "Clear Keyframe",
             Self::ClassicTween => "Create Classic Tween",
             Self::ShapeTween => "Create Shape Tween",
+            Self::MotionTween => "Create Motion Tween",
             Self::RemoveTween => "Remove Tween",
         }
     }
@@ -168,6 +185,7 @@ impl AniApp {
             MenuAction::EditInPlace => self.edit_selected_in_place(),
             MenuAction::EditSymbol => self.edit_symbol_of_selection(),
             MenuAction::ToggleScenePanel => self.ui.scene_panel = !self.ui.scene_panel,
+            MenuAction::ToggleMotionEditor => self.ui.motion.open = !self.ui.motion.open,
             MenuAction::ToggleParentingView => self.ui.parenting_view = !self.ui.parenting_view,
             MenuAction::ToggleEditMultiple => self.ui.timeline.edit_multiple = !self.ui.timeline.edit_multiple,
             MenuAction::ToggleAutoKeyframe => self.ui.timeline.auto_keyframe = !self.ui.timeline.auto_keyframe,
@@ -199,11 +217,28 @@ impl AniApp {
             "timeline.insert_blank_keyframe" => Some(FrameOp::InsertBlankKeyframe),
             "timeline.create_classic_tween" => Some(FrameOp::ClassicTween),
             "timeline.create_shape_tween" => Some(FrameOp::ShapeTween),
+            "timeline.create_motion_tween" => Some(FrameOp::MotionTween),
             "timeline.remove_tween" => Some(FrameOp::RemoveTween),
             _ => None,
         };
         if let Some(op) = op {
             self.frame_op(op);
+            return;
+        }
+        if id.starts_with("shape.") && params.get("layer").is_none() {
+            // Menu items for shape hints act on the tween under the playhead.
+            let state = &self.host.session().doc().editor.state;
+            let (layer, frame) = (state.layer, state.frame);
+            let start = self
+                .host
+                .session()
+                .doc()
+                .document()
+                .timeline(&state.timeline)
+                .and_then(|t| t.layers.get(layer))
+                .and_then(|l| l.keyframe_at(frame))
+                .map_or(frame, |k| k.index);
+            self.run(id, &json!({ "layer": layer, "frame": start.saturating_add(1) }));
             return;
         }
         if id == "layer.add" {
@@ -579,6 +614,7 @@ impl AniApp {
                     FrameOp::ClearKeyframe => (first..=last).try_for_each(|f| edit::clear_keyframe(document, &id, layer, f)),
                     FrameOp::ClassicTween => edit::create_classic_tween(document, &id, layer, first),
                     FrameOp::ShapeTween => edit::create_shape_tween(document, &id, layer, first),
+                    FrameOp::MotionTween => create_motion_tween(document, &id, layer, first),
                     FrameOp::RemoveTween => edit::remove_tween(document, &id, layer, first),
                 }
                 .map_err(|e| format!("{}: {e}", op.label()))?;
@@ -610,7 +646,7 @@ impl AniApp {
             FrameAction::CreateClassicTween => self.frame_op(FrameOp::ClassicTween),
             FrameAction::CreateShapeTween => self.frame_op(FrameOp::ShapeTween),
             FrameAction::RemoveTween => self.frame_op(FrameOp::RemoveTween),
-            FrameAction::CreateMotionTween => self.status("motion tweens are not supported yet; use a classic tween"),
+            FrameAction::CreateMotionTween => self.frame_op(FrameOp::MotionTween),
             FrameAction::ReverseFrames => {
                 self.frame_range_command("timeline.reverse_frames", json!({}));
             }
