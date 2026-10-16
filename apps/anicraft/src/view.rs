@@ -72,6 +72,8 @@ pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionS
                     label: f.label.clone(),
                     has_script: f.actionscript.as_deref().is_some_and(|s| !s.trim().is_empty()),
                     sound: None,
+                    label_kind: Default::default(),
+                    preview: Vec::new(),
                 }
             })
             .collect();

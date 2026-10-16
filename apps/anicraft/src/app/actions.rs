@@ -452,7 +452,11 @@ impl AniApp {
             }
             TimelineEvent::ToggleOnion => self.ui.onion.enabled = !self.ui.onion.enabled,
             TimelineEvent::ToggleOnionOutlines => self.ui.onion.outlines = !self.ui.onion.outlines,
-            TimelineEvent::Scroll { .. } | TimelineEvent::Zoom { .. } => {}
+            TimelineEvent::Scroll { .. }
+            | TimelineEvent::Zoom { .. }
+            | TimelineEvent::ToggleEditMultiple
+            | TimelineEvent::ToggleAutoKeyframe
+            | TimelineEvent::SetFrameView { .. } => {}
         }
     }
 
@@ -513,6 +517,7 @@ impl AniApp {
             FrameAction::RemoveTween => self.frame_op(FrameOp::RemoveTween),
             FrameAction::CreateMotionTween => self.status("motion tweens are not supported yet; use a classic tween"),
             FrameAction::ReverseFrames => self.status("reversing frames is not supported yet"),
+            FrameAction::PasteOverwrite | FrameAction::Properties | FrameAction::EditLabel => self.status("not supported yet"),
             FrameAction::CopyFrames => self.copy_frames(),
             FrameAction::CutFrames => {
                 self.copy_frames();
@@ -634,6 +639,7 @@ impl AniApp {
         let idx = |l: u64| usize::try_from(l).unwrap_or(usize::MAX);
         match event {
             LayerEvent::Select { id: layer, .. } => self.set_current_layer(layer),
+            LayerEvent::AddKind(_) | LayerEvent::AddMotionGuide(_) | LayerEvent::Convert { .. } => self.status("not supported yet"),
             LayerEvent::ToggleVisible(l) => self.layer_flag(&id, idx(l), "Toggle Layer Visibility", |layer| layer.visible = !layer.visible),
             LayerEvent::ToggleLocked(l) => self.layer_flag(&id, idx(l), "Toggle Layer Lock", |layer| layer.locked = !layer.locked),
             LayerEvent::ToggleOutline(l) => self.layer_flag(&id, idx(l), "Toggle Layer Outline", |layer| layer.outline = !layer.outline),
