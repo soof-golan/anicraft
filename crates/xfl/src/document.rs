@@ -1,7 +1,7 @@
 //! `DOMDocument.xml`: stage settings, the library sections and the scenes.
 
 use anim_archive::Container;
-use anim_core::Rgba8;
+use anim_core::{Point, Rgba8};
 use anim_scene::{Document, Extra, Library, MediaStore};
 use roxmltree::Node;
 
@@ -21,6 +21,12 @@ pub fn read_document(ctx: &mut Ctx<'_>, root: Node<'_, '_>, container: &Containe
     doc.height = attrs.f64(ctx, "height").unwrap_or(400.0);
     doc.frame_rate = attrs.f64(ctx, "frameRate").unwrap_or(24.0);
     doc.background_color = attrs.color(ctx, "backgroundColor").unwrap_or(Rgba8::WHITE);
+    doc.perspective_angle = attrs.f64(ctx, "viewAngle3D").unwrap_or(doc.perspective_angle).clamp(1.0, 179.0);
+    let vanishing_x = attrs.f64(ctx, "vanishingPoint3DX");
+    let vanishing_y = attrs.f64(ctx, "vanishingPoint3DY");
+    if vanishing_x.is_some() || vanishing_y.is_some() {
+        doc.vanishing_point = Some(Point::new(vanishing_x.unwrap_or(doc.width / 2.0), vanishing_y.unwrap_or(doc.height / 2.0)));
+    }
     // XFL counts timelines from 1.
     let current = attrs.u32(ctx, "currentTimeline").unwrap_or(1);
     doc.current_timeline = usize::try_from(current.saturating_sub(1)).unwrap_or(0);

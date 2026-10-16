@@ -3,7 +3,7 @@
 //! Every function here mirrors a reader in `timeline.rs` or `element.rs`: attributes the reader would default are
 //! left out, everything else is written, and `extra` goes last so unmodelled content survives.
 
-use anim_core::{Affine, Point, Rgba8};
+use anim_core::{Affine, Matrix3D, Point, Rgba8};
 use anim_display::Filter;
 use anim_scene::{
     BitmapInstance, ColorEffect, EaseCurve, Element, Frame, FrameSound, Group, InstanceFilter, Layer, LoopMode, SoundLoop, SoundSync, SymbolInstance,
@@ -27,6 +27,25 @@ pub fn matrix(out: &mut XmlOut, m: Affine) {
         .f_unless("tx", tx, 0.0)
         .f_unless("ty", ty, 0.0);
     out.leaf("Matrix", &attrs);
+    out.close();
+}
+
+/// `<matrix3D><Matrix3D m11 .. m44/></matrix3D>` with the identity's entries left out.
+pub fn matrix_3d(out: &mut XmlOut, m: &Matrix3D) {
+    out.open("matrix3D", &Attrs::new());
+    let names = [
+        ["m11", "m12", "m13", "m14"],
+        ["m21", "m22", "m23", "m24"],
+        ["m31", "m32", "m33", "m34"],
+        ["m41", "m42", "m43", "m44"],
+    ];
+    let mut attrs = Attrs::new();
+    for (row, (values, row_names)) in m.m.iter().zip(names).enumerate() {
+        for (column, (value, name)) in values.iter().zip(row_names).enumerate() {
+            attrs = attrs.f_unless(name, *value, if row == column { 1.0 } else { 0.0 });
+        }
+    }
+    out.leaf("Matrix3D", &attrs);
     out.close();
 }
 
@@ -243,10 +262,16 @@ fn symbol_instance(out: &mut XmlOut, i: &SymbolInstance) {
         .s_opt("blendMode", i.blend_mode.xfl_name())
         .b_unless("isVisible", i.visible, true)
         .b_unless("cacheAsBitmap", i.cache_as_bitmap, false)
+        // Animate omits a zero coordinate unless both are zero.
+        .f_opt("centerPoint3DX", i.center_point_3d.filter(|p| p.x != 0.0 || p.y == 0.0).map(|p| p.x))
+        .f_opt("centerPoint3DY", i.center_point_3d.filter(|p| p.y != 0.0).map(|p| p.y))
         .extra(&i.extra);
     out.open("DOMSymbolInstance", &attrs);
     if i.matrix != Affine::IDENTITY {
         matrix(out, i.matrix);
+    }
+    if let Some(m3) = &i.matrix_3d {
+        matrix_3d(out, m3);
     }
     point(out, "transformationPoint", i.transformation_point);
     color_effect(out, i.color_effect);

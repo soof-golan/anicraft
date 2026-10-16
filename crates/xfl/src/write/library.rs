@@ -187,6 +187,9 @@ impl<'a> Plan<'a> {
             .f_unless("height", doc.height, 400.0)
             .f_unless("frameRate", doc.frame_rate, 24.0)
             .color_unless("backgroundColor", doc.background_color, Rgba8::WHITE)
+            .f_unless("viewAngle3D", doc.perspective_angle, anim_core::projective::DEFAULT_PERSPECTIVE_ANGLE)
+            .f_opt("vanishingPoint3DX", doc.vanishing_point.map(|p| p.x))
+            .f_opt("vanishingPoint3DY", doc.vanishing_point.map(|p| p.y))
             .u("currentTimeline", current)
             .extra(&doc.extra);
         out.open_root("DOMDocument", &attrs);

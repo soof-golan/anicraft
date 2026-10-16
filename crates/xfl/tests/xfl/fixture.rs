@@ -269,7 +269,7 @@ fn tweens_instances_colours_and_filters() {
     assert_eq!(i.blend_mode, BlendMode::Screen);
     assert!(!i.visible && i.cache_as_bitmap);
     assert_eq!(i.transformation_point, anim_core::Point::new(0.5, 0.5));
-    assert_eq!(i.extra.attr("centerPoint3DX"), Some("1.5"));
+    assert_eq!(i.center_point_3d.map(|p| p.x), Some(1.5));
     assert!(matches!(i.color_effect, ColorEffect::Tint { color, amount } if color == Rgba8::opaque(255, 136, 0) && (amount - 0.4).abs() < 1e-6));
     assert_eq!(i.filters.len(), 4);
     assert!(matches!(&i.filters[0], InstanceFilter::Mapped { filter: Filter::Blur { quality: 2, x, y }, .. } if *x == 8.0 && *y == 4.0));

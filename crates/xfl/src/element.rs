@@ -1,6 +1,6 @@
 //! The things inside a keyframe's `<elements>`: shapes, symbol and bitmap instances, text fields and groups.
 
-use anim_core::{Affine, BlendMode, ColorTransform, Rgba8};
+use anim_core::{Affine, BlendMode, ColorTransform, Matrix3D, Point, Rgba8};
 use anim_display::Filter;
 use anim_scene::{
     BitmapInstance, ColorEffect, Element, Extra, Group, InstanceFilter, LoopMode, RawXml, SymbolInstance, SymbolKind, TextAlign, TextElement, TextKind,
@@ -112,9 +112,15 @@ fn read_symbol_instance(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> SymbolInstance
         .unwrap_or(BlendMode::Normal);
     instance.visible = attrs.bool(ctx, "isVisible").unwrap_or(true);
     instance.cache_as_bitmap = attrs.bool(ctx, "cacheAsBitmap").unwrap_or(false);
+    let center_x = attrs.f64(ctx, "centerPoint3DX");
+    let center_y = attrs.f64(ctx, "centerPoint3DY");
+    if center_x.is_some() || center_y.is_some() {
+        instance.center_point_3d = Some(Point::new(center_x.unwrap_or(0.0), center_y.unwrap_or(0.0)));
+    }
     for c in element_children(node) {
         match c.tag_name().name() {
             "matrix" => instance.matrix = read_matrix(ctx, c),
+            "matrix3D" => instance.matrix_3d = read_matrix_3d(ctx, c),
             "transformationPoint" => instance.transformation_point = read_point(ctx, c),
             "color" => {
                 if let Some(effect) = read_color(ctx, c) {
@@ -127,6 +133,30 @@ fn read_symbol_instance(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> SymbolInstance
     }
     attrs.rest(ctx, &mut instance.extra);
     instance
+}
+
+const NAMES: [[&str; 4]; 4] = [
+    ["m11", "m12", "m13", "m14"],
+    ["m21", "m22", "m23", "m24"],
+    ["m31", "m32", "m33", "m34"],
+    ["m41", "m42", "m43", "m44"],
+];
+
+/// Reads `<matrix3D><Matrix3D m11 .. m44/></matrix3D>`; missing entries are the identity's. A matrix with a
+/// non-finite entry is dropped.
+fn read_matrix_3d(ctx: &mut Ctx<'_>, wrapper: Node<'_, '_>) -> Option<Matrix3D> {
+    let node = child(wrapper, "Matrix3D")?;
+    let mut attrs = Attrs::new(node);
+    let mut matrix = Matrix3D::IDENTITY;
+    for (values, names) in matrix.m.iter_mut().zip(NAMES) {
+        for (value, name) in values.iter_mut().zip(names) {
+            if let Some(v) = attrs.f64(ctx, name) {
+                *value = v;
+            }
+        }
+    }
+    attrs.rest_lost(ctx);
+    matrix.is_finite().then_some(matrix)
 }
 
 /// Reads `<color><Color .../></color>` into the style Animate would show in its Color property.
@@ -326,8 +356,20 @@ mod tests {
         assert_eq!(i.filters.len(), 3);
         assert!(matches!(i.filters.first(), Some(InstanceFilter::Mapped { filter: Filter::Blur { quality: 2, .. }, .. })));
         assert!(matches!(i.filters.get(2), Some(InstanceFilter::Raw(r)) if r.tag == "BevelFilter"));
-        assert_eq!(i.extra.attr("centerPoint3DX"), Some("1"));
-        assert_eq!(sink.unknowns.attrs.get("DOMSymbolInstance@centerPoint3DX"), Some(&1));
+        assert_eq!(i.center_point_3d, Some(Point::new(1.0, 0.0)));
+        assert!(sink.unknowns.attrs.is_empty());
+    }
+
+    #[test]
+    fn matrix_3d_and_centre_point_are_modelled() {
+        let (els, sink) = read(
+            r#"<elements><DOMSymbolInstance libraryItemName="a" centerPoint3DX="5" centerPoint3DY="6"><matrix3D><Matrix3D m11="0.5" m33="2" m43="40" m41="10"/></matrix3D></DOMSymbolInstance></elements>"#,
+        );
+        let Some(Element::SymbolInstance(i)) = els.first() else { panic!("instance") };
+        let m = i.matrix_3d.expect("matrix3D");
+        assert_eq!((m.m[0][0], m.m[2][2], m.m[3][2], m.m[3][0], m.m[1][1]), (0.5, 2.0, 40.0, 10.0, 1.0));
+        assert_eq!(i.center_point_3d, Some(Point::new(5.0, 6.0)));
+        assert!(sink.unknowns.attrs.is_empty());
     }
 
     #[test]
