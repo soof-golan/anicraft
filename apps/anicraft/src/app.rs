@@ -296,7 +296,16 @@ impl AniApp {
                     self.doc_action(&ctx, DocAction::TogglePanel(anim_ui::PanelId::Output));
                 }
                 "errors" => {
-                    let first = self.host.session_mut().doc_mut().editor.document.scenes.first_mut().and_then(|s| s.layers.first_mut()).and_then(|l| l.frames.first_mut());
+                    let first = self
+                        .host
+                        .session_mut()
+                        .doc_mut()
+                        .editor
+                        .document
+                        .scenes
+                        .first_mut()
+                        .and_then(|s| s.layers.first_mut())
+                        .and_then(|l| l.frames.first_mut());
                     if let Some(frame) = first {
                         frame.actionscript = Some("function f( { trace(1;".to_owned());
                     }

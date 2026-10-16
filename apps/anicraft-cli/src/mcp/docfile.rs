@@ -522,7 +522,11 @@ const PALETTE: [Rgba8; 6] = [
 ];
 
 fn layers(names: &[&str], frames: u32) -> Vec<Layer> {
-    names.iter().enumerate().map(|(i, name)| layer(name, PALETTE.get(i.checked_rem(PALETTE.len()).unwrap_or(0)).copied().unwrap_or(Rgba8::BLACK), frames)).collect()
+    names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| layer(name, PALETTE.get(i.checked_rem(PALETTE.len()).unwrap_or(0)).copied().unwrap_or(Rgba8::BLACK), frames))
+        .collect()
 }
 
 /// The document of a built-in template.
@@ -555,7 +559,8 @@ pub fn builtin_template(id: &str) -> Result<AniDoc, String> {
             let first = doc.editor.document.scenes.first_mut().ok_or("the new document has no scene")?;
             "Slide 1".clone_into(&mut first.name);
             for n in 2..=5_u32 {
-                edit::add_scene(&mut doc.editor.document, &format!("Slide {n}"), usize::try_from(n.saturating_sub(1)).unwrap_or(0)).map_err(|e| e.to_string())?;
+                edit::add_scene(&mut doc.editor.document, &format!("Slide {n}"), usize::try_from(n.saturating_sub(1)).unwrap_or(0))
+                    .map_err(|e| e.to_string())?;
             }
             doc
         }
@@ -725,7 +730,9 @@ fn settings(doc: &mut AniDoc, params: &Value) -> Out {
     }
     document.frame_rate = spec.fps;
     resize_stage(document, Resize { width: spec.width, height: spec.height, scale_content: p.scale_content, anchor });
-    Ok(json!({ "width": document.width, "height": document.height, "frame_rate": document.frame_rate, "doc_type": doc_type(document).id(), "units": units(document).id() }))
+    Ok(
+        json!({ "width": document.width, "height": document.height, "frame_rate": document.frame_rate, "doc_type": doc_type(document).id(), "units": units(document).id() }),
+    )
 }
 
 #[derive(Deserialize)]
@@ -740,7 +747,8 @@ struct PresetParams {
 fn apply_preset(doc: &mut AniDoc, params: &Value) -> Out {
     let p: PresetParams = parse_params(params)?;
     let preset = find_preset(&p.preset).ok_or_else(|| CommandError::invalid_params(format!("unknown preset {:?}; see document_presets", p.preset)))?;
-    let mut forward = json!({ "width": preset.width, "height": preset.height, "frame_rate": preset.fps, "doc_type": preset.kind.id(), "scale_content": p.scale_content });
+    let mut forward =
+        json!({ "width": preset.width, "height": preset.height, "frame_rate": preset.fps, "doc_type": preset.kind.id(), "scale_content": p.scale_content });
     if let (Some(anchor), Some(map)) = (&p.anchor, forward.as_object_mut()) {
         map.insert("anchor".to_owned(), json!(anchor));
     }
@@ -823,8 +831,10 @@ fn describe(_doc: &mut AniDoc, _params: &Value) -> Out {
             })
         })
         .collect();
-    let types: Vec<Value> = DocType::ALL.iter().map(|t| json!({ "id": t.id(), "name": t.label(), "description": t.description(), "publishes": t.publish_target() })).collect();
-    let templates: Vec<Value> = BUILTIN_TEMPLATES.iter().map(|t| json!({ "id": t.id, "name": t.name, "category": t.category, "description": t.description })).collect();
+    let types: Vec<Value> =
+        DocType::ALL.iter().map(|t| json!({ "id": t.id(), "name": t.label(), "description": t.description(), "publishes": t.publish_target() })).collect();
+    let templates: Vec<Value> =
+        BUILTIN_TEMPLATES.iter().map(|t| json!({ "id": t.id, "name": t.name, "category": t.category, "description": t.description })).collect();
     Ok(json!({ "categories": categories, "document_types": types, "units": Units::ALL.map(Units::id), "builtin_templates": templates }))
 }
 

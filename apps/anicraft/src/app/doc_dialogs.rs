@@ -109,7 +109,11 @@ fn new_document_ui(ui: &mut Ui, state: &mut NewDocState, user: &[crate::template
                             }
                             ui.horizontal(|ui| {
                                 let choice = TemplateChoice::User(t.path.clone());
-                                if ui.selectable_label(state.template.as_ref() == Some(&choice), crate::text(&t.name)).on_hover_text(t.path.display().to_string()).clicked() {
+                                if ui
+                                    .selectable_label(state.template.as_ref() == Some(&choice), crate::text(&t.name))
+                                    .on_hover_text(t.path.display().to_string())
+                                    .clicked()
+                                {
                                     state.template = Some(choice);
                                 }
                                 if ui.small_button("Delete").clicked() {
@@ -531,7 +535,11 @@ pub fn settings_ui(ui: &mut Ui, state: &mut SettingsState, document: &anim_scene
         egui::Grid::new("anchor-grid").spacing([2.0, 2.0]).show(ui, |ui| {
             for (i, anchor) in Anchor::GRID.into_iter().enumerate() {
                 let selected = state.anchor == anchor;
-                if ui.add_sized([24.0, 24.0], egui::Button::selectable(selected, if selected { "o" } else { "" })).on_hover_text(anchor.id().replace('_', " ")).clicked() {
+                if ui
+                    .add_sized([24.0, 24.0], egui::Button::selectable(selected, if selected { "o" } else { "" }))
+                    .on_hover_text(anchor.id().replace('_', " "))
+                    .clicked()
+                {
                     state.anchor = anchor;
                 }
                 if i % 3 == 2 {

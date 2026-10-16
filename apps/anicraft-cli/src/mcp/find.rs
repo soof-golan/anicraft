@@ -230,7 +230,14 @@ impl Walk<'_> {
             return false;
         }
         let number = self.hits.len();
-        self.hits.push(Hit { timeline: at.timeline.clone(), layer: at.layer, frame: at.frame, path: path.to_vec(), what: what.to_owned(), context: snippet(context) });
+        self.hits.push(Hit {
+            timeline: at.timeline.clone(),
+            layer: at.layer,
+            frame: at.frame,
+            path: path.to_vec(),
+            what: what.to_owned(),
+            context: snippet(context),
+        });
         let go = self.apply && self.only.is_none_or(|n| n == number);
         if go {
             self.changed = self.changed.saturating_add(1);
@@ -597,12 +604,19 @@ mod tests {
 
     fn doc_with_text() -> AniDoc {
         let mut s = Session::new(AniDoc::default(), registry());
-        s.execute("draw.rectangle", &json!({ "x": 0, "y": 0, "width": 40, "height": 40, "fill": "#ff0000", "stroke": "#00ff00", "object_drawing": false })).unwrap();
+        s.execute("draw.rectangle", &json!({ "x": 0, "y": 0, "width": 40, "height": 40, "fill": "#ff0000", "stroke": "#00ff00", "object_drawing": false }))
+            .unwrap();
         s.execute("draw.rectangle", &json!({ "x": 50, "y": 0, "width": 40, "height": 40, "fill": "#ff0000", "object_drawing": true })).unwrap();
         let mut doc = s.doc().clone();
         let frame = &mut doc.editor.document.scenes[0].layers[0].frames[0];
         let run = anim_scene::TextRun::new("Hello world, hello World", "Arial", 24.0);
-        frame.elements.push(Element::Text(Box::new(anim_scene::TextElement::new(anim_scene::TextKind::Static, anim_core::Affine::IDENTITY, 200.0, 40.0, vec![run]))));
+        frame.elements.push(Element::Text(Box::new(anim_scene::TextElement::new(
+            anim_scene::TextKind::Static,
+            anim_core::Affine::IDENTITY,
+            200.0,
+            40.0,
+            vec![run],
+        ))));
         frame.label = Some("intro".to_owned());
         doc.editor.document.scenes[0].layers[0].name = "Hello layer".to_owned();
         doc

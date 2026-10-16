@@ -18,8 +18,8 @@ type AutosaveJob = (u64, AniDoc, Option<PathBuf>, String, (usize, usize, u64));
 
 use super::AniApp;
 use crate::docs::{
-    After, DOC_PANELS, DocAction, DocDialog, DocView, ERRORS_PANEL, HISTORY_PANEL, Level, NewDocState, NewTab, Parked, SettingsState, Step, TabEvent, TabInfo,
-    PlayToggle, TemplateChoice, tab_title,
+    After, DOC_PANELS, DocAction, DocDialog, DocView, ERRORS_PANEL, HISTORY_PANEL, Level, NewDocState, NewTab, Parked, PlayToggle, SettingsState, Step,
+    TabEvent, TabInfo, TemplateChoice, tab_title,
 };
 use crate::menus::MenuAction;
 use crate::state::Dialog;
@@ -177,7 +177,12 @@ impl AniApp {
             DocAction::HistoryReplay { from, to } => self.history_replay(from, to),
             DocAction::SaveSteps { from, to, name } => {
                 let steps = self.recorded_steps(from, to);
-                let saved = self.docs.prefs.commands_dir().ok_or_else(|| "this system has no folder for commands".to_owned()).and_then(|d| crate::macros::save(&d, &name, &steps));
+                let saved = self
+                    .docs
+                    .prefs
+                    .commands_dir()
+                    .ok_or_else(|| "this system has no folder for commands".to_owned())
+                    .and_then(|d| crate::macros::save(&d, &name, &steps));
                 match saved {
                     Ok(()) => {
                         self.status(format!("saved command {name:?}"));
@@ -187,7 +192,12 @@ impl AniApp {
                 }
             }
             DocAction::RunCommand(name) => {
-                let steps = self.docs.prefs.commands_dir().ok_or_else(|| "this system has no folder for commands".to_owned()).and_then(|d| crate::macros::load(&d, &name));
+                let steps = self
+                    .docs
+                    .prefs
+                    .commands_dir()
+                    .ok_or_else(|| "this system has no folder for commands".to_owned())
+                    .and_then(|d| crate::macros::load(&d, &name));
                 match steps {
                     Ok(steps) => {
                         let mut done = 0_usize;
@@ -360,7 +370,8 @@ impl AniApp {
             return;
         }
         let existing = self.docs.tabs.order.iter().copied().find(|id| {
-            let session_path = if *id == self.docs.tabs.active { self.host.session().path() } else { self.docs.tabs.parked(*id).and_then(|p| p.session.path()) };
+            let session_path =
+                if *id == self.docs.tabs.active { self.host.session().path() } else { self.docs.tabs.parked(*id).and_then(|p| p.session.path()) };
             session_path == Some(path.as_path())
         });
         if let Some(id) = existing {
@@ -472,7 +483,8 @@ impl AniApp {
     }
 
     fn open_save_template(&mut self) {
-        self.ui.docs.dialog = Some(DocDialog::SaveTemplate { name: "My template".to_owned(), category: crate::templates::DEFAULT_CATEGORY.to_owned(), error: None });
+        self.ui.docs.dialog =
+            Some(DocDialog::SaveTemplate { name: "My template".to_owned(), category: crate::templates::DEFAULT_CATEGORY.to_owned(), error: None });
     }
 
     /// OK of the Save as Template dialog.
@@ -560,7 +572,13 @@ impl AniApp {
         let mut todo: Vec<AutosaveJob> = Vec::new();
         let active = self.docs.tabs.active;
         for &id in &self.docs.tabs.order {
-            let (session, edits) = if id == active { (self.host.session(), self.edits) } else if let Some(p) = self.docs.tabs.parked(id) { (&p.session, 0) } else { continue };
+            let (session, edits) = if id == active {
+                (self.host.session(), self.edits)
+            } else if let Some(p) = self.docs.tabs.parked(id) {
+                (&p.session, 0)
+            } else {
+                continue;
+            };
             if !session.is_dirty() {
                 continue;
             }

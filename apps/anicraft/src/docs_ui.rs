@@ -51,7 +51,11 @@ pub fn history_panel(ui: &mut Ui, view: &HistoryView, state: &mut DocsUi) -> Vec
         {
             out.push(DocAction::HistoryReplay { from, to });
         }
-        if ui.add_enabled(can_replay, egui::Button::new("Save as Command...")).on_hover_text("Keep the selected steps as a command in the Commands menu").clicked() {
+        if ui
+            .add_enabled(can_replay, egui::Button::new("Save as Command..."))
+            .on_hover_text("Keep the selected steps as a command in the Commands menu")
+            .clicked()
+        {
             state.save_command_open = true;
         }
     });
@@ -166,7 +170,11 @@ pub fn errors_panel(ui: &mut Ui, state: &DocsUi) -> Vec<DocAction> {
         for (i, problem) in state.problems.iter().enumerate() {
             let tag = if problem.level == Level::Error { "Error" } else { "Warning" };
             let text = if problem.place.is_empty() { format!("{tag}: {}", problem.message) } else { format!("{tag}: {} ({})", problem.message, problem.place) };
-            if ui.add(egui::Button::new(RichText::new(crate::text(&text)).color(level_colour(problem.level, ui))).frame(false)).on_hover_text("Go to this place").clicked() {
+            if ui
+                .add(egui::Button::new(RichText::new(crate::text(&text)).color(level_colour(problem.level, ui))).frame(false))
+                .on_hover_text("Go to this place")
+                .clicked()
+            {
                 out.push(DocAction::GotoProblem(i));
             }
         }

@@ -521,9 +521,16 @@ pub enum DocAction {
     /// History panel: go to the state with this many steps applied (0 is the document as opened).
     HistoryJump(usize),
     /// History panel: run the commands of these steps (0-based, oldest first, inclusive) again.
-    HistoryReplay { from: usize, to: usize },
+    HistoryReplay {
+        from: usize,
+        to: usize,
+    },
     /// History panel: keep these steps as a named command.
-    SaveSteps { from: usize, to: usize, name: String },
+    SaveSteps {
+        from: usize,
+        to: usize,
+        name: String,
+    },
     /// Commands menu: run a saved command.
     RunCommand(String),
     /// Commands menu: delete a saved command.
@@ -537,9 +544,17 @@ pub enum DocAction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DocDialog {
     New(NewDocState),
-    SaveTemplate { name: String, category: String, error: Option<String> },
+    SaveTemplate {
+        name: String,
+        category: String,
+        error: Option<String>,
+    },
     /// Save changes first? `dirty` lists the tabs still to ask about, `close` all the tabs that will be closed.
-    SaveChanges { close: Vec<u64>, dirty: Vec<u64>, after: After },
+    SaveChanges {
+        close: Vec<u64>,
+        dirty: Vec<u64>,
+        after: After,
+    },
     Revert,
     Recover(Vec<Orphan>),
 }

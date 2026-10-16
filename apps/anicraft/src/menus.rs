@@ -304,7 +304,10 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Find and Replace...", "Ctrl+F", true), MenuAction::Doc(DocAction::Find));
             push(item(ui, "Find Next", "F3", true), MenuAction::Doc(DocAction::FindAgain));
             ui.separator();
-            push(check(ui, "History", "Ctrl+F10", view.open_doc_panels.contains(&crate::docs::HISTORY_PANEL)), MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL)));
+            push(
+                check(ui, "History", "Ctrl+F10", view.open_doc_panels.contains(&crate::docs::HISTORY_PANEL)),
+                MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL)),
+            );
         });
         ui.menu_button("Commands", |ui| {
             push(item(ui, "Open History Panel", "", true), MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL)));

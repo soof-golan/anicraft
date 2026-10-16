@@ -14,8 +14,8 @@ pub mod commands;
 pub mod doc;
 pub mod docfile;
 pub mod editing;
-pub mod timeline_ops;
 pub mod find;
+pub mod timeline_ops;
 
 use std::fs::File;
 use std::io::{self, Write as _};

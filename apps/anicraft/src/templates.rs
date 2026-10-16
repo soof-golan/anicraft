@@ -20,7 +20,8 @@ pub const DEFAULT_CATEGORY: &str = "My Templates";
 /// A file or folder name made from free text: no separators, no leading dots, bounded length.
 #[must_use]
 pub fn clean_name(text: &str) -> String {
-    let cleaned: String = text.chars().map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
+    let cleaned: String =
+        text.chars().map(|c| if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect();
     cleaned.trim().trim_start_matches('.').chars().take(80).collect::<String>().trim().to_owned()
 }
 
