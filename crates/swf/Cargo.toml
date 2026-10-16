@@ -18,7 +18,15 @@ flate2 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
+[[bench]]
+name = "swf"
+harness = false
+
 [dev-dependencies]
+# The benchmarks evaluate frames of the sample files into display lists.
+anicraft-xfl = { workspace = true }
+anim-timeline = { workspace = true }
+criterion = { version = "0.8", default-features = false }
 # The visual tests render the same display lists with anim-render and compare with Ruffle's picture of the SWF.
 anim-render = { workspace = true }
 png = { workspace = true }

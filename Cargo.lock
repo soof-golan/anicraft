@@ -323,10 +323,13 @@ dependencies = [
 name = "anicraft-swf"
 version = "0.1.0"
 dependencies = [
+ "anicraft-xfl",
  "anim-core",
  "anim-display",
  "anim-render",
  "anim-shape",
+ "anim-timeline",
+ "criterion",
  "flate2",
  "png",
  "proptest",
