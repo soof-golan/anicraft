@@ -2,7 +2,7 @@
 
 use anim_core::{Rgba8, num};
 use anim_display::{Cap, Join, StrokeScale};
-use anim_scene::ShapeElement;
+use anim_scene::{PrimitiveKind, ShapeElement};
 use anim_shape::{FillStyle, OtherStroke, StrokeKind, StrokeStyle};
 use anim_ui::property::{PropValue, Property};
 
@@ -114,10 +114,107 @@ pub(super) fn describe(s: &ShapeElement, out: &mut Vec<Property>) {
         None => out.push(Property::new("stroke_type", "Type", PropValue::Text("None".to_owned())).in_section(STROKE).read_only()),
     }
     out.push(Property::new("drawing_object", "Object drawing", PropValue::Bool(s.is_drawing_object)).in_section("Mode"));
+    if let Some(primitive) = &s.primitive {
+        describe_primitive(&primitive.kind, out);
+    }
+}
+
+const RADII: [(&str, &str); 4] = [
+    ("prim_radius_tl", "Top left radius"),
+    ("prim_radius_tr", "Top right radius"),
+    ("prim_radius_br", "Bottom right radius"),
+    ("prim_radius_bl", "Bottom left radius"),
+];
+
+fn px_row(id: &str, label: &str, value: f64, max: f64, section: &str) -> Property {
+    Property::new(id, label, PropValue::number_in(value, 0.0, max).precision(1, 0.5).with_suffix(" px")).in_section(section)
+}
+
+/// The rows of a Rectangle or Oval Primitive.
+fn describe_primitive(kind: &PrimitiveKind, out: &mut Vec<Property>) {
+    match kind {
+        PrimitiveKind::Rectangle(r) => {
+            let section = "Rectangle options";
+            out.push(px_row("prim_width", "Width", r.width, 16000.0, section));
+            out.push(px_row("prim_height", "Height", r.height, 16000.0, section));
+            for ((id, label), radius) in RADII.into_iter().zip(r.radii) {
+                out.push(px_row(id, label, radius, 1000.0, section));
+            }
+            out.push(Property::new("prim_lock", "Same radius for all corners", PropValue::Bool(r.lock)).in_section(section));
+        }
+        PrimitiveKind::Oval(o) => {
+            let section = "Oval options";
+            out.push(px_row("prim_width", "Width", o.width, 16000.0, section));
+            out.push(px_row("prim_height", "Height", o.height, 16000.0, section));
+            let degrees = |id: &str, label: &str, value: f64| {
+                Property::new(id, label, PropValue::number_in(value, 0.0, 360.0).precision(1, 0.5).with_suffix(" deg")).in_section(section)
+            };
+            out.push(degrees("prim_start", "Start angle", o.start_angle));
+            out.push(degrees("prim_end", "End angle", o.end_angle));
+            out.push(
+                Property::new("prim_inner", "Inner radius", PropValue::number_in(o.inner_radius, 0.0, 99.0).precision(1, 0.5).with_suffix(" %"))
+                    .in_section(section),
+            );
+            out.push(Property::new("prim_close", "Close path", PropValue::Bool(o.close_path)).in_section(section));
+        }
+    }
+}
+
+/// Applies an edit of a primitive's parameters and regenerates its shape.
+fn apply_primitive(s: &mut ShapeElement, id: &str, value: &PropValue) -> Result<(), String> {
+    let mut primitive = s.primitive.as_deref().cloned().ok_or_else(|| "this shape is not a primitive".to_owned())?;
+    let amount = || number(value).filter(|v| v.is_finite() && *v >= 0.0).ok_or_else(|| wrong(id));
+    match (&mut primitive.kind, id) {
+        (PrimitiveKind::Rectangle(r), "prim_width") => r.width = amount()?,
+        (PrimitiveKind::Rectangle(r), "prim_height") => r.height = amount()?,
+        (PrimitiveKind::Rectangle(r), "prim_lock") => {
+            r.lock = boolean(value).ok_or_else(|| wrong(id))?;
+            if r.lock {
+                r.radii = [r.radii.first().copied().unwrap_or(0.0); 4];
+            }
+        }
+        (PrimitiveKind::Rectangle(r), radius) => {
+            let index = RADII.iter().position(|(name, _)| *name == radius).ok_or_else(|| format!("rectangle primitives have no property {radius:?}"))?;
+            let v = amount()?;
+            if r.lock {
+                r.radii = [v; 4];
+            } else if let Some(slot) = r.radii.get_mut(index) {
+                *slot = v;
+            }
+        }
+        (PrimitiveKind::Oval(o), "prim_width") => o.width = amount()?,
+        (PrimitiveKind::Oval(o), "prim_height") => o.height = amount()?,
+        (PrimitiveKind::Oval(o), "prim_start") => o.start_angle = amount()?,
+        (PrimitiveKind::Oval(o), "prim_end") => o.end_angle = amount()?,
+        (PrimitiveKind::Oval(o), "prim_inner") => o.inner_radius = amount()?.min(99.0),
+        (PrimitiveKind::Oval(o), "prim_close") => o.close_path = boolean(value).ok_or_else(|| wrong(id))?,
+        _ => return Err(format!("this primitive has no property {id:?}")),
+    }
+    let (w, h) = primitive.kind.size();
+    s.set_primitive(primitive);
+    s.transformation_point = Some(anim_core::Point::new(w / 2.0, h / 2.0));
+    Ok(())
+}
+
+/// After a style edit the primitive's own fill and stroke follow the shape's.
+fn sync_primitive_styles(s: &mut ShapeElement) {
+    if let Some(p) = s.primitive.as_mut() {
+        p.fill = s.shape.fills.first().cloned();
+        p.stroke = s.shape.strokes.first().cloned();
+    }
 }
 
 /// Applies a shape edit to every fill or stroke the shape has (a shape drawn in merge mode may have several).
 pub(super) fn apply(s: &mut ShapeElement, id: &str, value: &PropValue) -> Result<(), String> {
+    if id.starts_with("prim_") {
+        return apply_primitive(s, id, value);
+    }
+    apply_style(s, id, value)?;
+    sync_primitive_styles(s);
+    Ok(())
+}
+
+fn apply_style(s: &mut ShapeElement, id: &str, value: &PropValue) -> Result<(), String> {
     match id {
         "fill" => {
             let c = colour(value).ok_or_else(|| wrong(id))?;

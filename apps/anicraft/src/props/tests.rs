@@ -445,10 +445,58 @@ fn component_parameters_are_rows_and_are_written_back_to_the_parameter_xml() {
     assert!(apply(&mut doc, "param.missing", &PropValue::Text("x".to_owned())).is_err());
 }
 
+fn primitive_doc(oval: bool) -> AniDoc {
+    use anim_scene::{OvalPrimitive, Primitive, PrimitiveKind, RectPrimitive, ShapeElement};
+    let kind = if oval {
+        PrimitiveKind::Oval(OvalPrimitive { width: 80.0, height: 60.0, start_angle: 0.0, end_angle: 0.0, inner_radius: 0.0, close_path: true })
+    } else {
+        PrimitiveKind::Rectangle(RectPrimitive { width: 80.0, height: 60.0, radii: [0.0; 4], lock: false })
+    };
+    let primitive = Primitive { kind, fill: Some(FillStyle::Solid(RED)), stroke: Some(StrokeStyle::plain(2.0, Rgba8::BLACK)) };
+    doc_with(Element::Shape(ShapeElement::from_primitive(primitive, Affine::translate((10.0, 10.0)))))
+}
+
+#[test]
+fn a_rectangle_primitive_shows_and_edits_its_parameters() {
+    let mut doc = primitive_doc(false);
+    let ids = rows(&doc);
+    for id in ["prim_width", "prim_height", "prim_radius_tl", "prim_radius_br", "prim_lock"] {
+        assert!(ids.iter().any(|i| i == id), "{id} in {ids:?}");
+    }
+    set(&mut doc, "prim_radius_tl", json!(20.0));
+    set(&mut doc, "prim_width", json!(120.0));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    let b = s.shape.bounds().unwrap();
+    assert!((b.width() - 120.0).abs() < 0.1, "{b:?}");
+    assert!(s.shape.fill_at(anim_core::Point::new(1.0, 1.0)).is_none(), "the rounded corner is cut away");
+    // Locking the radii copies the first one to all corners.
+    set(&mut doc, "prim_lock", json!(true));
+    set(&mut doc, "prim_radius_br", json!(5.0));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    let Some(anim_scene::PrimitiveKind::Rectangle(r)) = s.primitive.as_ref().map(|p| &p.kind) else { panic!("not a rectangle") };
+    assert_eq!(r.radii, [5.0; 4]);
+    // A fill change reaches the primitive, so the next parameter edit keeps the colour.
+    set(&mut doc, "fill", json!("#00ff00"));
+    set(&mut doc, "prim_height", json!(90.0));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    assert_eq!(s.shape.fills.first(), Some(&FillStyle::Solid(Rgba8 { r: 0, g: 255, b: 0, a: 255 })));
+}
+
+#[test]
+fn an_oval_primitive_edits_its_arc() {
+    let mut doc = primitive_doc(true);
+    set(&mut doc, "prim_end", json!(90.0));
+    set(&mut doc, "prim_inner", json!(50.0));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    let Some(anim_scene::PrimitiveKind::Oval(o)) = s.primitive.as_ref().map(|p| &p.kind) else { panic!("not an oval") };
+    assert_eq!((o.end_angle, o.inner_radius), (90.0, 50.0));
+    assert!(s.shape.bounds().unwrap().width() < 80.0, "a quarter ring is narrower than the whole oval");
+}
+
 #[test]
 fn every_row_the_panel_shows_can_be_set_to_its_own_value() {
     // A panel edit that commits the value a row already holds must never fail, whatever the selection.
-    let mut docs = vec![AniDoc::default(), doc_with_instance(), component_doc(), shape_doc(), text_doc("abc")];
+    let mut docs = vec![AniDoc::default(), doc_with_instance(), component_doc(), shape_doc(), text_doc("abc"), primitive_doc(false), primitive_doc(true)];
     let mut with_filters = doc_with_instance();
     set(&mut with_filters, "filter.add", json!("Drop Shadow"));
     set(&mut with_filters, "effect", json!("Advanced"));

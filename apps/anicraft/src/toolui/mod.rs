@@ -111,13 +111,16 @@ pub struct ToolUi {
 }
 
 /// Tools the toolbox groups under another tool's button, as `(tool, group's first tool)`.
-const GROUPS: [(&str, &str); 7] = [
+const GROUPS: [(&str, &str); 10] = [
     ("gradient_transform", "transform"),
     ("translation_3d", "rotation_3d"),
     ("oval", "rect"),
     ("rect_primitive", "rect"),
     ("oval_primitive", "rect"),
     ("polystar", "rect"),
+    ("add_anchor", "pen"),
+    ("delete_anchor", "pen"),
+    ("convert_anchor", "pen"),
     ("ink", "bucket"),
 ];
 
@@ -129,6 +132,12 @@ pub fn with_extra_tools(mut tools: Vec<ToolItem>) -> Vec<ToolItem> {
         ("gradient_transform", ToolItem::new("rotation_3d", "3D Rotation Tool", Icon::FreeTransform, Some('w'))),
         ("rotation_3d", ToolItem::new("translation_3d", "3D Translation Tool", Icon::FreeTransform, Some('g'))),
         ("bucket", ToolItem::new("ink", "Ink Bottle Tool", Icon::PaintBucket, Some('s'))),
+        ("pen", ToolItem::new("add_anchor", "Add Anchor Point Tool", Icon::AddAnchor, Some('='))),
+        ("add_anchor", ToolItem::new("delete_anchor", "Delete Anchor Point Tool", Icon::DeleteAnchor, Some('-'))),
+        ("delete_anchor", ToolItem::new("convert_anchor", "Convert Anchor Point Tool", Icon::ConvertAnchor, Some('c'))),
+        ("oval", ToolItem::new("rect_primitive", "Rectangle Primitive Tool", Icon::RectanglePrimitive, None)),
+        ("rect_primitive", ToolItem::new("oval_primitive", "Oval Primitive Tool", Icon::OvalPrimitive, None)),
+        ("oval_primitive", ToolItem::new("polystar", "PolyStar Tool", Icon::PolyStar, None)),
     ];
     for (after, item) in extras {
         if tools.iter().any(|t| t.id == item.id) {
@@ -170,10 +179,20 @@ mod tests {
         let ids = |g: &[&ToolItem]| g.iter().map(|t| t.id.clone()).collect::<Vec<_>>();
         assert!(grouped.iter().any(|g| ids(g) == ["transform", "gradient_transform"]));
         assert!(grouped.iter().any(|g| ids(g) == ["rotation_3d", "translation_3d"]));
-        assert!(grouped.iter().any(|g| ids(g) == ["rect", "oval"]));
+        assert!(grouped.iter().any(|g| ids(g) == ["rect", "oval", "rect_primitive", "oval_primitive", "polystar"]));
+        assert!(grouped.iter().any(|g| ids(g) == ["pen", "add_anchor", "delete_anchor", "convert_anchor"]));
         assert!(grouped.iter().any(|g| ids(g) == ["bucket", "ink"]));
         // Every tool shows up in exactly one group.
         assert_eq!(grouped.iter().map(Vec::len).sum::<usize>(), tools.len());
+    }
+
+    #[test]
+    fn every_toolbox_button_but_the_camera_selects_a_working_tool() {
+        for tool in with_extra_tools(anim_ui::toolbar::animate_tools()) {
+            if tool.id != "camera" {
+                assert!(anicraft_tools::ToolId::from_toolbar_id(&tool.id).is_some(), "{} has no tool behind it", tool.id);
+            }
+        }
     }
 
     #[test]

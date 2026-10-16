@@ -12,24 +12,24 @@ repository = "https://github.com/soof-golan/anicraft"
 [workspace.dependencies]
 # Engine crates from anicraft-libs (see its ARCHITECTURE.md for what each one owns), pinned to the v0.1.0 commit.
 # To move to newer engine work, change every rev below to the new commit and run `cargo update`.
-anim-core = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-display = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-archive = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-shape = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-scene = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-morph = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-text = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-timeline = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-rig = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-render = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-audio = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-artwork = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-export = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-video = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-ui = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-session = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-mcp = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
-anim-script = { git = "https://github.com/soof-golan/anicraft-libs", rev = "67b6e601e8dc4b2eb1f66f6196a73d13a68eb47c" }
+anim-core = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-display = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-archive = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-shape = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-scene = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-morph = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-text = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-timeline = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-rig = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-render = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-audio = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-artwork = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-export = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-video = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-ui = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-session = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-mcp = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
+anim-script = { git = "https://github.com/soof-golan/anicraft-libs", rev = "8152d1b83d6eb6de056952993425cc56a83612cd" }
 
 # Crates of this repository.
 anicraft-xfl = { path = "crates/xfl" }
