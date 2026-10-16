@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AniCraft
+GenericName=2D animation editor
+Comment=Animate-compatible 2D animation editor
+Exec=anicraft %F
+Icon=anicraft
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;
+MimeType=application/x-anicraft-fla;application/x-anicraft-xfl;
+StartupWMClass=anicraft

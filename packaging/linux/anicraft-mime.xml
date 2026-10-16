@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-anicraft-fla">
+    <comment>Animate document (FLA)</comment>
+    <glob pattern="*.fla"/>
+  </mime-type>
+  <mime-type type="application/x-anicraft-xfl">
+    <comment>Animate document (XFL)</comment>
+    <glob pattern="*.xfl"/>
+  </mime-type>
+</mime-info>

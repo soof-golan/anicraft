@@ -1,8 +1,9 @@
 name: release
 
 # Push a tag like v0.1.0 to build the app and the CLI on Linux and Windows (x86_64 and Arm64) and macOS (Apple silicon
-# and Intel), and attach
-# the packages plus SHA256SUMS to a GitHub pre-release. The binaries are unsigned (no signing secrets are used).
+# and Intel), and attach the packages plus SHA256SUMS to a GitHub pre-release. Each platform gets an archive and an
+# installer: a .deb and an AppImage on Linux, a .dmg per architecture on macOS, a setup.exe (NSIS, Start-menu shortcuts,
+# .fla/.xfl associations) on Windows. The binaries are unsigned (no signing secrets are used).
 
 on:
   push:
@@ -96,6 +97,24 @@ jobs:
               (cd stage && 7z a -tzip "../dist/${PKG}.zip" "${PKG}")
               ;;
           esac
+          printf 'PKG=%s\nVERSION=%s\n' "${PKG}" "${VERSION}" >> "$GITHUB_ENV"
+          ls -l dist
+      - name: Installer (Linux .deb and AppImage)
+        if: runner.os == 'Linux'
+        run: bash packaging/linux/build-linux-packages.sh anicraft "${VERSION}" "stage/${PKG}" dist
+      - name: Installer (macOS .dmg)
+        if: runner.os == 'macOS'
+        run: bash packaging/macos/build-dmg.sh AniCraft "stage/${PKG}" "dist/${PKG}.dmg"
+      - name: Installer (Windows setup.exe)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v makensis >/dev/null; then
+            if [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then choco install nsis -y --no-progress; fi
+            export PATH="/c/Program Files (x86)/NSIS:$PATH"
+          fi
+          makensis -V2 "-DVERSION=${VERSION}" "-DSTAGE=stage/${PKG}" "-DOUTFILE=dist/${PKG}-setup.exe" packaging/windows/anicraft.nsi
           ls -l dist
       - uses: actions/upload-artifact@v5
         with:

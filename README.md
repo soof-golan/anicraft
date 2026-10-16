@@ -31,9 +31,25 @@ real Animate documents; see [Known gaps](#known-gaps).
 
 ## Install
 
-Download a package from the [releases page](https://github.com/soof-golan/anicraft/releases): Linux `tar.gz`, macOS
-(Apple silicon and Intel) and Windows `zip`, with `SHA256SUMS`. The binaries are unsigned: on macOS right-click the app
-and choose Open the first time; on Windows choose More info, then Run anyway in SmartScreen.
+Download a package from the [releases page](https://github.com/soof-golan/anicraft/releases) and check it against
+`SHA256SUMS`:
+
+| Platform | Installer | Also |
+| --- | --- | --- |
+| Linux (x86_64) | `.AppImage` (`chmod +x`, then run it) or `.deb` (`sudo apt install ./anicraft_*.deb`) | `tar.gz` |
+| macOS | `.dmg` for Apple silicon (`macos-arm64`) or Intel (`macos-x86_64`): drag AniCraft to Applications | `zip` |
+| Windows (x86_64) | `-setup.exe`: Start-menu shortcuts, opens `.fla` and `.xfl` files | `zip` |
+
+The `.deb` and the Windows installer register `.fla` and `.xfl` so a double click opens them in AniCraft; the `.deb`
+also puts `anicraft` and `anicraft-cli` on the `PATH`.
+
+The binaries are unsigned (a deliberate choice), so each OS asks for confirmation the first time:
+
+- **macOS Gatekeeper**: "AniCraft cannot be opened". Open System Settings, Privacy & Security, scroll to the message
+  about AniCraft and choose Open Anyway; or right-click the app, choose Open, then Open; or run
+  `xattr -dr com.apple.quarantine /Applications/AniCraft.app`.
+- **Windows SmartScreen**: "Windows protected your PC". Choose More info, then Run anyway.
+- **Linux**: no prompt. An AppImage needs the executable bit and FUSE 2 (or run it with `--appimage-extract-and-run`).
 
 ## Using it
 
@@ -85,7 +101,6 @@ from `anicraft-libs`, pinned by git rev in `Cargo.toml`.
   samples. It has not been checked in Adobe's Flash Player.
 - Some panels (properties, library preview) are basic.
 - Large documents are slow to export (software rendering and encoding).
-- Binaries are unsigned and there is no installer.
 
 ## Crates
 
