@@ -184,6 +184,35 @@ fn derwood_loads_text_and_sounds() {
     assert!(doc.publish_settings_xml.is_some());
 }
 
+/// The survey the ActionScript support is scoped from: how many frame scripts and component instances the samples
+/// hold. The numbers are printed with `--nocapture`.
+#[test]
+fn samples_script_and_component_survey() {
+    for name in ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"] {
+        let Some(path) = sample(name) else {
+            continue;
+        };
+        let loaded = read_with(&path, &ReadOptions { load_media: false, ..ReadOptions::default() }).unwrap();
+        let mut scripts = Vec::new();
+        let mut components = 0usize;
+        for timeline in all_timelines(&loaded.document) {
+            for layer in &timeline.layers {
+                for frame in &layer.frames {
+                    if let Some(s) = &frame.actionscript {
+                        scripts.push(s.clone());
+                    }
+                }
+            }
+        }
+        for_each_element(&loaded.document, &mut |e| {
+            if let Element::SymbolInstance(i) = e {
+                components += usize::from(i.component.is_some());
+            }
+        });
+        println!("survey {name}: {} frame scripts, {components} component instances, first scripts {:?}", scripts.len(), scripts.iter().take(5).collect::<Vec<_>>());
+    }
+}
+
 #[test]
 fn reading_without_media_is_faster_and_leaves_ids_empty() {
     let Some(path) = sample("unicorn_4AE.fla") else {
