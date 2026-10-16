@@ -29,6 +29,7 @@ anim-export = { workspace = true }
 anim-mcp = { workspace = true }
 anim-render = { workspace = true }
 anim-scene = { workspace = true }
+anim-script = { workspace = true }
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
 anim-timeline = { workspace = true }
@@ -48,6 +49,7 @@ harness = false
 [dev-dependencies]
 anim-shape = { workspace = true }
 base64 = "0.22"
+flate2 = { workspace = true }
 criterion = { version = "0.8", default-features = false }
 png = { workspace = true }
 tempfile = "3"

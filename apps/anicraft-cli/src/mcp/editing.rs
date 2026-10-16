@@ -137,8 +137,11 @@ fn timeline_commands() -> Vec<CommandSpec<AniDoc>> {
             .describe("Attaches a library sound to the keyframe at `frame` (or clears it when `sound` is omitted). `sync`: event (default), start, stop, stream; `repeat` plays it that many times in total; `forever` loops it.")
             .with_schema(concat!(r#"{"type":"object","additionalProperties":false,"required":["layer","frame"],"properties":{"#, r#""scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based"}"#, r#","sound":{"type":"string","description":"library name of a sound"},"sync":{"enum":["event","start","stop","stream"]},"repeat":{"type":"integer","minimum":1,"maximum":10000},"forever":{"type":"boolean"}}}"#)),
         CommandSpec::new("timeline.set_script", "Set Frame Script", set_script)
-            .describe("Sets the ActionScript of the keyframe at `frame` (kept verbatim; AniCraft does not run it). An empty `script` clears it.")
+            .describe("Sets the ActionScript of the keyframe covering `frame` (a blank keyframe is made first when `frame` is inside a span). The text is kept verbatim in the file; Test Movie and SWF export use the supported subset (timeline control, frame labels, button handlers, trace). An empty `script` clears it.")
             .with_schema(concat!(r#"{"type":"object","additionalProperties":false,"required":["layer","frame","script"],"properties":{"#, r#""scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based"}"#, r#","script":{"type":"string"}}}"#)),
+        CommandSpec::new("timeline.set_component_param", "Set Component Parameter", set_component_param)
+            .describe("Sets a parameter of a component instance (a symbol instance with parameters, such as a Button or CheckBox component) addressed by `layer`, 1-based `frame` of its keyframe and `index` in the keyframe. `value` is the parameter's text (`true`/`false` for Booleans). The element query lists the parameters.")
+            .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","frame","index","param","value"],"properties":{"scene":{"type":"integer","minimum":0},"symbol":{"type":"string"},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"index":{"type":"integer","minimum":0},"param":{"type":"string"},"value":{"type":"string"}}}"#),
         CommandSpec::new("timeline.move_keyframe", "Move Keyframe", move_keyframe)
             .describe("Moves the keyframe at `from` to the empty frame `to` on a layer.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","from","to"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"from":{"type":"integer","minimum":1},"to":{"type":"integer","minimum":1}}}"#),
@@ -949,9 +952,30 @@ struct ScriptParams {
 fn set_script(doc: &mut AniDoc, params: &Value) -> Out {
     let p: ScriptParams = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    let frame = edit::keyframe_mut(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?).map_err(failed)?;
-    frame.actionscript = Some(p.script.clone()).filter(|s| !s.is_empty());
+    edit::set_frame_script(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, Some(&p.script)).map_err(failed)?;
     Ok(json!({ "layer": p.layer, "frame": p.frame, "bytes": p.script.len() }))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComponentParamParams {
+    scene: Option<usize>,
+    symbol: Option<String>,
+    layer: usize,
+    frame: u32,
+    index: usize,
+    param: String,
+    value: String,
+}
+
+fn set_component_param(doc: &mut AniDoc, params: &Value) -> Out {
+    let p: ComponentParamParams = parse_params(params)?;
+    let id = match &p.symbol {
+        Some(name) => TimelineId::Symbol(name.clone()),
+        None => timeline(doc, p.scene)?,
+    };
+    edit::set_component_param(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, p.index, &p.param, &p.value).map_err(failed)?;
+    Ok(json!({ "layer": p.layer, "frame": p.frame, "index": p.index, "param": p.param, "value": p.value }))
 }
 
 #[derive(Deserialize)]

@@ -15,6 +15,7 @@ pub mod doc;
 pub mod docfile;
 pub mod editing;
 pub mod find;
+mod script;
 pub mod timeline_ops;
 
 use std::fs::File;
@@ -212,7 +213,14 @@ fn element_json(index: usize, element: &anim_scene::Element) -> Value {
     match element {
         Element::Shape(_) => json!({ "index": index, "kind": "shape" }),
         Element::SymbolInstance(i) => {
-            json!({ "index": index, "kind": "symbol", "item": i.library_item_name, "item_label": anicraft_xfl::display_name(&i.library_item_name), "name": i.name })
+            let mut row = json!({ "index": index, "kind": "symbol", "item": i.library_item_name, "item_label": anicraft_xfl::display_name(&i.library_item_name), "name": i.name });
+            if let (Some(component), Some(map)) = (&i.component, row.as_object_mut()) {
+                map.insert(
+                    "component".into(),
+                    json!(component.params().iter().map(|p| json!({ "id": p.id, "value": p.value, "type": p.kind })).collect::<Vec<_>>()),
+                );
+            }
+            row
         }
         Element::Bitmap(b) => {
             json!({ "index": index, "kind": "bitmap", "item": b.library_item_name, "item_label": anicraft_xfl::display_name(&b.library_item_name) })
@@ -267,6 +275,22 @@ impl AppHooks<AniDoc> for AniHooks {
                 "properties": { "scene": scene, "symbol": { "type": "string", "description": "library name of a symbol, to read its own timeline" } }
             })),
             QuerySpec::new(
+                "frame_script",
+                "The ActionScript of the keyframe covering `frame` of `layer`, the document's ActionScript version, and the constructs the parser could not read (those are skipped when the movie is tested or exported).",
+            )
+            .with_schema(json!({
+                "type": "object", "required": ["layer", "frame"], "additionalProperties": false,
+                "properties": { "scene": scene, "layer": { "type": "integer", "minimum": 0 }, "frame": { "type": "integer", "minimum": 1 } }
+            })),
+            QuerySpec::new(
+                "test_movie",
+                "Test Movie without a window: runs the frame scripts in the preview runtime and reports the playhead and the `trace` output. Supported: timeline control (stop, play, gotoAndPlay/gotoAndStop with a frame number or label, nextFrame, prevFrame, nextScene, prevScene), frame labels, button event handlers (addEventListener with MouseEvent.CLICK and friends, onPress/onRelease), var, if/else, functions, trace. `steps` is a list of `{\"tick\": n}` (advance n frames) and `{\"event\": \"click\", \"target\": \"instanceName\"}` (also mouseDown, mouseUp, rollOver, rollOut, doubleClick).",
+            )
+            .with_schema(json!({
+                "type": "object", "additionalProperties": false,
+                "properties": { "steps": { "type": "array", "maxItems": 1000, "items": { "type": "object" } } }
+            })),
+            QuerySpec::new(
                 "element",
                 "All properties of one object, addressed by path: the timeline (`scene` or `symbol`), `layer`, 1-based `frame`, `index` in the keyframe and, for members of groups, `members` (indices going down). Returns the object as the model stores it.",
             )
@@ -281,6 +305,7 @@ impl AppHooks<AniDoc> for AniHooks {
         ]
     }
 
+    #[allow(clippy::too_many_lines, reason = "one arm per query")]
     fn query(&mut self, session: &Session<AniDoc>, name: &str, params: &Value, _ticket: &Ticket) -> HookResult {
         let doc = session.doc().document();
         let value = match name {
@@ -358,6 +383,8 @@ impl AppHooks<AniDoc> for AniHooks {
                     .collect();
                 json!({ "timeline": timeline_name(&id), "frames": timeline.frame_count(), "layers": layers })
             }
+            "frame_script" => script::frame_script(doc, params)?,
+            "test_movie" => script::test_movie(doc, params)?,
             "element" => {
                 let (_, timeline) = timeline_of(doc, params)?;
                 let layer = uint(params, "layer")?;

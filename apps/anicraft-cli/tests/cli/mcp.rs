@@ -253,6 +253,9 @@ fn every_editor_command_is_a_tool_with_a_schema_and_a_description() {
         "timeline_set_ease",
         "timeline_set_sound",
         "timeline_set_script",
+        "timeline_set_component_param",
+        "query_frame_script",
+        "query_test_movie",
         "timeline_move_keyframe",
         "timeline_set_label",
         // tools as commands
@@ -406,4 +409,49 @@ fn a_whole_animation_is_built_looked_at_exported_saved_and_reopened() {
     // The saved file is a valid Animate document for the one-shot commands too.
     let info = common::cli_ok(&["info", fla.to_str().unwrap(), "--json"]);
     assert!(info.contains("Block"));
+}
+
+/// Prediction: a 10-frame movie whose last frame says `stop()` is on frame 10, stopped, after 30 ticks, and a script
+/// that jumps to the label "mid" lands on frame 5 and prints what the script wrote.
+#[test]
+fn frame_scripts_are_stored_tested_and_exported_to_swf() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut c = Client::spawn(&["--read-root", &root(&dir), "--write-root", &root(&dir)]);
+    c.ok("new_document", json!({}));
+    for frame in [5, 10] {
+        c.ok("timeline_insert_keyframe", json!({ "layer": 0, "frame": frame }));
+    }
+    c.ok("timeline_set_label", json!({ "layer": 0, "frame": 5, "label": "mid" }));
+    c.ok("timeline_set_script", json!({ "layer": 0, "frame": 10, "script": "trace(\"done\");\nstop();" }));
+    let script = c.ok("query_frame_script", json!({ "layer": 0, "frame": 10 }));
+    assert_eq!(script["script"], "trace(\"done\");\nstop();");
+    assert_eq!(script["diagnostics"].as_array().unwrap().len(), 0);
+
+    let run = c.ok("query_test_movie", json!({ "steps": [{ "tick": 30 }] }));
+    assert_eq!(run["frame"], 10, "{run}");
+    assert_eq!(run["playing"], false);
+    assert_eq!(run["output"], json!(["done"]));
+
+    // Frame 1 jumps to the label: "mid" is frame 5, where the movie stops.
+    c.ok("timeline_set_script", json!({ "layer": 0, "frame": 1, "script": "gotoAndStop(\"mid\");" }));
+    let run = c.ok("query_test_movie", json!({ "steps": [{ "tick": 1 }] }));
+    assert_eq!(run["frame"], 5, "{run}");
+    assert_eq!(run["playing"], false);
+
+    // Statements outside the supported subset are reported, not hidden.
+    c.ok("timeline_set_script", json!({ "layer": 0, "frame": 2, "script": "for (var i = 0; i < 3; i++) { trace(i); }" }));
+    let script = c.ok("query_frame_script", json!({ "layer": 0, "frame": 2 }));
+    assert_eq!(script["diagnostics"].as_array().unwrap().len(), 1, "{script}");
+
+    // The SWF export carries the scripts: an ActionScript 3 document gets a DoABC tag and a SymbolClass for `Main`.
+    let swf = dir.path().join("out.swf");
+    let result = c.ok("export", json!({ "format": "swf", "path": swf.to_str().unwrap() }));
+    assert_eq!(result["frames"], 10);
+    let notes = result["notes"].as_array().unwrap();
+    assert!(notes.iter().any(|n| n.as_str().is_some_and(|n| n.starts_with("swf script:"))), "{notes:?}");
+    let bytes = std::fs::read(&swf).unwrap();
+    assert_eq!(&bytes[..3], b"CWS");
+    let mut body = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::ZlibDecoder::new(&bytes[8..]), &mut body).unwrap();
+    assert!(body.windows(5).any(|w| w == b"Main\0"), "the SymbolClass tag names the document class");
 }

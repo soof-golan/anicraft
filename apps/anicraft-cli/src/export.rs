@@ -225,9 +225,40 @@ pub fn run(job: &ExportJob<'_>, progress: ProgressCb<'_>) -> Result<ExportOutcom
         Format::Mp4 | Format::Mov => video(job, &plan, out_fps, spec, progress),
         Format::Gif | Format::Svg | Format::SvgAnim | Format::Spritesheet | Format::Swf => {
             let (source, notes) = collect(job, &plan, out_fps)?;
-            from_source(job, &source, out_fps, spec, notes, progress)
+            let scripts = (job.format == Format::Swf).then(|| script_plan(job.doc, job.scene, &plan));
+            from_source(job, &source, out_fps, spec, notes, scripts, progress)
         }
     }
+}
+
+/// The frame labels and frame scripts of the exported frames: for each, those of the keyframes that start on it.
+///
+/// A frame's scripts are those of every layer, top layer first, as Animate runs them.
+#[must_use]
+pub fn script_plan(doc: &Document, scene: usize, plan: &[u32]) -> anicraft_swf::script::ScriptPlan {
+    let version = anim_script::script_version(doc);
+    let mut frames = Vec::with_capacity(plan.len());
+    let mut previous = None;
+    for frame in plan {
+        let mut entry = anicraft_swf::script::PlanFrame::default();
+        // A frame repeated by a frame rate change runs its scripts once.
+        if previous != Some(*frame)
+            && let Some(timeline) = doc.scenes.get(scene)
+        {
+            for layer in &timeline.layers {
+                let Some(key) = layer.frames.iter().find(|k| k.index == *frame) else { continue };
+                if entry.label.is_none() && key.label_type.unwrap_or_default() == anim_scene::timeline::LabelType::Name {
+                    entry.label.clone_from(&key.label);
+                }
+                if let Some(source) = key.actionscript.as_deref() {
+                    entry.stmts.extend(anim_script::parse(source).stmts);
+                }
+            }
+        }
+        previous = Some(*frame);
+        frames.push(entry);
+    }
+    anicraft_swf::script::ScriptPlan { version, frames }
 }
 
 fn png_sequence(job: &ExportJob<'_>, plan: &[u32], spec: RenderSpec, progress: ProgressCb<'_>) -> Result<ExportOutcome> {
@@ -332,6 +363,7 @@ fn from_source(
     out_fps: f64,
     spec: RenderSpec,
     mut notes: Vec<String>,
+    scripts: Option<anicraft_swf::script::ScriptPlan>,
     progress: ProgressCb<'_>,
 ) -> Result<ExportOutcome> {
     use anim_export::FrameSource as _;
@@ -365,12 +397,11 @@ fn from_source(
         }
         Format::Swf => {
             let first = source.display_list(0);
-            let output = anicraft_swf::export_display_lists(
-                (0..frames).map(|i| source.display_list(i)).collect::<Vec<_>>().iter(),
-                source.images(),
-                anicraft_swf::ExportOptions::for_list(&first, out_fps),
-            )?;
+            let mut options = anicraft_swf::ExportOptions::for_list(&first, out_fps);
+            options.scripts = scripts;
+            let output = anicraft_swf::export_display_lists((0..frames).map(|i| source.display_list(i)).collect::<Vec<_>>().iter(), source.images(), options)?;
             notes.extend(output.report.notes.iter().map(|n| format!("swf: {n:?}")));
+            notes.extend(output.report.script_notes.iter().map(|n| format!("swf script: {n}")));
             fs::write(out, &output.swf).map_err(|e| CliError::io(out, e))?;
             (vec![out.clone()], u64::try_from(output.swf.len()).unwrap_or(u64::MAX))
         }
