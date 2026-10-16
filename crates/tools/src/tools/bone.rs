@@ -77,9 +77,7 @@ pub fn bone_under(ctx: &ToolContext<'_>, p: Point) -> bool {
 /// The motion that takes the rest geometry the new bone hangs from to where it is shown: the parent's motion, or
 /// the whole-armature offset.
 fn parent_motion(armature: Option<&Armature>, pose: &Pose, parent: Option<usize>) -> Affine {
-    parent
-        .and_then(|p| armature.and_then(|a| a.motions(pose).get(p).copied()))
-        .unwrap_or_else(|| Affine::translate(pose.offset))
+    parent.and_then(|p| armature.and_then(|a| a.motions(pose).get(p).copied())).unwrap_or_else(|| Affine::translate(pose.offset))
 }
 
 /// The element of the first keyframe a new bone should move, from its end points (rest coordinates): a symbol

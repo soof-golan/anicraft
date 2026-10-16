@@ -199,11 +199,7 @@ fn document_rows(document: &Document, out: &mut Vec<Property>) {
 /// The bones of the current layer's armature: a name and the joint limits of each, in degrees. A limit of
 /// -180 .. 180 is no limit.
 fn describe_armature(editor: &anicraft_tools::Editor, out: &mut Vec<Property>) {
-    let Some(armature) = editor
-        .document
-        .timeline(&editor.state.timeline)
-        .and_then(|t| t.layers.get(editor.state.layer))
-        .and_then(|l| l.armature.as_ref())
+    let Some(armature) = editor.document.timeline(&editor.state.timeline).and_then(|t| t.layers.get(editor.state.layer)).and_then(|l| l.armature.as_ref())
     else {
         return;
     };

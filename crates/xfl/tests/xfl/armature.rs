@@ -85,7 +85,7 @@ fn armature_layers_round_trip() {
 fn writing_an_armature_twice_is_a_fixed_point() {
     let doc = document();
     let first = write_fla_bytes(&doc, &MediaStore::new(), &[], &WriteOptions::default()).unwrap().0;
-    let loaded = read_bytes(first,&ReadOptions::default()).unwrap();
+    let loaded = read_bytes(first, &ReadOptions::default()).unwrap();
     let second = write_fla_bytes(&loaded.document, &loaded.media, &loaded.sidecars, &WriteOptions::default()).unwrap().0;
     let again = read_bytes(second.clone(), &ReadOptions::default()).unwrap();
     let third = write_fla_bytes(&again.document, &again.media, &again.sidecars, &WriteOptions::default()).unwrap().0;

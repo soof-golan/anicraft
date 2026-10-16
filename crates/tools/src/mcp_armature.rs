@@ -39,11 +39,7 @@ fn target(editor: &Editor, layer: Option<usize>, frame: Option<u32>) -> Result<(
 
 /// The armature of `layer` and its pose at `frame`.
 fn armature_pose(editor: &Editor, layer: usize, frame: u32) -> Result<(anim_scene::Armature, Pose), CommandError> {
-    let l = editor
-        .document
-        .timeline(&editor.state.timeline)
-        .and_then(|t| t.layers.get(layer))
-        .ok_or_else(|| invalid("no such layer"))?;
+    let l = editor.document.timeline(&editor.state.timeline).and_then(|t| t.layers.get(layer)).ok_or_else(|| invalid("no such layer"))?;
     let armature = l.armature.clone().ok_or_else(|| invalid("the layer has no armature; add a bone first"))?;
     let pose = pose_at(l, frame).unwrap_or_else(|| armature.rest_pose());
     Ok((armature, pose))
@@ -137,7 +133,10 @@ fn armature_add_bone<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value,
             }
             None => Point::new(p.x1, p.y1),
         };
-        let script = ToolScript { tool: Some(ToolId::Bone), events: vec![down(head.x, head.y), drag(f64::midpoint(head.x, p.x2), f64::midpoint(head.y, p.y2)), up(p.x2, p.y2)] };
+        let script = ToolScript {
+            tool: Some(ToolId::Bone),
+            events: vec![down(head.x, head.y), drag(f64::midpoint(head.x, p.x2), f64::midpoint(head.y, p.y2)), up(p.x2, p.y2)],
+        };
         run(ed, &script)?;
         let after = ed.document.timeline(&ed.state.timeline).and_then(|t| t.layers.get(layer)).and_then(|l| l.armature.as_ref()).map_or(0, |a| a.bones.len());
         if after != before.saturating_add(1) {
