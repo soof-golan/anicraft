@@ -3,6 +3,7 @@
 
 mod common;
 
+mod armature;
 mod edge_shapes;
 mod morph;
 mod proptests;

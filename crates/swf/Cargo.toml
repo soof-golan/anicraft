@@ -28,6 +28,7 @@ harness = false
 [dev-dependencies]
 # The benchmarks evaluate frames of the sample files into display lists.
 anicraft-xfl = { workspace = true }
+anim-scene = { workspace = true }
 anim-timeline = { workspace = true }
 criterion = { version = "0.8", default-features = false }
 png = { workspace = true }

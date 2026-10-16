@@ -329,6 +329,7 @@ dependencies = [
  "anim-core",
  "anim-display",
  "anim-render",
+ "anim-scene",
  "anim-shape",
  "anim-timeline",
  "criterion",
