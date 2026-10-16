@@ -10,6 +10,8 @@
 //!
 //! The same hooks and commands drive a running editor, which embeds `anim_mcp::ControlServer` instead.
 
+pub mod arrange_ops;
+pub mod bitmap_ops;
 pub mod commands;
 pub mod doc;
 pub mod docfile;
@@ -17,6 +19,7 @@ pub mod editing;
 pub mod find;
 pub mod motion;
 mod script;
+pub mod shape_ops;
 pub mod timeline_ops;
 
 use std::fs::File;
@@ -56,6 +59,9 @@ pub fn registry() -> CommandRegistry<AniDoc> {
     docfile::register(&mut registry);
     find::register(&mut registry);
     motion::register(&mut registry);
+    arrange_ops::register(&mut registry);
+    shape_ops::register(&mut registry);
+    bitmap_ops::register(&mut registry);
     #[expect(clippy::expect_used, reason = "ids are static and unique; a test registers them")]
     registry.register_all(anicraft_tools::mcp_commands::<AniDoc>()).expect("tool command ids are unique");
     registry

@@ -309,6 +309,7 @@ dependencies = [
  "anim-script",
  "anim-session",
  "anim-shape",
+ "anim-text",
  "anim-timeline",
  "anim-video",
  "base64 0.22.1",
@@ -323,6 +324,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
+ "vectorcraft-trace",
 ]
 
 [[package]]
@@ -6266,6 +6268,18 @@ source = "git+https://github.com/storytold/vectorcraft?rev=ed96a1219620b5b6ab13e
 dependencies = [
  "vectorcraft-geom",
  "vectorcraft-pathops",
+]
+
+[[package]]
+name = "vectorcraft-trace"
+version = "0.11.0"
+source = "git+https://github.com/storytold/vectorcraft?rev=ed96a1219620b5b6ab13e25369f7b55cddd664f6#ed96a1219620b5b6ab13e25369f7b55cddd664f6"
+dependencies = [
+ "image",
+ "kurbo",
+ "serde",
+ "thiserror 2.0.21",
+ "vectorcraft-geom",
 ]
 
 [[package]]

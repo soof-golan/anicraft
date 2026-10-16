@@ -32,8 +32,10 @@ anim-scene = { workspace = true }
 anim-script = { workspace = true }
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
+anim-text = { workspace = true }
 anim-timeline = { workspace = true }
 anim-video = { workspace = true }
+vectorcraft-trace = { workspace = true }
 clap = { workspace = true }
 color-eyre = { workspace = true }
 crossbeam-channel = { workspace = true }

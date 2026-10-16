@@ -12,7 +12,7 @@ use anicraft_tools::{ElementRef, Selection};
 use anim_core::{Affine, BlendMode, ColorTransform, Point, Rgba8, num};
 use anim_scene::edit::{self, Registration, SymbolSpec};
 use anim_scene::timeline::{SoundLoop, SoundSync, TweenRotate};
-use anim_scene::{ColorEffect, Document, Element, FrameSound, Group, InstanceFilter, LoopMode, SymbolKind, TextAlign, TextDirection, TimelineId};
+use anim_scene::{ColorEffect, Document, Element, FrameSound, InstanceFilter, LoopMode, SymbolKind, TextAlign, TextDirection, TimelineId};
 use anim_session::{CommandError, CommandRegistry, CommandSpec, parse_params};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -61,24 +61,6 @@ fn menu_commands() -> Vec<CommandSpec<AniDoc>> {
             .enabled_when(has_selection)
             .describe("Moves the selected objects of one keyframe into a new library symbol and puts an instance in their place. `kind` is graphic, movie_clip or button; `registration` is center, top_left or origin.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1},"kind":{"enum":["graphic","movie_clip","button"]},"registration":{"enum":["center","top_left","origin"]}}}"#),
-        CommandSpec::new("modify.group", "Group", group)
-            .in_menu(&["Modify"])
-            .with_shortcut("Cmd+G")
-            .enabled_when(has_selection)
-            .describe("Groups the selected objects.")
-            .with_schema(NO_PARAMS),
-        CommandSpec::new("modify.ungroup", "Ungroup", ungroup)
-            .in_menu(&["Modify"])
-            .with_shortcut("Cmd+Shift+G")
-            .enabled_when(has_selection)
-            .describe("Replaces each selected group by its members.")
-            .with_schema(NO_PARAMS),
-        CommandSpec::new("modify.break_apart", "Break Apart", break_apart)
-            .in_menu(&["Modify"])
-            .with_shortcut("Cmd+B")
-            .enabled_when(has_selection)
-            .describe("Replaces each selected symbol instance by the content of its first frame, and each group by its members.")
-            .with_schema(NO_PARAMS),
         CommandSpec::new("modify.arrange", "Arrange", arrange)
             .in_menu(&["Modify"])
             .enabled_when(has_selection)
@@ -240,80 +222,6 @@ fn convert_to_symbol(doc: &mut AniDoc, params: &Value) -> Out {
     let at = edit::convert_to_symbol(&mut doc.editor.document, &id, layer, keyframe, &indices, &spec).map_err(failed)?;
     select(doc, layer, keyframe, [at]);
     Ok(json!({ "symbol": p.name, "instance_index": at }))
-}
-
-fn group(doc: &mut AniDoc, _params: &Value) -> Out {
-    let (layer, keyframe, indices) = one_keyframe(doc)?;
-    let id = editing(doc);
-    let members = edit::remove_elements(&mut doc.editor.document, &id, layer, keyframe, &indices).map_err(failed)?;
-    let count = members.len();
-    let at = indices.first().copied().unwrap_or(0);
-    let frame = edit::keyframe_mut(&mut doc.editor.document, &id, layer, keyframe).map_err(failed)?;
-    let at = at.min(frame.elements.len());
-    frame.elements.insert(at, Element::Group(Group::new(members)));
-    select(doc, layer, keyframe, [at]);
-    Ok(json!({ "grouped": count, "index": at }))
-}
-
-fn ungroup(doc: &mut AniDoc, _params: &Value) -> Out {
-    expand(doc, false)
-}
-
-fn break_apart(doc: &mut AniDoc, _params: &Value) -> Out {
-    expand(doc, true)
-}
-
-/// Replaces groups (and, with `symbols`, instances) by their content.
-fn expand(doc: &mut AniDoc, symbols: bool) -> Out {
-    let (layer, keyframe, indices) = one_keyframe(doc)?;
-    let id = editing(doc);
-    let library = doc.editor.document.library.clone();
-    let frame = edit::keyframe_mut(&mut doc.editor.document, &id, layer, keyframe).map_err(failed)?;
-    let mut produced = Vec::new();
-    let mut touched = 0_usize;
-    let mut result = Vec::with_capacity(frame.elements.len());
-    for (i, element) in std::mem::take(&mut frame.elements).into_iter().enumerate() {
-        if !indices.contains(&i) {
-            result.push(element);
-            continue;
-        }
-        match element {
-            Element::Group(g) => {
-                touched = touched.saturating_add(1);
-                for mut member in g.members {
-                    if let Some(m) = member.matrix() {
-                        member.set_matrix(g.matrix * m);
-                    }
-                    produced.push(result.len());
-                    result.push(member);
-                }
-            }
-            Element::SymbolInstance(inst) if symbols => {
-                let content = library
-                    .find_symbol(&inst.library_item_name)
-                    .and_then(|s| s.timeline.layers.iter().rev().find_map(|l| l.keyframe_at(inst.first_frame).map(|k| k.elements.clone())))
-                    .unwrap_or_default();
-                touched = touched.saturating_add(1);
-                for mut member in content {
-                    if let Some(m) = member.matrix() {
-                        member.set_matrix(inst.matrix * m);
-                    }
-                    produced.push(result.len());
-                    result.push(member);
-                }
-            }
-            other => {
-                produced.push(result.len());
-                result.push(other);
-            }
-        }
-    }
-    frame.elements = result;
-    if touched == 0 {
-        return Err(CommandError::failed(if symbols { "nothing selected can be broken apart" } else { "no group is selected" }));
-    }
-    select(doc, layer, keyframe, produced);
-    Ok(json!({ "expanded": touched }))
 }
 
 #[derive(Deserialize)]

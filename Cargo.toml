@@ -44,6 +44,7 @@ craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "8f5a283
 # VectorCraft's path booleans, planar faces (Live Paint) and curve fitting, used by the drawing tools.
 vectorcraft-geom = { git = "https://github.com/storytold/vectorcraft", rev = "ed96a1219620b5b6ab13e25369f7b55cddd664f6" }
 vectorcraft-pathops = { git = "https://github.com/storytold/vectorcraft", rev = "ed96a1219620b5b6ab13e25369f7b55cddd664f6" }
+vectorcraft-trace = { git = "https://github.com/storytold/vectorcraft", rev = "ed96a1219620b5b6ab13e25369f7b55cddd664f6" }
 
 # External crates (versions match anicraft-libs where they overlap).
 kurbo = { version = "0.13", features = ["serde"] }
