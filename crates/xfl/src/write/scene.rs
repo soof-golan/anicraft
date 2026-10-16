@@ -189,6 +189,13 @@ pub fn write_element(out: &mut XmlOut, element: &Element, depth: usize) {
     }
 }
 
+/// Drops the float noise of composing two matrices. Animate writes at most 15 significant digits, so rounding to 15
+/// gives back exactly the numbers the reader started from.
+fn snap(m: Affine) -> Affine {
+    let round = |v: f64| format!("{v:.14e}").parse::<f64>().unwrap_or(v);
+    Affine::new(m.as_coeffs().map(round))
+}
+
 fn write_group(out: &mut XmlOut, group: &Group, depth: usize) {
     out.open("DOMGroup", &Attrs::new().extra(&group.extra));
     if group.matrix != Affine::IDENTITY {
@@ -199,7 +206,15 @@ fn write_group(out: &mut XmlOut, group: &Group, depth: usize) {
     }
     out.open("members", &Attrs::new());
     for member in &group.members {
-        write_element(out, member, depth.saturating_add(1));
+        match member.matrix() {
+            // The reader made the member's matrix relative to the group; the file stores it absolute.
+            Some(own) if group.matrix != Affine::IDENTITY && own != Affine::IDENTITY => {
+                let mut absolute = member.clone();
+                absolute.set_matrix(snap(group.matrix * own));
+                write_element(out, &absolute, depth.saturating_add(1));
+            }
+            _ => write_element(out, member, depth.saturating_add(1)),
+        }
     }
     out.close();
     for child in &group.extra.children {

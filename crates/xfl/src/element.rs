@@ -58,7 +58,26 @@ fn read_group(ctx: &mut Ctx<'_>, node: Node<'_, '_>, depth: usize) -> Group {
         }
     }
     attrs.rest(ctx, &mut group.extra);
+    make_members_relative(&mut group);
     group
+}
+
+/// Animate stores a member's own matrix as its placement in the parent timeline, not relative to the group (the
+/// shapes of a drawing and the shapes of a group around part of it share one edge space and one matrix). The model
+/// composes the group's matrix over its members, so members with a matrix of their own are re-expressed relative to
+/// the group; [`crate::write`] undoes this. Members without a matrix are placed by the group's matrix alone.
+fn make_members_relative(group: &mut Group) {
+    if group.matrix == Affine::IDENTITY || group.matrix.determinant().abs() < 1e-12 || !group.matrix.is_finite() {
+        return;
+    }
+    let inverse = group.matrix.inverse();
+    for member in &mut group.members {
+        if let Some(own) = member.matrix()
+            && own != Affine::IDENTITY
+        {
+            member.set_matrix(inverse * own);
+        }
+    }
 }
 
 fn read_bitmap_instance(ctx: &mut Ctx<'_>, node: Node<'_, '_>) -> BitmapInstance {

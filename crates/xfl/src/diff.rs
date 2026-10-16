@@ -219,8 +219,8 @@ fn compare_nodes(a: Node<'_, '_>, b: Node<'_, '_>, path: &mut Vec<String>, optio
             diff.note(options, path, DiffKind::AttributeAdded, &format!("{tag}@{name}"), format!("{name}={:?} is new", attribute.value()));
         }
     }
-    let kids_a: Vec<Node<'_, '_>> = element_children(a).collect();
-    let kids_b: Vec<Node<'_, '_>> = element_children(b).collect();
+    let kids_a = comparable_children(a, options);
+    let kids_b = comparable_children(b, options);
     if kids_a.is_empty() && kids_b.is_empty() {
         let text_a = text_content(a);
         let text_b = text_content(b);
@@ -237,6 +237,38 @@ fn compare_nodes(a: Node<'_, '_>, b: Node<'_, '_>, path: &mut Vec<String>, optio
         compare_nodes(x, y, path, options, diff);
         path.pop();
     }
+}
+
+/// The element children of `node`, without a `<matrix>` that repeats the matrix of the group the node is a member of.
+/// The reader places such a member by the group's matrix alone (see `read_group`), so the two spellings mean the same.
+fn comparable_children<'a, 'input>(node: Node<'a, 'input>, options: &DiffOptions) -> Vec<Node<'a, 'input>> {
+    let group = node
+        .parent_element()
+        .filter(|p| p.tag_name().name() == "members")
+        .and_then(|p| p.parent_element())
+        .filter(|g| g.tag_name().name() == "DOMGroup")
+        .and_then(|g| element_children(g).find(|c| c.tag_name().name() == "matrix"))
+        .map(matrix_numbers);
+    element_children(node)
+        .filter(|c| {
+            let redundant = c.tag_name().name() == "matrix"
+                && group.is_some_and(|g| g.iter().zip(matrix_numbers(*c)).all(|(x, y)| (x - y).abs() <= options.tolerance * x.abs().max(1.0)));
+            !redundant
+        })
+        .collect()
+}
+
+/// `a b c d tx ty` of the `<Matrix>` inside a `<matrix>` wrapper, with the identity's values for missing ones.
+fn matrix_numbers(wrapper: Node<'_, '_>) -> [f64; 6] {
+    let mut out = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    if let Some(m) = element_children(wrapper).find(|c| c.tag_name().name() == "Matrix") {
+        for (slot, name) in out.iter_mut().zip(["a", "b", "c", "d", "tx", "ty"]) {
+            if let Some(v) = m.attribute(name).and_then(|v| v.trim().parse::<f64>().ok()) {
+                *slot = v;
+            }
+        }
+    }
+    out
 }
 
 fn text_content(node: Node<'_, '_>) -> String {
