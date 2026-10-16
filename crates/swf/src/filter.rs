@@ -1,6 +1,5 @@
 //! `FILTERLIST` for `PlaceObject3`.
 
-use anim_core::num;
 use anim_display::Filter;
 
 use crate::bits::PutBytes;
@@ -67,23 +66,6 @@ fn passes(quality: u8) -> u8 {
 /// The shared flag byte: inner, knockout, composite source and a five bit pass count.
 fn flags(inner: bool, knockout: bool, composite: bool, passes: u8) -> u8 {
     u8::from(inner).wrapping_shl(7) | u8::from(knockout).wrapping_shl(6) | u8::from(composite).wrapping_shl(5) | (passes & 0x1f)
-}
-
-/// Approximate extra pixels a filter paints beyond an object's bounds, for callers that need to grow bounds.
-#[must_use]
-pub fn filter_margin(filter: &Filter) -> f64 {
-    match filter {
-        Filter::Blur { x, y, .. } => x.max(*y).max(0.0),
-        Filter::DropShadow { distance, blur_x, blur_y, .. } => distance.abs() + blur_x.max(*blur_y).max(0.0),
-        Filter::Glow { blur_x, blur_y, .. } => blur_x.max(*blur_y).max(0.0),
-        Filter::ColorMatrix(_) => 0.0,
-    }
-}
-
-/// Rounds a margin up to whole pixels.
-#[must_use]
-pub fn margin_px(filters: &[Filter]) -> i32 {
-    num::ceil_f64_to_i32(filters.iter().map(filter_margin).fold(0.0, f64::max))
 }
 
 #[cfg(test)]

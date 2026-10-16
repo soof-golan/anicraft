@@ -81,16 +81,6 @@ pub fn write_tag_after(out: &mut Vec<u8>, tag_code: u16, prefix: &[u8], rest: &[
     Ok(())
 }
 
-/// A complete tag (header and body) as a fresh buffer.
-///
-/// # Errors
-/// See [`write_tag`].
-pub fn tag_bytes(tag_code: u16, body: &[u8]) -> Result<Vec<u8>, SwfError> {
-    let mut out = Vec::with_capacity(body.len().saturating_add(6));
-    write_tag(&mut out, tag_code, body)?;
-    Ok(out)
-}
-
 /// One tag found by [`scan_tags`]: its code and body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawTag<'a> {

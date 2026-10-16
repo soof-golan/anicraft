@@ -3,7 +3,7 @@
 //! [`Movie`] appends tags in order, so definitions can be interleaved with frames (a frame by frame export defines
 //! new shapes just before the frame that first uses them). Identical shapes and sprites are written once.
 
-use anim_core::{FrameRate, Rgba8, num};
+use anim_core::{Rgba8, num};
 use anim_display::Image;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -82,15 +82,6 @@ impl Default for MovieSettings {
             metadata: None,
             use_network: false,
         }
-    }
-}
-
-impl MovieSettings {
-    /// Settings for a stage of `width` x `height` pixels at a rational frame rate.
-    #[must_use]
-    pub fn with_frame_rate(width: f64, height: f64, rate: FrameRate) -> Self {
-        let fps = if rate.den == 0 { 24.0 } else { num::i64_to_f64(rate.num) / num::i64_to_f64(rate.den) };
-        Self { width, height, frame_rate: fps, ..Self::default() }
     }
 }
 
@@ -218,12 +209,6 @@ impl Movie {
     #[must_use]
     pub const fn character_count(&self) -> u32 {
         self.next_id.saturating_sub(1)
-    }
-
-    /// Bytes of tags written so far (before compression).
-    #[must_use]
-    pub const fn size_so_far(&self) -> usize {
-        self.body.len()
     }
 
     /// Reserves the next character id.
@@ -378,14 +363,6 @@ impl Movie {
         }
         self.frames = self.frames.saturating_add(1);
         Ok(())
-    }
-
-    /// Appends an arbitrary definition tag (it must not show a frame).
-    ///
-    /// # Errors
-    /// [`SwfError::TooLarge`] for bodies over 4 GiB.
-    pub fn raw_tag(&mut self, tag_code: u16, body: &[u8]) -> Result<(), SwfError> {
-        write_tag(&mut self.body, tag_code, body)
     }
 
     /// Assembles the file.

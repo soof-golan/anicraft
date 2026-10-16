@@ -64,14 +64,6 @@ impl Rect {
         Self { x_min, x_max, y_min, y_max }
     }
 
-    /// A pixel rectangle converted to twips, widened outwards so that rounding never clips content.
-    #[must_use]
-    pub fn from_px(rect: anim_core::Rect) -> Self {
-        let lo = |v: f64| num::floor_f64_to_i32(v * TWIPS_PER_PX).clamp(-MAX_TWIPS, MAX_TWIPS);
-        let hi = |v: f64| num::ceil_f64_to_i32(v * TWIPS_PER_PX).clamp(-MAX_TWIPS, MAX_TWIPS);
-        Self { x_min: lo(rect.min_x()), x_max: hi(rect.max_x()), y_min: lo(rect.min_y()), y_max: hi(rect.max_y()) }
-    }
-
     /// The smallest rectangle containing both.
     #[must_use]
     pub fn union(self, other: Self) -> Self {
