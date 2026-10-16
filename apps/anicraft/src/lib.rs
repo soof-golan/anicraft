@@ -25,14 +25,20 @@
 pub mod app;
 pub mod audio;
 pub mod commands;
+pub mod docs;
+pub mod docs_ui;
 pub mod files;
+pub mod macros;
 pub mod mcp;
 pub mod menus;
 pub mod preview;
+pub mod prefs;
 pub mod props;
+pub mod recovery;
 pub mod smoke;
 pub mod state;
 pub mod toolui;
+pub mod templates;
 pub mod view;
 pub mod worker;
 

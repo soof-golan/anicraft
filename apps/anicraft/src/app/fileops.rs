@@ -8,34 +8,10 @@ use anim_session::JobEvent;
 
 use super::AniApp;
 use crate::files::{self, ExportRequest, IMPORT_EXTENSIONS, Loaded, OPEN_EXTENSIONS};
-use crate::menus::{ExportKind, MenuAction};
+use crate::menus::ExportKind;
 use crate::state::Dialog;
 
 impl AniApp {
-    /// True when it is fine to discard the document now; otherwise asks first and runs `action` again once the
-    /// person has agreed.
-    fn confirmed(&mut self, action: &MenuAction) -> bool {
-        if self.host.session().is_dirty() {
-            self.ui.dialog = Some(Dialog::Discard(Box::new(action.clone())));
-            return false;
-        }
-        true
-    }
-
-    /// Runs the action the person confirmed in the "unsaved changes" dialog.
-    pub(super) fn discard_confirmed(&mut self, action: MenuAction) {
-        match action {
-            MenuAction::New => self.replace_document(AniDoc::default(), None),
-            MenuAction::Open => self.pick_and_open(),
-            MenuAction::OpenRecent(path) => self.start_open(path),
-            MenuAction::Quit => {
-                self.closing = true;
-                self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-            _ => {}
-        }
-    }
-
     /// Replaces the document of the session; the history starts afresh.
     pub(crate) fn replace_document(&mut self, doc: AniDoc, path: Option<PathBuf>) {
         if let Some(path) = &path {
@@ -46,26 +22,17 @@ impl AniApp {
         self.reset_view_for_new_document();
     }
 
-    fn remember(&mut self, path: &Path) {
-        self.ui.recent.retain(|p| p != path);
-        self.ui.recent.insert(0, path.to_path_buf());
-        self.ui.recent.truncate(10);
+    pub(crate) fn remember(&mut self, path: &Path) {
+        self.docs.prefs.update(|p| p.common.recent.push(path));
+        self.ui.recent = self.docs.prefs.get().common.recent.to_vec();
     }
 
+    /// File > New: the New Document dialog, as in Animate.
     pub(super) fn new_document(&mut self) {
-        if self.confirmed(&MenuAction::New) {
-            self.replace_document(AniDoc::default(), None);
-            self.status("new document");
-        }
+        self.doc_action(&self.ctx.clone(), crate::docs::DocAction::NewDialog);
     }
 
     pub(super) fn open_dialog(&mut self) {
-        if self.confirmed(&MenuAction::Open) {
-            self.pick_and_open();
-        }
-    }
-
-    fn pick_and_open(&mut self) {
         let picked = rfd::FileDialog::new().set_title("Open").add_filter("Animate documents", &OPEN_EXTENSIONS).pick_file();
         if let Some(path) = picked {
             self.start_open(path);
@@ -73,12 +40,10 @@ impl AniApp {
     }
 
     pub(super) fn open_path(&mut self, path: PathBuf) {
-        if self.confirmed(&MenuAction::OpenRecent(path.clone())) {
-            self.start_open(path);
-        }
+        self.start_open(path);
     }
 
-    fn start_open(&mut self, path: PathBuf) {
+    pub(crate) fn start_open(&mut self, path: PathBuf) {
         self.status(format!("opening {}...", path.display()));
         self.jobs.spawn("open", files::open_job(path));
     }
@@ -90,10 +55,9 @@ impl AniApp {
                 JobEvent::Progress { fraction, message } => self.finish_export_status(&message, fraction),
                 JobEvent::Finished(Loaded::Opened { path, project }) => {
                     self.ui.export = None;
-                    let warnings = project.loaded.warnings.len();
-                    self.replace_document(AniDoc::from(*project), Some(path.clone()));
-                    self.status(format!("opened {}{}", path.display(), if warnings > 0 { format!(" ({warnings} reader warnings)") } else { String::new() }));
+                    self.finish_open(path, *project);
                 }
+                JobEvent::Finished(Loaded::Autosaved { .. }) => {}
                 JobEvent::Finished(Loaded::Exported { label, outcome }) => {
                     self.ui.export = None;
                     let first = outcome.files.first().map(|p| p.display().to_string()).unwrap_or_default();
@@ -144,6 +108,7 @@ impl AniApp {
         match result {
             Ok(()) => {
                 self.remember(&path);
+                self.saved_hook();
                 self.status(format!("saved {}", path.display()));
             }
             Err(e) => self.ui.dialog = Some(Dialog::Message { title: "Could not save".to_owned(), text: e }),

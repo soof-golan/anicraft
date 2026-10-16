@@ -20,6 +20,13 @@ impl eframe::App for AniApp {
         self.draw(ui);
     }
 
+    fn on_exit(&mut self) {
+        self.docs.prefs.flush();
+        if let Some(recovery) = &self.docs.recovery {
+            recovery.finish();
+        }
+    }
+
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
         visuals.panel_fill.to_normalized_gamma_f32()
     }
@@ -41,14 +48,28 @@ impl AniApp {
         egui::Panel::top("menu").show(ui, |ui| {
             events.extend(menus::menu_bar(ui, &menu_view).into_iter().map(UiEvent::Menu));
         });
+        if self.docs.tabs.order.len() > 1 {
+            let tabs = self.tab_infos();
+            egui::Panel::top("doc-tabs").show(ui, |ui| {
+                for event in crate::docs_ui::tab_strip(ui, &tabs) {
+                    self.tab_event(event);
+                }
+            });
+        }
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.dock(ui, &mut events));
         events.extend(self.dialogs(&ctx));
         events.extend(self.scene_panel(&ctx));
         events.extend(self.parenting_view(&ctx));
+        self.doc_dialogs(&ctx);
 
         for event in events {
             self.handle(&ctx, event);
+        }
+        self.docs_frame(&ctx);
+        if ctx.input(|i| i.viewport().close_requested()) && !self.docs.quit_ok && !self.closing {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.doc_action(&ctx, crate::docs::DocAction::Quit);
         }
         self.sync_worker(&ctx);
         self.drive_shot(&ctx);
@@ -92,6 +113,13 @@ impl AniApp {
             parenting_view: self.ui.parenting_view,
             edit_multiple: self.ui.timeline.edit_multiple,
             auto_keyframe: self.ui.timeline.auto_keyframe,
+            tabs: self.docs.tabs.order.len(),
+            can_revert: session.path().is_some(),
+            play: self.play_options(),
+            autosave: self.docs.prefs.get().common.autosave_minutes,
+            user_templates: self.ui.docs.templates.iter().map(|t| (t.category.clone(), t.name.clone(), t.path.clone())).collect(),
+            commands: self.ui.docs.commands.clone(),
+            open_doc_panels: crate::docs::DOC_PANELS.into_iter().filter(|p| self.ui.layout.contains(p)).collect(),
         }
     }
 
@@ -169,6 +197,14 @@ impl AniApp {
         let settings = state.settings.clone();
         let swatches = anicraft_tools::swatches::read(doc.document());
         let bitmaps: Vec<String> = doc.document().library.bitmaps().map(|b| b.name.clone()).collect();
+        let history_view = {
+            let history = session.history();
+            let mut labels: Vec<String> = history.undo_labels().map(str::to_owned).collect();
+            labels.reverse();
+            labels.extend(history.redo_labels().map(str::to_owned));
+            let replayable = (0..labels.len()).map(|i| self.docs.steps.get(i).is_some()).collect();
+            crate::docs_ui::HistoryView { labels, applied: history.undo_len(), replayable }
+        };
 
         let st = &mut self.ui;
         st.stage.grid_size = num::f64_to_f32(settings.snap.grid_size.clamp(1.0, 1000.0));
@@ -183,8 +219,8 @@ impl AniApp {
         st.stage.overlays = overlays;
         let texture = self.stage_tex.as_ref();
         let panel_rects = &mut st.panel_rects;
-        let output = dock::show_dock(ui, egui::Id::new("anicraft-dock"), &st.layout, toolui::panel_title, |ui, panel| {
-            panel_rects.insert(toolui::panel_title(*panel).to_lowercase(), ui.available_rect_before_wrap());
+        let output = dock::show_dock(ui, egui::Id::new("anicraft-dock"), &st.layout, crate::docs::panel_title, |ui, panel| {
+            panel_rects.insert(crate::docs::panel_title(*panel).to_lowercase(), ui.available_rect_before_wrap());
             match panel {
                 PanelId::Tools => {
                     for e in toolui::toolbox(ui, &st.tools, &tool_id, &settings, &swatches, &mut st.toolui) {
@@ -234,7 +270,16 @@ impl AniApp {
                         events.push(UiEvent::Library(e));
                     }
                 }
-                PanelId::Output | PanelId::Custom(_) => {}
+                PanelId::Output => {
+                    events.extend(crate::docs_ui::output_panel(ui, &mut st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
+                }
+                p if *p == crate::docs::HISTORY_PANEL => {
+                    events.extend(crate::docs_ui::history_panel(ui, &history_view, &mut st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
+                }
+                p if *p == crate::docs::ERRORS_PANEL => {
+                    events.extend(crate::docs_ui::errors_panel(ui, &st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
+                }
+                PanelId::Custom(_) => {}
             }
         });
         let actions = output.actions;
@@ -243,7 +288,7 @@ impl AniApp {
     }
 
     fn dialogs(&mut self, ctx: &Context) -> Vec<UiEvent> {
-        let mut out = Vec::new();
+        let out = Vec::new();
         let Some(mut dialog) = self.ui.dialog.take() else { return out };
         let mut keep = true;
         let mut confirmed = false;
@@ -257,7 +302,6 @@ impl AniApp {
             Dialog::FrameProperties(_) => "Frame Properties",
             Dialog::DocumentSettings => "Document Settings",
             Dialog::Message { title, .. } => title.as_str(),
-            Dialog::Discard(_) => "Unsaved changes",
             Dialog::About => "AniCraft",
         }
         .to_owned();
@@ -366,32 +410,10 @@ impl AniApp {
                 ok_cancel(ui, &mut confirmed, &mut keep);
             }
             Dialog::DocumentSettings => {
-                let doc = self.host.session().doc().document();
-                let (mut w, mut h, mut fps) = (doc.width, doc.height, doc.frame_rate);
-                let mut bg = [doc.background_color.r, doc.background_color.g, doc.background_color.b];
-                let mut changed = false;
-                egui::Grid::new("doc-settings").num_columns(2).show(ui, |ui| {
-                    ui.label("Width");
-                    changed |= ui.add(egui::DragValue::new(&mut w).range(1.0..=16000.0).suffix(" px")).changed();
-                    ui.end_row();
-                    ui.label("Height");
-                    changed |= ui.add(egui::DragValue::new(&mut h).range(1.0..=16000.0).suffix(" px")).changed();
-                    ui.end_row();
-                    ui.label("Frame rate");
-                    changed |= ui.add(egui::DragValue::new(&mut fps).range(1.0..=240.0).suffix(" fps")).changed();
-                    ui.end_row();
-                    ui.label("Stage colour");
-                    changed |= ui.color_edit_button_srgb(&mut bg).changed();
-                    ui.end_row();
-                });
-                if changed {
-                    out.push(UiEvent::Menu(MenuAction::Command {
-                        id: "document.set_stage",
-                        params: serde_json::json!({ "width": w, "height": h, "frame_rate": fps, "background": format!("#{:02x}{:02x}{:02x}", bg[0], bg[1], bg[2]) }),
-                    }));
-                }
-                if ui.button("Close").clicked() {
-                    keep = false;
+                let document = self.host.session().doc().document();
+                match self.ui.docs.settings.as_mut() {
+                    Some(state) => super::doc_dialogs::settings_ui(ui, state, document, &mut confirmed, &mut keep),
+                    None => keep = false,
                 }
             }
             Dialog::Message { text, .. } => {
@@ -399,17 +421,6 @@ impl AniApp {
                 if ui.button("OK").clicked() {
                     keep = false;
                 }
-            }
-            Dialog::Discard(_) => {
-                ui.label("The document has changes that were not saved. Discard them?");
-                ui.horizontal(|ui| {
-                    if ui.button("Discard").clicked() {
-                        confirmed = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        keep = false;
-                    }
-                });
             }
             Dialog::About => {
                 ui.label(RichText::new("AniCraft").heading());

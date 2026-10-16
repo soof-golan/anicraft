@@ -9,6 +9,8 @@
 //! 4. tell the render worker what to draw next, and finish screenshots.
 
 mod actions;
+mod doc_dialogs;
+mod docs;
 mod draw;
 mod fileops;
 mod input;
@@ -50,6 +52,9 @@ pub struct ShotPlan {
     pub library: Option<String>,
     /// With `library`: start the preview playing.
     pub library_play: bool,
+    /// Things to show before the shot, comma separated: `new-document`, `templates`, `settings`, `find`, `history`,
+    /// `output`, `errors`, `tabs`, `recovery`, `save-changes`, `menu-file`.
+    pub show: Option<String>,
 }
 
 /// Everything the command line can ask for.
@@ -163,6 +168,8 @@ pub struct AniApp {
     ctx: Context,
     /// Distinguishes property drags, so each drag is one undo step.
     prop_gesture: u64,
+    /// Tabs, settings, autosave and recovery.
+    pub(crate) docs: crate::docs::Docs,
 }
 
 impl AniApp {
@@ -221,7 +228,12 @@ impl AniApp {
             outcome,
             ctx: ctx.clone(),
             prop_gesture: 0,
+            docs: crate::docs::Docs::new(crate::prefs::Store::open(options.shot.is_some())),
         };
+        if let Some(path) = &options.file {
+            app.remember(path);
+        }
+        app.docs_start();
         if let Some(run) = &app.shot {
             let plan = run.plan.clone();
             app.prepare_shot(&plan);
@@ -240,6 +252,9 @@ impl AniApp {
         if let Some(name) = &plan.library {
             self.show_library_item(name, plan.library_play);
         }
+        if let Some(show) = &plan.show {
+            self.show_for_shot(show);
+        }
         if let Some(spec) = &plan.select {
             let parts: Vec<usize> = spec.split(':').filter_map(|p| p.parse().ok()).collect();
             if let [layer, keyframe, index] = parts.as_slice() {
@@ -247,6 +262,58 @@ impl AniApp {
                 doc.editor.state.layer = *layer;
                 doc.editor.state.selection =
                     anicraft_tools::Selection::one(anicraft_tools::ElementRef::top_level(*layer, u32::try_from(*keyframe).unwrap_or(0), *index));
+            }
+        }
+    }
+
+    /// Opens the dialogs and panels `--show` names, so a screenshot can capture them.
+    fn show_for_shot(&mut self, show: &str) {
+        use crate::docs::{DocAction, DocDialog, Level, NewDocState, NewTab, SettingsState, TemplateChoice};
+        let ctx = self.ctx.clone();
+        for what in show.split(',').map(str::trim) {
+            match what {
+                "new-document" => self.doc_action(&ctx, DocAction::NewDialog),
+                "templates" => {
+                    let mut state = NewDocState { tab: NewTab::Templates, ..NewDocState::default() };
+                    state.template = Some(TemplateChoice::Builtin("character_scene"));
+                    self.ui.docs.dialog = Some(DocDialog::New(state));
+                }
+                "settings" => {
+                    self.ui.docs.settings = Some(SettingsState::of(self.host.session().doc().document()));
+                    self.ui.dialog = Some(crate::state::Dialog::DocumentSettings);
+                }
+                "find" => self.doc_action(&ctx, DocAction::Find),
+                "history" => {
+                    for (id, params) in [("layer.add", serde_json::json!({})), ("scene.add", serde_json::json!({ "name": "Scene 2" }))] {
+                        self.run(id, &params);
+                    }
+                    self.doc_action(&ctx, DocAction::TogglePanel(crate::docs::HISTORY_PANEL));
+                }
+                "output" => {
+                    self.ui.docs.log(Level::Info, "Opened the document");
+                    self.ui.docs.log(Level::Warning, "Font Foo is missing; substituting");
+                    self.ui.docs.log(Level::Error, "Frame 12: stop( is never closed");
+                    self.doc_action(&ctx, DocAction::TogglePanel(anim_ui::PanelId::Output));
+                }
+                "errors" => {
+                    let first = self.host.session_mut().doc_mut().editor.document.scenes.first_mut().and_then(|s| s.layers.first_mut()).and_then(|l| l.frames.first_mut());
+                    if let Some(frame) = first {
+                        frame.actionscript = Some("function f( { trace(1;".to_owned());
+                    }
+                    self.refresh_problems();
+                    self.doc_action(&ctx, DocAction::TogglePanel(crate::docs::ERRORS_PANEL));
+                }
+                "tabs" => {
+                    self.open_tab(AniDoc::default(), None);
+                    self.open_tab(AniDoc::default(), None);
+                }
+                "save-changes" => {
+                    self.run("layer.add", &serde_json::json!({}));
+                    let id = self.docs.tabs.active;
+                    self.request_close(vec![id], crate::docs::After::CloseTabs);
+                }
+                "revert" => self.ui.docs.dialog = Some(DocDialog::Revert),
+                _ => {}
             }
         }
     }

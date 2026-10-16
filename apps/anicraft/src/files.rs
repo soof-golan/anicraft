@@ -19,6 +19,8 @@ pub enum Loaded {
     Opened { path: PathBuf, project: Box<Project> },
     /// An export finished.
     Exported { label: String, outcome: ExportOutcome },
+    /// A recovery copy was written.
+    Autosaved { title: String },
 }
 
 /// File extensions the Open dialog offers.

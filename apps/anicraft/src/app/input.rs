@@ -11,6 +11,7 @@ use serde_json::json;
 
 use super::AniApp;
 use super::actions::FrameOp;
+use crate::docs::DocAction;
 use crate::menus::MenuAction;
 use crate::state::Dialog;
 use crate::view;
@@ -224,7 +225,17 @@ impl AniApp {
             (true, true, K::S) => Some(MenuAction::SaveAs),
             (true, false, K::Q) => Some(MenuAction::Quit),
             (true, false, K::R) => Some(MenuAction::Import { to_stage: true }),
-            (true, false, K::J) => Some(MenuAction::Dialog(Dialog::DocumentSettings)),
+            (true, false, K::J) => Some(MenuAction::Doc(DocAction::OpenSettings)),
+            (true, false, K::M) if modifiers.alt => Some(MenuAction::Doc(DocAction::Play(crate::docs::PlayToggle::MuteSounds))),
+            (true, false, K::B) if modifiers.alt => Some(MenuAction::Doc(DocAction::Play(crate::docs::PlayToggle::SimpleButtons))),
+            (true, false, K::F) => Some(MenuAction::Doc(DocAction::Find)),
+            (true, true, K::W) => Some(MenuAction::Doc(DocAction::CloseAll)),
+            (true, false, K::W) => Some(MenuAction::Doc(DocAction::CloseTab)),
+            (true, false, K::PageDown) => Some(MenuAction::Doc(DocAction::NextTab)),
+            (true, false, K::PageUp) => Some(MenuAction::Doc(DocAction::PrevTab)),
+            (false, false, K::F3) => Some(MenuAction::Doc(DocAction::FindAgain)),
+            (true, false, K::F10) => Some(MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL))),
+            (false, false, K::F2) => Some(MenuAction::Doc(DocAction::TogglePanel(anim_ui::PanelId::Output))),
             (true, false, K::C) => Some(MenuAction::Copy),
             (true, false, K::X) => Some(MenuAction::Cut),
             (true, false, K::V) => Some(MenuAction::Paste),

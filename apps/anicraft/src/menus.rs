@@ -9,6 +9,7 @@ use anim_ui::timeline::{FrameAction, LayerKind};
 use egui::Ui;
 use serde_json::{Value, json};
 
+use crate::docs::{BUILTIN_CATEGORY_ORDER, DOC_PANELS, DocAction, PlayToggle, TemplateChoice, panel_title};
 use crate::state::Dialog;
 
 /// What an export menu item asks for.
@@ -21,7 +22,7 @@ pub enum ExportKind {
 }
 
 /// A picked menu item.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuAction {
     /// Run a registered command.
     Command {
@@ -76,6 +77,8 @@ pub enum MenuAction {
     ToggleParentingView,
     ToggleEditMultiple,
     ToggleAutoKeyframe,
+    /// Tabs, templates, Save All, Find and the other document-level items.
+    Doc(DocAction),
 }
 
 /// What the menus need to know to enable, disable and check items.
@@ -99,6 +102,19 @@ pub struct MenuView {
     pub parenting_view: bool,
     pub edit_multiple: bool,
     pub auto_keyframe: bool,
+    /// Open documents.
+    pub tabs: usize,
+    /// The active document has a file to go back to.
+    pub can_revert: bool,
+    pub play: anicraft_cli::mcp::docfile::PlayOptions,
+    /// Autosave interval in minutes (0 is off).
+    pub autosave: u32,
+    /// The person's templates: category, name, file.
+    pub user_templates: Vec<(String, String, PathBuf)>,
+    /// Names of the saved commands.
+    pub commands: Vec<String>,
+    /// The History, Output and Compiler Errors panels that are open.
+    pub open_doc_panels: Vec<PanelId>,
 }
 
 impl MenuView {
@@ -180,7 +196,25 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
     };
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
-            push(item(ui, "New", "Ctrl+N", true), MenuAction::New);
+            push(item(ui, "New...", "Ctrl+N", true), MenuAction::New);
+            ui.menu_button("New from Template", |ui| {
+                let mut categories: Vec<&str> = BUILTIN_CATEGORY_ORDER.to_vec();
+                for (category, _, _) in &view.user_templates {
+                    if !categories.contains(&category.as_str()) {
+                        categories.push(category.as_str());
+                    }
+                }
+                for category in categories {
+                    ui.menu_button(crate::text(category), |ui| {
+                        for t in anicraft_cli::mcp::docfile::BUILTIN_TEMPLATES.iter().filter(|t| t.category == category) {
+                            push(item(ui, t.name, "", true), MenuAction::Doc(DocAction::NewFrom(TemplateChoice::Builtin(t.id))));
+                        }
+                        for (_, name, path) in view.user_templates.iter().filter(|t| t.0 == category) {
+                            push(item(ui, name, "", true), MenuAction::Doc(DocAction::NewFrom(TemplateChoice::User(path.clone()))));
+                        }
+                    });
+                }
+            });
             push(item(ui, "Open...", "Ctrl+O", true), MenuAction::Open);
             ui.add_enabled_ui(!view.recent.is_empty(), |ui| {
                 ui.menu_button("Open Recent", |ui| {
@@ -192,11 +226,19 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                             ui.close();
                         }
                     }
+                    ui.separator();
+                    push(item(ui, "Clear Recent Files", "", true), MenuAction::Doc(DocAction::ClearRecent));
                 });
             });
+            push(item(ui, "Close", "Ctrl+W", true), MenuAction::Doc(DocAction::CloseTab));
+            push(item(ui, "Close All", "Ctrl+Shift+W", view.tabs > 1), MenuAction::Doc(DocAction::CloseAll));
             ui.separator();
             push(item(ui, "Save", "Ctrl+S", true), MenuAction::Save);
             push(item(ui, "Save As...", "Ctrl+Shift+S", true), MenuAction::SaveAs);
+            push(item(ui, "Save as Template...", "", true), MenuAction::Doc(DocAction::SaveTemplate));
+            push(item(ui, "Save All", "", view.dirty || view.tabs > 1), MenuAction::Doc(DocAction::SaveAll));
+            push(item(ui, "Save and Compact", "", true), MenuAction::Doc(DocAction::SaveCompact));
+            push(item(ui, "Revert", "", view.can_revert), MenuAction::Doc(DocAction::Revert));
             ui.separator();
             ui.menu_button("Import", |ui| {
                 push(item(ui, "Import to Stage...", "Ctrl+R", true), MenuAction::Import { to_stage: true });
@@ -218,7 +260,13 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                 }
             });
             ui.separator();
-            push(item(ui, "Document Settings...", "Ctrl+J", true), MenuAction::Dialog(Dialog::DocumentSettings));
+            push(item(ui, "Document Settings...", "Ctrl+J", true), MenuAction::Doc(DocAction::OpenSettings));
+            ui.menu_button("Autosave", |ui| {
+                for minutes in crate::prefs::AUTOSAVE_CHOICES {
+                    let label = if minutes == 0 { "Off".to_owned() } else { format!("Every {minutes} minute{}", if minutes == 1 { "" } else { "s" }) };
+                    push(check(ui, &label, "", view.autosave == minutes), MenuAction::Doc(DocAction::SetAutosave(minutes)));
+                }
+            });
             ui.separator();
             push(item(ui, "Quit", "Ctrl+Q", true), MenuAction::Quit);
         });
@@ -252,6 +300,29 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             ui.separator();
             push(item(ui, "Edit Symbols", "Ctrl+E", true), MenuAction::EditSymbol);
             push(item(ui, "Edit in Place", "", view.has_selection), MenuAction::EditInPlace);
+            ui.separator();
+            push(item(ui, "Find and Replace...", "Ctrl+F", true), MenuAction::Doc(DocAction::Find));
+            push(item(ui, "Find Next", "F3", true), MenuAction::Doc(DocAction::FindAgain));
+            ui.separator();
+            push(check(ui, "History", "Ctrl+F10", view.open_doc_panels.contains(&crate::docs::HISTORY_PANEL)), MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL)));
+        });
+        ui.menu_button("Commands", |ui| {
+            push(item(ui, "Open History Panel", "", true), MenuAction::Doc(DocAction::TogglePanel(crate::docs::HISTORY_PANEL)));
+            ui.separator();
+            if view.commands.is_empty() {
+                ui.add_enabled(false, egui::Button::new("No saved commands"));
+            }
+            for name in &view.commands {
+                ui.horizontal(|ui| {
+                    let run = ui.button(crate::text(name)).clicked();
+                    push(run, MenuAction::Doc(DocAction::RunCommand(name.clone())));
+                    let delete = ui.small_button("x").on_hover_text("Delete this command").clicked();
+                    push(delete, MenuAction::Doc(DocAction::DeleteCommand(name.clone())));
+                    if run || delete {
+                        ui.close();
+                    }
+                });
+            }
         });
         ui.menu_button("View", |ui| {
             push(item(ui, "Zoom In", "Ctrl+=", true), MenuAction::ZoomIn);
@@ -267,17 +338,19 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(check(ui, "Guides", "Ctrl+;", view.guides), MenuAction::ToggleGuides);
             ui.separator();
             push(item(ui, "Light / Dark Theme", "", true), MenuAction::ToggleTheme);
-            if !view.closed_panels.is_empty() {
-                ui.menu_button("Show Panel", |ui| {
-                    for panel in &view.closed_panels {
-                        let clicked = ui.button(crate::toolui::panel_title(*panel)).clicked();
-                        push(clicked, MenuAction::OpenPanel(*panel));
-                        if clicked {
-                            ui.close();
-                        }
+            ui.menu_button("Show Panel", |ui| {
+                for panel in &view.closed_panels {
+                    let clicked = ui.button(panel_title(*panel)).clicked();
+                    push(clicked, MenuAction::OpenPanel(*panel));
+                    if clicked {
+                        ui.close();
                     }
-                });
-            }
+                }
+                for panel in DOC_PANELS {
+                    let open = view.open_doc_panels.contains(&panel);
+                    push(check(ui, &panel_title(panel), "", open), MenuAction::Doc(DocAction::TogglePanel(panel)));
+                }
+            });
         });
         ui.menu_button("Insert", |ui| {
             push(item(ui, "New Symbol...", "Ctrl+F8", true), MenuAction::Dialog(Dialog::NewSymbol { name: "Symbol 1".to_owned(), kind: 0 }));
@@ -335,7 +408,7 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                 push(check(ui, "Auto Keyframe", "", view.auto_keyframe), MenuAction::ToggleAutoKeyframe);
             });
             ui.separator();
-            push(item(ui, "Document...", "Ctrl+J", true), MenuAction::Dialog(Dialog::DocumentSettings));
+            push(item(ui, "Document...", "Ctrl+J", true), MenuAction::Doc(DocAction::OpenSettings));
         });
         ui.menu_button("Control", |ui| {
             push(item(ui, if view.playing { "Pause" } else { "Play" }, "Enter", true), MenuAction::Play);
@@ -347,6 +420,10 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Step Backward One Frame", ",", true), MenuAction::StepBack);
             ui.separator();
             push(check(ui, "Loop Playback", "", view.looping), MenuAction::ToggleLoop);
+            ui.separator();
+            push(check(ui, "Mute Sounds", "Ctrl+Alt+M", view.play.mute_sounds), MenuAction::Doc(DocAction::Play(PlayToggle::MuteSounds)));
+            push(check(ui, "Enable Simple Buttons", "Ctrl+Alt+B", view.play.simple_buttons), MenuAction::Doc(DocAction::Play(PlayToggle::SimpleButtons)));
+            push(check(ui, "Enable Live Frame Actions", "", view.play.frame_actions), MenuAction::Doc(DocAction::Play(PlayToggle::FrameActions)));
         });
         ui.menu_button("Window", |ui| {
             push(check(ui, "Scene", "Shift+F2", view.scene_panel), MenuAction::ToggleScenePanel);

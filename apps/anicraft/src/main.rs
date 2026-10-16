@@ -45,6 +45,10 @@ struct Args {
     /// With --library: start the preview playing before the shot.
     #[arg(long)]
     library_play: bool,
+    /// With --screenshot: open dialogs and panels first (comma separated): new-document, templates, settings, find,
+    /// history, output, errors, tabs, save-changes, revert.
+    #[arg(long, value_name = "LIST")]
+    show: Option<String>,
 
     /// Window size for --screenshot, as `WIDTHxHEIGHT` in points.
     #[arg(long, value_name = "WxH", default_value = "1440x900")]
@@ -95,6 +99,7 @@ fn main() -> color_eyre::Result<()> {
         select: args.select,
         library: args.library,
         library_play: args.library_play,
+        show: args.show,
     });
     let options = Options {
         file: args.file,

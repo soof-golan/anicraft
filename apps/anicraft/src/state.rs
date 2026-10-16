@@ -10,7 +10,7 @@ use anim_ui::{PanelId, StageViewState, Theme, ToolItem, toolbar};
 use egui::{Rect, TextureHandle, vec2};
 
 /// A modal question to the person at the keyboard.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Dialog {
     /// Convert the selection to a symbol (name and kind).
     ConvertToSymbol { name: String, kind: usize },
@@ -32,8 +32,6 @@ pub enum Dialog {
     Message { title: String, text: String },
     /// Keyboard shortcuts and about.
     About,
-    /// The document has unsaved changes; run this action if the person agrees to discard them.
-    Discard(Box<crate::menus::MenuAction>),
 }
 
 /// What the Layer Properties dialog edits.
@@ -130,6 +128,8 @@ pub struct UiState {
     pub tool_overlay: Vec<anim_ui::stage::Overlay>,
     /// Toolbox groups, flyouts and the Colour panel's selection.
     pub toolui: crate::toolui::ToolUi,
+    /// Dialogs, panels and logs of the document features (tabs, History, Output, Find).
+    pub docs: crate::docs::DocsUi,
 }
 
 impl UiState {
@@ -171,6 +171,7 @@ impl UiState {
             tool_cursor: None,
             tool_overlay: Vec::new(),
             toolui: crate::toolui::ToolUi::default(),
+            docs: crate::docs::DocsUi::default(),
         }
     }
 }

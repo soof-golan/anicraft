@@ -112,7 +112,8 @@ impl AniApp {
             MenuAction::SaveAs => self.save(true),
             MenuAction::Import { to_stage } => self.import_dialog(to_stage),
             MenuAction::Export(kind) => self.export_dialog(kind),
-            MenuAction::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            MenuAction::Quit => self.doc_action(ctx, crate::docs::DocAction::Quit),
+            MenuAction::Doc(action) => self.doc_action(ctx, action),
             MenuAction::Cut => {
                 self.copy_selection();
                 self.run("edit.delete", &json!({}));
@@ -222,9 +223,17 @@ impl AniApp {
 
     /// Runs a registered command as one undo step and reports failures in the status bar.
     pub(crate) fn run(&mut self, id: &str, params: &Value) -> bool {
+        let before = self.host.session().history().undo_len();
         let result = self.host.session_mut().execute(id, params);
         match result {
             Ok(_) => {
+                let history = self.host.session().history();
+                if history.undo_len() > before {
+                    // Keep the History panel's command log in step with the undo stack.
+                    let (undo, redo) = (history.undo_len(), history.redo_len());
+                    self.docs.steps.sync(undo, redo);
+                    self.docs.steps.record(crate::docs::Step { id: id.to_owned(), params: params.clone() });
+                }
                 if id.starts_with("edit.undo") || id.starts_with("edit.redo") {
                     self.ui.drag_base = None;
                 }
@@ -402,7 +411,7 @@ impl AniApp {
         self.start_playback(from_frame);
     }
 
-    fn start_playback(&mut self, from_frame: u32) {
+    pub(crate) fn start_playback(&mut self, from_frame: u32) {
         let token = self.ui.next_token;
         self.ui.next_token = token.saturating_add(1);
         self.ui.playback = Some(Playback { started: Instant::now(), from_frame, token });
@@ -429,7 +438,9 @@ impl AniApp {
         if pb.token != id {
             return;
         }
-        if let Some(track) = track {
+        if let Some(track) = track
+            && !self.play_options().mute_sounds
+        {
             self.audio.play(track, pb.started.elapsed().as_secs_f64());
         }
     }
@@ -1056,8 +1067,8 @@ impl AniApp {
                 let new_name = old.rsplit_once('/').map_or_else(|| name.clone(), |(parent, _)| format!("{parent}/{name}"));
                 self.run("library.rename_item", &json!({ "name": old, "new_name": new_name }));
             }
-            Dialog::DocumentSettings | Dialog::About | Dialog::Message { .. } => {}
-            Dialog::Discard(action) => self.discard_confirmed(*action),
+            Dialog::DocumentSettings => self.apply_settings(),
+            Dialog::About | Dialog::Message { .. } => {}
         }
     }
 
