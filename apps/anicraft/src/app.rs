@@ -345,15 +345,8 @@ impl AniApp {
         let size = self.ui.stage.desired_texture_size(ctx.pixels_per_point());
         let onion = (self.ui.onion.enabled && self.ui.playback.is_none()).then_some((self.ui.onion.before, self.ui.onion.after));
         let in_place = in_place_context(state, scenes);
-        let key = RenderKey {
-            revision: self.sync.revision,
-            target: target.clone(),
-            frame: state.frame,
-            size,
-            onion,
-            playing: self.ui.playback.is_some(),
-            in_place,
-        };
+        let key =
+            RenderKey { revision: self.sync.revision, target: target.clone(), frame: state.frame, size, onion, playing: self.ui.playback.is_some(), in_place };
         if self.sync.requested.as_ref() != Some(&key) {
             self.sync.next_id = self.sync.next_id.saturating_add(1);
             let id = self.sync.next_id;

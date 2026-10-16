@@ -14,10 +14,7 @@ use crate::state::EditorState;
 
 /// True when `layer` shows the keyframe `keyframe` at `frame` without that keyframe starting there.
 fn held(doc: &Document, timeline: &TimelineId, layer: usize, keyframe: u32, frame: u32) -> bool {
-    doc.timeline(timeline)
-        .and_then(|t| t.layers.get(layer))
-        .and_then(|l| l.keyframe_at(frame))
-        .is_some_and(|k| k.index == keyframe && keyframe != frame)
+    doc.timeline(timeline).and_then(|t| t.layers.get(layer)).and_then(|l| l.keyframe_at(frame)).is_some_and(|k| k.index == keyframe && keyframe != frame)
 }
 
 /// The element references a command reads, as the selection or its own targets.

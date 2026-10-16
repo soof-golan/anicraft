@@ -671,7 +671,12 @@ fn paste_frames(doc: &mut AniDoc, params: &Value) -> Out {
     let tl = doc.editor.document.timeline_mut(&id).ok_or_else(|| CommandError::failed("no such timeline"))?;
     let needed = p.layer.saturating_add(p.clip.rows.len());
     if needed > tl.layers.len() {
-        return Err(CommandError::failed(format!("the clip has {} layers but only {} lie from layer {} down", p.clip.rows.len(), tl.layers.len().saturating_sub(p.layer), p.layer)));
+        return Err(CommandError::failed(format!(
+            "the clip has {} layers but only {} lie from layer {} down",
+            p.clip.rows.len(),
+            tl.layers.len().saturating_sub(p.layer),
+            p.layer
+        )));
     }
     for (row, frames) in p.clip.rows.iter().enumerate() {
         let Some(l) = tl.layers.get_mut(p.layer.saturating_add(row)) else { continue };

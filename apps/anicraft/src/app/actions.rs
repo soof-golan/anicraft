@@ -704,7 +704,10 @@ impl AniApp {
         let layer = p.layer;
         let kinds = ["name", "comment", "anchor"];
         let syncs = ["event", "start", "stop", "stream"];
-        self.run("timeline.set_label", &json!({ "layer": layer, "frame": frame, "label": p.label, "kind": kinds.get(p.label_kind).copied().unwrap_or("name") }));
+        self.run(
+            "timeline.set_label",
+            &json!({ "layer": layer, "frame": frame, "label": p.label, "kind": kinds.get(p.label_kind).copied().unwrap_or("name") }),
+        );
         if p.tween != "None" {
             self.run("timeline.set_ease", &json!({ "layer": layer, "frame": frame, "acceleration": p.ease }));
         }

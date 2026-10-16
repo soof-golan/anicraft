@@ -145,9 +145,11 @@ impl AniApp {
             anim_scene::TimelineId::Symbol(n) => anicraft_xfl::display_name(n).into_owned(),
         };
         // The edit bar: the chain of timelines entered, outermost first, and the scenes to switch between.
-        let crumbs: Vec<String> = state.timeline_stack.iter().map(|(id, ..)| timeline_name(id)).chain(std::iter::once(timeline_name(&state.timeline))).collect();
+        let crumbs: Vec<String> =
+            state.timeline_stack.iter().map(|(id, ..)| timeline_name(id)).chain(std::iter::once(timeline_name(&state.timeline))).collect();
         let scene_names: Vec<String> = doc.document().scenes.iter().map(|s| anicraft_xfl::display_name(&s.name).into_owned()).collect();
-        let root_scene = if let anim_scene::TimelineId::Scene(i) = state.timeline_stack.first().map_or(&state.timeline, |(id, ..)| id) { Some(*i) } else { None };
+        let root_scene =
+            if let anim_scene::TimelineId::Scene(i) = state.timeline_stack.first().map_or(&state.timeline, |(id, ..)| id) { Some(*i) } else { None };
         let editing_in_place = state.in_place.is_some();
         let to_stage = state.in_place.unwrap_or(anim_core::Affine::IDENTITY);
         let bg = doc.document().background_color;
@@ -473,8 +475,10 @@ impl AniApp {
                             out.push(UiEvent::Menu(MenuAction::Command { id: "layer.set_parent", params: serde_json::json!({ "layer": index }) }));
                         }
                         for (candidate, (cname, ckind, _)) in rows.iter().enumerate().take(index) {
-                            if matches!(ckind, anim_scene::timeline::LayerKind::Folder | anim_scene::timeline::LayerKind::Mask | anim_scene::timeline::LayerKind::Guide)
-                                && ui.selectable_label(*parent == Some(candidate), crate::text(cname)).clicked()
+                            if matches!(
+                                ckind,
+                                anim_scene::timeline::LayerKind::Folder | anim_scene::timeline::LayerKind::Mask | anim_scene::timeline::LayerKind::Guide
+                            ) && ui.selectable_label(*parent == Some(candidate), crate::text(cname)).clicked()
                             {
                                 out.push(UiEvent::Menu(MenuAction::Command {
                                     id: "layer.set_parent",
