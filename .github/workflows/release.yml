@@ -43,7 +43,7 @@ jobs:
             target: aarch64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install rustup if the runner image lacks it
         # The Windows on Arm image does not ship rustup; the pinned toolchain then comes from rust-toolchain.toml.
         if: runner.os == 'Windows' && runner.arch == 'ARM64'
@@ -116,7 +116,7 @@ jobs:
           fi
           makensis -V2 "-DVERSION=${VERSION}" "-DSTAGE=stage/${PKG}" "-DOUTFILE=dist/${PKG}-setup.exe" packaging/windows/anicraft.nsi
           ls -l dist
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-${{ matrix.name }}
           path: dist/*
@@ -129,7 +129,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           pattern: package-*

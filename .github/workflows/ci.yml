@@ -32,7 +32,7 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: cargo fmt --all --check
 
   test:
@@ -48,11 +48,11 @@ jobs:
       # every test binary, so the Windows job builds without debug info.
       CARGO_PROFILE_DEV_DEBUG: ${{ matrix.os == 'windows-latest' && '0' || 'line-tables-only' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # A ReFS Dev Drive for the checkout, target dir and Cargo home: far cheaper small-file IO than NTFS + Defender.
       - name: Windows Dev Drive
         if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@v4
+        uses: samypr100/setup-dev-drive@562171fe8df7401fdf582d766cd3b6ab80d5b1a0 # v4.1.0
         with:
           drive-size: 16GB
           workspace-copy: true
@@ -65,7 +65,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev \
             libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev libfontconfig1-dev
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: nextest
       # One cache entry per OS, toolchain, week and Cargo.lock. An exact hit skips the multi-GB save, so a normal push
@@ -78,7 +78,7 @@ jobs:
           prefix="${{ runner.os }}-${{ runner.arch }}-ci-${rustc_id}"
           echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
           echo "key=${prefix}-$(date +%G%V)-${{ hashFiles('Cargo.lock') }}" >> "$GITHUB_OUTPUT"
-      - uses: jdx/mr-boxington-action@v1
+      - uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240 # v1.7.2
         with:
           working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
           cache-key: ${{ steps.key.outputs.key }}
