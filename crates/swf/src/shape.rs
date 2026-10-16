@@ -425,7 +425,12 @@ impl ShapeBuilder {
         let start = self.pos;
         self.pos = anchor;
         self.grow(anchor);
-        self.grow_quad(start, control, anchor);
+        // A control point strictly inside the box of the end points makes the curve monotone on both axes: its extent
+        // is that of the end points, which are already counted.
+        let between = |a: i32, c: i32, b: i32| (a < c && c < b) || (b < c && c < a);
+        if !(between(start.0, control.0, anchor.0) && between(start.1, control.1, anchor.1)) {
+            self.grow_quad(start, control, anchor);
+        }
     }
 
     fn grow(&mut self, p: (i32, i32)) {
@@ -634,6 +639,41 @@ mod tests {
         assert_eq!((x, y), (0, 0));
         // the curve's apex is at y = 37.5 px = 750 twips
         assert!(def.edge_bounds.y_max >= 745 && def.edge_bounds.y_max <= 755, "{:?}", def.edge_bounds);
+    }
+
+    #[test]
+    fn curve_bounds_include_every_extremum() {
+        // reference: the box of the end points widened by each quadratic's own extrema
+        let mut seed = 12_345_u32;
+        let mut next = || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            f64::from(seed >> 16) / 65_536.0 * 200.0
+        };
+        for _ in 0..200 {
+            let points: Vec<Point> = (0..9).map(|_| Point::new(next(), next())).collect();
+            let mut path = BezPath::new();
+            path.move_to(points[0]);
+            for pair in points[1..].chunks(2) {
+                path.quad_to(pair[0], pair[1]);
+            }
+            let mut b = ShapeBuilder::new();
+            b.add_path(&path, PathStyle::default());
+            let got = b.finish().edge_bounds;
+
+            let tw = |p: Point| Point::new(f64::from(twip_point(p).0), f64::from(twip_point(p).1));
+            let (mut x_min, mut x_max, mut y_min, mut y_max) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
+            let mut start = tw(points[0]);
+            for pair in points[1..].chunks(2) {
+                let (c, end) = (tw(pair[0]), tw(pair[1]));
+                let bbox = ParamCurveExtrema::bounding_box(&QuadBez::new(start, c, end));
+                x_min = x_min.min(num::floor_f64_to_i32(bbox.min_x()));
+                x_max = x_max.max(num::ceil_f64_to_i32(bbox.max_x()));
+                y_min = y_min.min(num::floor_f64_to_i32(bbox.min_y()));
+                y_max = y_max.max(num::ceil_f64_to_i32(bbox.max_y()));
+                start = end;
+            }
+            assert_eq!(got, Rect::new(x_min, x_max, y_min, y_max));
+        }
     }
 
     #[test]
