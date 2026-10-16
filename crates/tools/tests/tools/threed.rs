@@ -61,7 +61,11 @@ fn rotating_about_y_turns_the_box_about_its_origin() {
     let m = instance(&e).matrix_3d.expect("a 3D placement");
     let s = 45.0_f64.to_radians();
     assert!(near(m.transform_point([0.0, 0.0, 0.0]), [200.0, 150.0, 0.0]));
-    assert!(near(m.transform_point([100.0, 0.0, 0.0]), [100.0_f64.mul_add(s.cos(), 200.0), 150.0, -100.0 * s.sin()]), "{:?}", m.transform_point([100.0, 0.0, 0.0]));
+    assert!(
+        near(m.transform_point([100.0, 0.0, 0.0]), [100.0_f64.mul_add(s.cos(), 200.0), 150.0, -100.0 * s.sin()]),
+        "{:?}",
+        m.transform_point([100.0, 0.0, 0.0])
+    );
     assert!(near(m.transform_point([0.0, 100.0, 0.0]), [200.0, 250.0, 0.0]));
 }
 

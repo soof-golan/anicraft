@@ -182,8 +182,12 @@ fn document_rows(document: &Document, out: &mut Vec<Property>) {
             .in_section("Document"),
     );
     out.push(
-        Property::new("doc.perspective", "Perspective angle", PropValue::number_in(document.perspective_angle, 1.0, 179.0).precision(1, 0.5).with_suffix(" deg"))
-            .in_section("Document"),
+        Property::new(
+            "doc.perspective",
+            "Perspective angle",
+            PropValue::number_in(document.perspective_angle, 1.0, 179.0).precision(1, 0.5).with_suffix(" deg"),
+        )
+        .in_section("Document"),
     );
     let vanishing = document.vanishing_point.unwrap_or_else(|| anim_core::Point::new(document.width / 2.0, document.height / 2.0));
     out.push(
