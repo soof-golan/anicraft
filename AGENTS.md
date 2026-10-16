@@ -59,6 +59,18 @@ They are repeated here so that this repository stands on its own. If the two eve
 - Tests that need sample files read `ANICRAFT_SAMPLES` and return early when it is unset.
 - Run builds through the queue (see below) in the dev profile. Use release only for benchmarks.
 
+## Visual verification: predict, render, inspect
+
+Every component that draws or reads/writes drawable content follows the predict → render → inspect loop described
+in anicraft-libs' AGENTS.md ("Visual verification"):
+- Hand-written, original synthetic fixtures in `tests/fixtures/visual/`, each targeting a failure mode. For this repo:
+  nested symbols with skew, masks, motion and shape tweens, classic tweens with rotation wrap-around, RTL text fields,
+  filters, blend modes, and SWF output played back in Ruffle.
+- A written prediction in `<name>.expect.md` before rendering.
+- Close inspection of every PNG with the Read tool, using crops.
+- Fix the code, not the prediction.
+- Assertions plus goldens at the end.
+
 ## Building: always through the job queue
 
 Never run `cargo` directly for builds, checks, clippy or tests. Use the queue so parallel agents share the machine:
