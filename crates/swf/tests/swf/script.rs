@@ -1,7 +1,17 @@
 //! Frame scripts in exported SWFs, read back with Ruffle's `swf` crate (an independent parser of both the
 //! `ActionScript` 2 actions and the `ActionScript` 3 byte code).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::arithmetic_side_effects, clippy::panic, clippy::too_many_lines)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::panic,
+    clippy::too_many_lines,
+    clippy::missing_const_for_fn,
+    clippy::assert_is_empty,
+    clippy::as_conversions
+)]
 
 use anicraft_swf::export::{ExportOptions, export_display_lists};
 use anicraft_swf::movie::Compression;
