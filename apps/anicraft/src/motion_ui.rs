@@ -456,12 +456,13 @@ fn curve_section(ui: &mut Ui, view: &TweenView, state: &mut MotionUi, out: &mut 
     ui.horizontal(|ui| {
         if ui.button("Apply").clicked() {
             let curve = curve_points(edit);
-            match edit.target {
+            let command = match edit.target {
                 CurveTarget::Key(prop, offset) => {
-                    out.push(("motion.set_key_ease", span_params(view, json!({ "property": prop.label(), "offset": offset, "curve": curve }))))
+                    ("motion.set_key_ease", span_params(view, json!({ "property": prop.label(), "offset": offset, "curve": curve })))
                 }
-                CurveTarget::Tween(target) => out.push(("timeline.set_custom_ease", span_params(view, json!({ "target": target.xfl_name(), "curve": curve })))),
-            }
+                CurveTarget::Tween(target) => ("timeline.set_custom_ease", span_params(view, json!({ "target": target.xfl_name(), "curve": curve }))),
+            };
+            out.push(command);
             close = true;
         }
         if ui.button("Cancel").clicked() {
