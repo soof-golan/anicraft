@@ -73,6 +73,17 @@ fn dragging_makes_a_fixed_width_field() {
 }
 
 #[test]
+fn the_text_type_option_decides_what_kind_of_field_is_created() {
+    for kind in [TextKind::Static, TextKind::Dynamic, TextKind::Input] {
+        let mut e = editor();
+        e.state.settings.text.kind = kind;
+        new_field(&mut e, (50.0, 50.0));
+        let Element::Text(t) = elements(&e)[0] else { panic!("text") };
+        assert_eq!(t.kind, kind);
+    }
+}
+
+#[test]
 fn typing_inserts_in_order_at_the_caret() {
     let mut e = editor();
     new_field(&mut e, (50.0, 50.0));

@@ -130,16 +130,12 @@ pub fn wand_select(doc: &mut Document, state: &mut EditorState, point: Point, th
     let timeline = state.timeline.clone();
     let frame = state.frame;
     for layer in editable_layers(doc, &timeline) {
-        let wanted: Option<FillStyle> = doc
-            .timeline(&timeline)
-            .and_then(|t| t.layers.get(layer))
-            .and_then(|l| l.keyframe_at(frame))
-            .and_then(|k| {
-                k.elements.iter().rev().find_map(|e| match e {
-                    Element::Shape(s) if !s.is_drawing_object && s.matrix == Affine::IDENTITY => shapeops::paint_at(&s.shape, point),
-                    _ => None,
-                })
-            });
+        let wanted: Option<FillStyle> = doc.timeline(&timeline).and_then(|t| t.layers.get(layer)).and_then(|l| l.keyframe_at(frame)).and_then(|k| {
+            k.elements.iter().rev().find_map(|e| match e {
+                Element::Shape(s) if !s.is_drawing_object && s.matrix == Affine::IDENTITY => shapeops::paint_at(&s.shape, point),
+                _ => None,
+            })
+        });
         let Some(wanted) = wanted else { continue };
         items.extend(cut_layer(doc, &timeline, layer, frame, &|s| shapeops::split_by_paint(&s.shape, &wanted, threshold), &|_, _| false));
         break;

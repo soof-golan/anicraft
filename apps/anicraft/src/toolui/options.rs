@@ -2,7 +2,8 @@
 //! Animate (object drawing, snapping, pencil mode, brush and eraser settings, bucket gap size, rectangle and oval
 //! settings).
 
-use anicraft_tools::{BrushMode, EraserMode, GapSize, PencilMode, TipShape, ToolId, ToolSettings};
+use anicraft_tools::{BrushMode, EraserMode, GapSize, LassoMode, PencilMode, PolyStarStyle, TipShape, ToolId, ToolSettings};
+use anim_scene::TextKind;
 use egui::Ui;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -23,6 +24,9 @@ const fn snaps(tool: ToolId) -> bool {
             | ToolId::Line
             | ToolId::Rectangle
             | ToolId::Oval
+            | ToolId::RectanglePrimitive
+            | ToolId::OvalPrimitive
+            | ToolId::PolyStar
             | ToolId::Pen
             | ToolId::Pencil
             | ToolId::Brush
@@ -30,7 +34,15 @@ const fn snaps(tool: ToolId) -> bool {
 }
 
 const fn draws_objects(tool: ToolId) -> bool {
-    matches!(tool, ToolId::Line | ToolId::Rectangle | ToolId::Oval | ToolId::Pen | ToolId::Pencil | ToolId::Brush)
+    matches!(tool, ToolId::Line | ToolId::Rectangle | ToolId::Oval | ToolId::PolyStar | ToolId::Pen | ToolId::Pencil | ToolId::Brush)
+}
+
+const fn text_kind_label(kind: TextKind) -> &'static str {
+    match kind {
+        TextKind::Static => "Static Text",
+        TextKind::Dynamic => "Dynamic Text",
+        TextKind::Input => "Input Text",
+    }
 }
 
 fn combo<T: Copy + PartialEq>(ui: &mut Ui, id: &str, current: T, all: &[T], label: impl Fn(T) -> &'static str) -> Option<T> {
@@ -96,7 +108,7 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
             ui.end_row();
         }
         match tool {
-            ToolId::Rectangle => {
+            ToolId::Rectangle | ToolId::RectanglePrimitive => {
                 ui.label("Corner radius");
                 ui.vertical(|ui| {
                     let mut lock = s.corner_lock;
@@ -125,7 +137,55 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 });
                 ui.end_row();
             }
-            ToolId::Oval => {
+            ToolId::PolyStar => {
+                ui.label("Style");
+                if let Some(style) = combo(ui, "polystar-style", s.polystar.style, &PolyStarStyle::ALL, PolyStarStyle::label) {
+                    set(json!({ "polystar": { "style": patch(style) } }));
+                }
+                ui.end_row();
+                ui.label("Number of sides");
+                let mut sides = s.polystar.sides;
+                if ui.add(egui::DragValue::new(&mut sides).range(3..=32)).changed() {
+                    set(json!({ "polystar": { "sides": sides } }));
+                }
+                ui.end_row();
+                ui.label("Star point size");
+                let mut size = s.polystar.star_point_size;
+                let enabled = s.polystar.style == PolyStarStyle::Star;
+                if ui.add_enabled(enabled, egui::DragValue::new(&mut size).range(0.0..=1.0).speed(0.01).fixed_decimals(2)).changed() {
+                    set(json!({ "polystar": { "star_point_size": size } }));
+                }
+                ui.end_row();
+            }
+            ToolId::Lasso => {
+                ui.label("Mode");
+                if let Some(mode) = combo(ui, "lasso-mode", s.lasso.mode, &LassoMode::ALL, LassoMode::label) {
+                    set(json!({ "lasso": { "mode": patch(mode) } }));
+                }
+                ui.end_row();
+                if s.lasso.mode == LassoMode::MagicWand {
+                    ui.label("Threshold");
+                    if let Some(v) = number(ui, s.lasso.threshold, 0.0..=255.0, "") {
+                        set(json!({ "lasso": { "threshold": v } }));
+                    }
+                    ui.end_row();
+                }
+                ui.label("");
+                ui.weak("Hold Alt and click to place polygon corners; Enter closes the polygon.");
+                ui.end_row();
+            }
+            ToolId::Text => {
+                ui.label("Text type");
+                let kinds = [TextKind::Static, TextKind::Dynamic, TextKind::Input];
+                if let Some(kind) = combo(ui, "text-kind", s.text.kind, &kinds, text_kind_label) {
+                    set(json!({ "text": { "kind": patch(kind) } }));
+                }
+                ui.end_row();
+                ui.label("");
+                ui.weak("Click for a text field that grows as you type; drag for a box of a fixed width.");
+                ui.end_row();
+            }
+            ToolId::Oval | ToolId::OvalPrimitive => {
                 ui.label("Start angle");
                 if let Some(v) = number(ui, s.oval.start_angle, 0.0..=360.0, "\u{b0}") {
                     set(json!({ "oval": { "start_angle": v } }));

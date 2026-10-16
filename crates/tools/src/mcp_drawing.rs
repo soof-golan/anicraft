@@ -70,7 +70,10 @@ fn draw_polystar<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Com
             if let Some(size) = p.point_size {
                 options.star_point_size = size;
             }
-            let script = ToolScript { tool: Some(ToolId::PolyStar), events: vec![down(p.x, p.y), drag(f64::midpoint(p.x, end_x), f64::midpoint(p.y, end_y)), up(end_x, end_y)] };
+            let script = ToolScript {
+                tool: Some(ToolId::PolyStar),
+                events: vec![down(p.x, p.y), drag(f64::midpoint(p.x, end_x), f64::midpoint(p.y, end_y)), up(end_x, end_y)],
+            };
             let report = run(ed, &script)?;
             Ok(result_of(ed, &report))
         })
@@ -247,7 +250,8 @@ const SCHEMA_POLYSTAR: &str = r##"{"type":"object","required":["x","y","radius"]
 const SCHEMA_PRIMITIVE: &str = r##"{"type":"object","description":"Change the selected rectangle or oval primitives","properties":{"width":{"type":"number","minimum":0},"height":{"type":"number","minimum":0},"corner_radius":{"type":"number","minimum":0},"radii":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"top left, top right, bottom right, bottom left"},"lock":{"type":"boolean"},"start_angle":{"type":"number"},"end_angle":{"type":"number"},"inner_radius":{"type":"number","minimum":0,"maximum":99},"close_path":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_LASSO: &str = r##"{"type":"object","required":["points"],"properties":{"points":{"type":"array","minItems":3,"items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"add":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_WAND: &str = r##"{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"threshold":{"type":"number","minimum":0,"maximum":255},"add":{"type":"boolean"}},"additionalProperties":false}"##;
-const SCHEMA_ANCHOR: &str = r##"{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}},"additionalProperties":false}"##;
+const SCHEMA_ANCHOR: &str =
+    r##"{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}},"additionalProperties":false}"##;
 const SCHEMA_CONVERT: &str = r##"{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"pull":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2,"description":"Drag the handles out by this offset instead of toggling corner and smooth"}},"additionalProperties":false}"##;
 
 /// The commands of this module.
@@ -265,9 +269,9 @@ pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
         CommandSpec::new("primitive.set", "Set Primitive", primitive_set::<D>)
             .with_schema(SCHEMA_PRIMITIVE)
             .describe("Change the size, corner radii, start and end angle or inner radius of the selected rectangle or oval primitives."),
-        CommandSpec::new("select.lasso", "Lasso Select", select_lasso::<D>)
-            .with_schema(SCHEMA_LASSO)
-            .describe("Select what lies inside a polygon: shapes are cut along it and the part inside is selected, whole objects are selected when it encloses them."),
+        CommandSpec::new("select.lasso", "Lasso Select", select_lasso::<D>).with_schema(SCHEMA_LASSO).describe(
+            "Select what lies inside a polygon: shapes are cut along it and the part inside is selected, whole objects are selected when it encloses them.",
+        ),
         CommandSpec::new("select.wand", "Magic Wand Select", select_wand::<D>)
             .with_schema(SCHEMA_WAND)
             .describe("Select the fills whose colour is within a threshold of the fill at a point."),

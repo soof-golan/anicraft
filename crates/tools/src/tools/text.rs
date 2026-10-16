@@ -6,7 +6,7 @@
 //! delegated to the host with [`ToolCommand::CaretMotion`]; the host answers with a `SetCaret` event.
 
 use anim_core::{Affine, Point, Vec2};
-use anim_scene::{Element, TextElement, TextKind, TextRun};
+use anim_scene::{Element, TextElement, TextRun};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::command::{CaretMotion, ToolCommand};
@@ -127,7 +127,7 @@ impl TextTool {
         run.italic = s.italic;
         let (width, auto_expand) = size.map_or((NEW_FIELD_WIDTH, true), |v| (v.x.max(1.0), false));
         let height = f64::from(s.size) * 1.4;
-        let mut field = TextElement::new(TextKind::Static, Affine::translate(origin.to_vec2()), width, height, vec![run]);
+        let mut field = TextElement::new(s.kind, Affine::translate(origin.to_vec2()), width, height, vec![run]);
         field.auto_expand = auto_expand;
         Some((Element::Text(Box::new(field)), ElementRef::top_level(ctx.layer, keyframe, count)))
     }
