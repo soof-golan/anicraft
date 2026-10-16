@@ -60,7 +60,26 @@ state; every tool carries a JSON Schema and a description in `tools/list`.
 | Instances | `instance_set_color_effect` (none, brightness, tint, alpha, advanced), `instance_add_filter` (blur, drop shadow, glow, colour matrix), `instance_clear_filters`, `instance_set_options` (blend mode, name, visible, cache as bitmap, graphic loop mode and first frame) |
 | Text | `text_set_style` (text, face, size, colour, bold, italic, letter spacing, direction, alignment) |
 | Library | `library_rename_item`, `library_remove_item`, `library_duplicate_symbol` |
-| Window only | `selection_set_property` (any Properties panel field) |
+| Window only | `selection_set_property` (any Properties panel field), the `properties` query (what it accepts right now) |
+
+### Properties
+
+`selection_set_property` takes `{"property": id, "value": ...}` and is one undo step, like dragging the field in the
+Properties panel. The `properties` query (`query` with `name: "properties"`) lists every id the call accepts for the
+current selection, with its label, section, current value and, for choices, the option names. Choices take the option's
+name or its index, colours `#rrggbb` or `#rrggbbaa`, percentages are 0 to 100.
+
+| Selection | Ids |
+|---|---|
+| Any object | `x`, `y`, `w`, `h`, `rotation` |
+| Shape, drawing object | `fill`, `fill_alpha`, `fill_stopN` (gradients), `stroke`, `stroke_alpha`, `stroke_width`, `stroke_style` (solid, dashed, dotted), `stroke_cap`, `stroke_join`, `stroke_miter`, `stroke_scale`, `stroke_hinting`, `drawing_object` |
+| Symbol instance | `symbol` (swap), `name`, `kind`, `visible`, `cache_as_bitmap`, `loop`, `first_frame`, `last_frame`, `effect`, `brightness`, `tint`, `tint_amount`, `alpha`, `adv_r` ... `adv_a_off`, `blend`, `filter.add`, `filter.N.*` (blur, drop shadow and glow parameters, `remove`) |
+| Text | `text_type`, `name`, `orientation`, `auto_expand`, `text`, `font`, `size`, `text_color`, `text_alpha`, `bold`, `italic`, `letter_spacing`, `align`, `direction`, `line_spacing`, `indent`, `margin_left`, `margin_right` |
+| Bitmap | `source` (swap), `bitmap.smoothing`, `bitmap.compression`, `bitmap.quality` |
+| Group | `x`, `y`, `w`, `h`, `rotation` |
+| Document | `doc.width`, `doc.height`, `doc.fps`, `doc.background` |
+| Layer under the playhead | `layer.name`, `layer.visible`, `layer.locked`, `layer.outline`, `layer.color` |
+| Keyframe under the playhead | `frame.label`, `frame.label_type`, `tween.type` (none, classic, shape), `tween.preset`, `tween.ease`, `tween.rotate`, `tween.rotate_times`, `tween.scale`, `tween.snap`, `tween.orient`, `tween.sync` |
 
 Resources: `anim://session/status`, `anim://document/outline`, `anim://document/library`, `anim://commands`,
 `anim://session/journal`, `anim://property/{path}`.

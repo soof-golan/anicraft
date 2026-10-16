@@ -103,7 +103,7 @@ fn menu_commands() -> Vec<CommandSpec<AniDoc>> {
             .with_schema(NO_PARAMS),
         CommandSpec::new("library.import", "Import to Library...", import)
             .in_menu(&["File", "Import"])
-            .describe("Imports an image into the library: PNG, JPEG, GIF, BMP and WebP as they are; PSD, AI, PDF and SVG flattened to a PNG at their own size. `name` overrides the library name. With `place` the bitmap is also put, centred, on the current layer and frame of the timeline being edited. The path must lie inside a read root.")
+            .describe("Imports an image into the library: PNG, JPEG, GIF, BMP and WebP as they are; PSD, AI, PDF and SVG flattened to a PNG at their own size. WAV, MP3, Ogg and FLAC sounds go to the library only (a WAV is stored as Animate stores it: 16 bit PCM at 5, 11, 22 or 44 kHz); put one on a keyframe with timeline_set_sound. `name` overrides the library name. With `place` the bitmap is also put, centred, on the current layer and frame of the timeline being edited. The path must lie inside a read root.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["path"],"properties":{"path":{"type":"string","description":"file to import"},"name":{"type":"string"},"place":{"type":"boolean","default":false}}}"#),
     ]
 }
@@ -457,7 +457,11 @@ struct ImportParams {
 fn import(doc: &mut AniDoc, params: &Value) -> Out {
     let p: ImportParams = parse_params(params)?;
     let imported = crate::import::import_artwork_as(doc, Path::new(&p.path), p.name.as_deref(), p.place).map_err(CommandError::failed)?;
-    Ok(json!({ "name": imported.name, "width": imported.size[0], "height": imported.size[1], "placed": p.place }))
+    if doc.document().library.find_sound(&imported.name).is_some() {
+        // Sounds go to the library only; they are placed on a keyframe with timeline_set_sound.
+        return Ok(json!({ "name": imported.name, "kind": "sound" }));
+    }
+    Ok(json!({ "name": imported.name, "kind": "bitmap", "width": imported.size[0], "height": imported.size[1], "placed": p.place }))
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

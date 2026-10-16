@@ -12,6 +12,7 @@ mod actions;
 mod draw;
 mod fileops;
 mod input;
+mod library_preview;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,6 +45,10 @@ pub struct ShotPlan {
     pub tool: Option<String>,
     /// Open the Properties panel on this selection: `layer:keyframe:index`.
     pub select: Option<String>,
+    /// Select this library item (its full path) so the preview shows it.
+    pub library: Option<String>,
+    /// With `library`: start the preview playing.
+    pub library_play: bool,
 }
 
 /// Everything the command line can ask for.
@@ -216,6 +221,9 @@ impl AniApp {
             let doc = self.host.session_mut().doc_mut();
             doc.editor.select_tool(tool);
         }
+        if let Some(name) = &plan.library {
+            self.show_library_item(name, plan.library_play);
+        }
         if let Some(spec) = &plan.select {
             let parts: Vec<usize> = spec.split(':').filter_map(|p| p.parse().ok()).collect();
             if let [layer, keyframe, index] = parts.as_slice() {
@@ -288,6 +296,7 @@ impl AniApp {
                     self.ui.status = format!("render failed: {message}");
                 }
                 Done::Sound { id, track, notes } => self.soundtrack_ready(id, track, &notes),
+                Done::Preview { name, frame: _, data } => self.preview_ready(ctx, &name, data),
                 Done::Thumbnail { name, image } => {
                     if let Some(image) = image {
                         let size = [num::u32_to_usize(image.width), num::u32_to_usize(image.height)];
@@ -337,23 +346,25 @@ impl AniApp {
             self.sync.requested = Some(key);
         }
         self.request_thumbnails();
+        self.drive_preview(ctx);
     }
 
     fn request_thumbnails(&mut self) {
         let doc = self.host.session().doc().document();
         let mut budget = 6;
-        for symbol in doc.library.symbols() {
+        let names = doc.library.symbols().map(|s| &s.name).chain(doc.library.bitmaps().map(|b| &b.name));
+        for name in names {
             if budget == 0 {
                 break;
             }
-            if self.ui.thumbs.contains_key(&symbol.name) || self.ui.thumb_requested.contains(&symbol.name) {
+            if self.ui.thumbs.contains_key(name) || self.ui.thumb_requested.contains(name) {
                 continue;
             }
-            if symbol.name.rsplit_once('/').is_some_and(|(parent, _)| self.ui.collapsed_folders.contains(parent)) {
+            if name.rsplit_once('/').is_some_and(|(parent, _)| self.ui.collapsed_folders.contains(parent)) {
                 continue;
             }
-            self.ui.thumb_requested.insert(symbol.name.clone());
-            self.worker.send(Job::Thumbnail { name: symbol.name.clone(), size: 48 });
+            self.ui.thumb_requested.insert(name.clone());
+            self.worker.send(Job::Thumbnail { name: name.clone(), size: 48 });
             budget = usize::saturating_sub(budget, 1);
         }
     }
@@ -368,6 +379,7 @@ impl AniApp {
         self.ui.collapsed_folders.clear();
         self.ui.collapsed_layers.clear();
         self.ui.library_selected = None;
+        self.ui.preview = crate::preview::PreviewState::default();
         self.ui.timeline.selection = anim_ui::timeline::FrameSelection::default();
         self.ui.timeline.selected_layers.clear();
         self.stop_playback();
@@ -473,6 +485,7 @@ impl AniApp {
             && self.sync.shown == self.sync.requested
             && self.sync.inflight.is_empty()
             && self.fonts
+            && self.preview_settled()
             && self.sync.last_error.is_none();
         let Some(run) = &mut self.shot else { return };
         match &mut run.stage {

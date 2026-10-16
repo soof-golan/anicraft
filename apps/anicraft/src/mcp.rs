@@ -72,10 +72,19 @@ impl AppHooks<AniDoc> for GuiHooks {
     fn queries(&self) -> Vec<QuerySpec> {
         let mut queries = self.inner.queries();
         queries.push(QuerySpec::new("editor_state", "The playhead, active tool, current layer, selection and the timeline being edited."));
+        queries.push(QuerySpec::new(
+            "properties",
+            "Every property selection_set_property accepts right now, with its id, label, section, current value and options: the rows of the Properties panel \
+for the selection (or the document, layer and keyframe), plus doc.*, layer.*, frame.* and tween.*.",
+        ));
         queries
     }
 
     fn query(&mut self, session: &Session<AniDoc>, name: &str, params: &Value, ticket: &Ticket) -> HookResult {
+        if name == "properties" {
+            let rows: Vec<Value> = crate::props::catalog(session.doc()).iter().filter_map(|p| serde_json::to_value(p).ok()).collect();
+            return Ok(HookOutcome::Ready(anim_mcp::Reply::value(json!({ "properties": rows }))));
+        }
         if name == "editor_state" {
             let s = &session.doc().editor.state;
             let value = json!({

@@ -68,10 +68,17 @@ pub enum Job {
         scene: usize,
         from_frame: u32,
     },
-    /// A library symbol's thumbnail.
+    /// A library item's thumbnail (symbols and bitmaps).
     Thumbnail {
         name: String,
         size: u32,
+    },
+    /// The Library panel's preview of an item at a frame.
+    Preview {
+        name: String,
+        frame: u32,
+        /// Let nested movie clips advance (the preview is playing).
+        playing: bool,
     },
 }
 
@@ -82,6 +89,7 @@ pub enum Done {
     Failed { id: u64, message: String },
     Sound { id: u64, track: Option<PcmBuffer>, notes: Vec<String> },
     Thumbnail { name: String, image: Option<Image> },
+    Preview { name: String, frame: u32, data: crate::preview::PreviewData },
 }
 
 /// Handle to the worker thread.
@@ -173,7 +181,7 @@ fn target_list(ev: &mut Evaluator<'_>, target: &Target, frame: u32) -> DisplayLi
 }
 
 /// A premultiplied image filled with `colour` (transparent for `None`).
-fn solid(width: u32, height: u32, colour: Option<Rgba8>) -> Image {
+pub(crate) fn solid(width: u32, height: u32, colour: Option<Rgba8>) -> Image {
     let pixel = colour.map_or([0; 4], |c| {
         let a = u16::from(c.a);
         let mul = |v: u8| u8::try_from(u16::from(v).saturating_mul(a).saturating_add(127).checked_div(255).unwrap_or(0)).unwrap_or(255);
@@ -188,7 +196,7 @@ fn solid(width: u32, height: u32, colour: Option<Rgba8>) -> Image {
 }
 
 /// Source-over of `src` onto `dst` (both premultiplied, same size).
-fn over(dst: &mut Image, src: &Image) {
+pub(crate) fn over(dst: &mut Image, src: &Image) {
     if dst.width != src.width || dst.height != src.height {
         return;
     }
@@ -240,6 +248,8 @@ fn serve(jobs: &Receiver<Job>, done: &Sender<Done>, wake: &dyn Fn(), document: &
             match jobs.try_recv() {
                 Ok(next) => match (&job, next) {
                     (Job::Render(_), next @ Job::Render(_)) => job = next,
+                    // A running preview asks for a frame every tick; only the newest matters.
+                    (Job::Preview { name: old, .. }, next @ Job::Preview { .. }) if matches!(&next, Job::Preview { name, .. } if name == old) => job = next,
                     (_, next @ Job::Load { .. }) => {
                         *carry = Some(next);
                         return Ok(());
@@ -276,7 +286,8 @@ fn answer(ev: &mut Evaluator<'_>, document: &Document, media: &MediaStore, job: 
                 Err(e) => Done::Failed { id, message: e.to_string() },
             })
         }
-        Job::Thumbnail { name, size } => Some(Done::Thumbnail { image: thumbnail(ev, &name, size), name }),
+        Job::Thumbnail { name, size } => Some(Done::Thumbnail { image: thumbnail(ev, media, &name, size), name }),
+        Job::Preview { name, frame, playing } => Some(Done::Preview { data: crate::preview::render_preview(ev, media, &name, frame, playing), name, frame }),
     }));
     match result {
         Ok(Some(answer)) => {
@@ -291,8 +302,13 @@ fn answer(ev: &mut Evaluator<'_>, document: &Document, media: &MediaStore, job: 
     }
 }
 
-/// A symbol's first frame fitted into a `size` x `size` square with a transparent background.
-fn thumbnail(ev: &mut Evaluator<'_>, name: &str, size: u32) -> Option<Image> {
+/// A symbol's first frame fitted into a `size` x `size` square with a transparent background, or a bitmap scaled
+/// down to that size.
+fn thumbnail(ev: &mut Evaluator<'_>, media: &MediaStore, name: &str, size: u32) -> Option<Image> {
+    if let Some(item) = ev.document().library.find_bitmap(name) {
+        let image = anicraft_xfl::decode_bitmap(media, item.media?).ok()?;
+        return Some(crate::preview::shrink(&image, size.max(8)));
+    }
     let bounds = ev.symbol_bounds(name, 0)?;
     if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
         return None;

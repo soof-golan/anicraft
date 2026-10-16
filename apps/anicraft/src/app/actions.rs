@@ -726,6 +726,9 @@ impl AniApp {
     fn library_event(&mut self, event: LibraryEvent) {
         match event {
             LibraryEvent::Select(id) => self.ui.library_selected = self.library_name(id),
+            LibraryEvent::PreviewPlay => self.preview_play(),
+            LibraryEvent::PreviewStop => self.preview_stop(),
+            LibraryEvent::PreviewSeek(permille) => self.preview_seek(permille),
             LibraryEvent::Open(id) | LibraryEvent::Action { id, action: LibraryAction::Edit } => {
                 if let Some(name) = self.library_name(id) {
                     self.edit_symbol(&name);

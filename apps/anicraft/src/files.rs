@@ -24,8 +24,8 @@ pub enum Loaded {
 /// File extensions the Open dialog offers.
 pub const OPEN_EXTENSIONS: [&str; 2] = ["fla", "xfl"];
 
-/// Extensions of artwork the importer understands.
-pub const IMPORT_EXTENSIONS: [&str; 11] = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "psd", "psb", "ai", "svg", "pdf"];
+/// Extensions of artwork and sounds the importer understands.
+pub const IMPORT_EXTENSIONS: [&str; 15] = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "psd", "psb", "ai", "svg", "pdf", "wav", "mp3", "ogg", "flac"];
 
 /// A job body that reads a document.
 pub fn open_job(path: PathBuf) -> impl FnOnce(&mut JobContext<Loaded>) -> Result<Loaded, JobError> + Send + 'static {

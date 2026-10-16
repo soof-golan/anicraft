@@ -151,7 +151,7 @@ impl AniApp {
     }
 
     pub(super) fn import_dialog(&mut self, to_stage: bool) {
-        let picked = rfd::FileDialog::new().set_title("Import").add_filter("Artwork and images", &IMPORT_EXTENSIONS).pick_file();
+        let picked = rfd::FileDialog::new().set_title("Import").add_filter("Artwork, images and sounds", &IMPORT_EXTENSIONS).pick_file();
         if let Some(path) = picked {
             self.import_path(&path, to_stage);
         }

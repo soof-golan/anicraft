@@ -99,7 +99,6 @@ from `anicraft-libs`, pinned by git rev in `Cargo.toml`.
   (armatures) and ActionScript. Dashed, dotted and hatched strokes render as solid.
 - SWF output is checked against Ruffle's renderer on synthetic fixtures, and by parsing and round trips on the
   samples. It has not been checked in Adobe's Flash Player.
-- Some panels (properties, library preview) are basic.
 - Large documents are slow to export (software rendering and encoding).
 
 ## Crates

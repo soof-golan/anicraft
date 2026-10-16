@@ -9,6 +9,7 @@ use clap::Parser;
 /// `AniCraft`: a 2D animation editor for Adobe Animate documents (.fla / XFL).
 #[derive(Debug, Parser)]
 #[command(version, about)]
+#[allow(clippy::struct_excessive_bools, reason = "independent command line switches")]
 struct Args {
     /// A document to open (.fla, .xfl folder or its marker file).
     file: Option<PathBuf>,
@@ -36,6 +37,14 @@ struct Args {
     /// With --screenshot: select an element first, as LAYER:KEYFRAME:INDEX (all 0-based).
     #[arg(long, value_name = "L:K:I")]
     select: Option<String>,
+
+    /// With --screenshot: select this library item (its full path) so the Library panel previews it.
+    #[arg(long, value_name = "ITEM")]
+    library: Option<String>,
+
+    /// With --library: start the preview playing before the shot.
+    #[arg(long)]
+    library_play: bool,
 
     /// Window size for --screenshot, as `WIDTHxHEIGHT` in points.
     #[arg(long, value_name = "WxH", default_value = "1440x900")]
@@ -78,7 +87,15 @@ fn main() -> color_eyre::Result<()> {
         return Ok(());
     }
     let window = parse_size(&args.size).ok_or_else(|| color_eyre::eyre::eyre!("--size must look like 1440x900"))?;
-    let shot = args.screenshot.map(|out| ShotPlan { out, frame: args.frame, panel: args.panel, tool: args.tool, select: args.select });
+    let shot = args.screenshot.map(|out| ShotPlan {
+        out,
+        frame: args.frame,
+        panel: args.panel,
+        tool: args.tool,
+        select: args.select,
+        library: args.library,
+        library_play: args.library_play,
+    });
     let options = Options {
         file: args.file,
         shot,

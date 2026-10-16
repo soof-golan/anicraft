@@ -125,7 +125,10 @@ impl AniApp {
             frame_count: model.frame_count,
         };
         let thumbs: HashMap<String, egui::TextureId> = self.ui.thumbs.iter().map(|(k, v)| (k.clone(), v.id())).collect();
-        let rows = view::library_rows(doc.document(), &self.ui.collapsed_folders, &self.ui.library_filter, self.ui.library_selected.as_deref(), &thumbs);
+        let mut rows = view::library_rows(doc.document(), &self.ui.collapsed_folders, &self.ui.library_filter, self.ui.library_selected.as_deref(), &thumbs);
+        if let Some(name) = self.ui.library_selected.as_deref() {
+            rows.model.preview = crate::preview::model(doc.document(), name, &self.ui.preview, doc.document().frame_rate, std::time::Instant::now());
+        }
         let props = crate::props::describe(doc);
         let tool_id = state.active_tool.toolbar_id().to_owned();
         let in_symbol = matches!(state.timeline, anim_scene::TimelineId::Symbol(_));

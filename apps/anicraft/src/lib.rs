@@ -28,6 +28,7 @@ pub mod commands;
 pub mod files;
 pub mod mcp;
 pub mod menus;
+pub mod preview;
 pub mod props;
 pub mod smoke;
 pub mod state;

@@ -58,6 +58,8 @@ pub struct UiState {
     pub collapsed_folders: BTreeSet<String>,
     pub library_selected: Option<String>,
     pub library_filter: String,
+    /// The Library panel's preview of the selected item.
+    pub preview: crate::preview::PreviewState,
     pub thumbs: HashMap<String, TextureHandle>,
     pub thumb_requested: BTreeSet<String>,
     pub tools: Vec<ToolItem>,
@@ -95,6 +97,7 @@ impl UiState {
             collapsed_folders: BTreeSet::new(),
             library_selected: None,
             library_filter: String::new(),
+            preview: crate::preview::PreviewState::default(),
             thumbs: HashMap::new(),
             thumb_requested: BTreeSet::new(),
             tools: toolbar::animate_tools(),

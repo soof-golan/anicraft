@@ -30,7 +30,7 @@ pub fn registry() -> CommandRegistry<AniDoc> {
 pub fn all() -> Vec<CommandSpec<AniDoc>> {
     vec![
         CommandSpec::new("selection.set_property", "Set Property", set_property)
-            .describe("Sets one property of the single selected object (or of the document when nothing is selected, with ids doc.width, doc.height, doc.fps, doc.background). The ids are those the Properties panel shows: x, y, w, h, rotation, name, visible, effect, alpha, blend, fill, stroke, stroke_width, text, font, size, text_color, direction, align, ... Call tools_state to see what is selected.")
+            .describe("Sets one property, as the Properties panel would. Object properties (x, y, w, h, rotation, and per kind: fill, fill_alpha, stroke, stroke_alpha, stroke_width, stroke_style, stroke_cap, stroke_join, stroke_scale; name, kind, symbol, loop, first_frame, effect, brightness, alpha, tint, blend, filter.add, filter.N.*; text, font, size, text_color, text_alpha, align, direction, letter_spacing, line_spacing, ...) apply to the single selected object. doc.width, doc.height, doc.fps and doc.background edit the document; layer.*, frame.* and tween.* edit the layer and keyframe under the playhead. Run the `properties` query for the exact list, with current values and options, for what is selected now. Choices take the option's name or its index, colours take #rrggbb or #rrggbbaa, percentages are 0-100.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["property","value"],"properties":{"property":{"type":"string"},"value":{}}}"#),
     ]
 }

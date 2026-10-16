@@ -164,7 +164,7 @@ pub fn library_rows(
         });
         names.push(name.to_owned());
     }
-    LibraryRows { model: LibraryModel { items, selected: selected_id, filter: filter.to_owned() }, names }
+    LibraryRows { model: LibraryModel { items, selected: selected_id, filter: filter.to_owned(), preview: anim_ui::library::LibraryPreview::default() }, names }
 }
 
 fn hidden_by_collapsed(name: &str, collapsed: &BTreeSet<String>) -> bool {
