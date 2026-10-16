@@ -15,7 +15,8 @@ anicraft-cli render FILE --frame N [--scene NAME | --symbol NAME] [--scale X] [-
 anicraft-cli export FILE --format png-seq|gif|mp4|mov|svg|svg-anim|spritesheet|swf -o OUT
                    [--scene NAME] [--from N] [--to N] [--fps F] [--scale X] [--transparent|--alpha] [-q]
 anicraft-cli convert IN OUT            # OUT.fla is a zip; any other name is an XFL folder (scene.xfl is a folder too)
-anicraft-cli mcp [FILE] [--root DIR]...
+anicraft-cli mcp [--file F | FILE] [--root DIR]... [--read-root DIR]... [--write-root DIR]...
+anicraft-cli mcp --bridge PORT [--token-file F]    # drive the running editor (anicraft --control-port PORT)
 ```
 
 * `export --format png-seq` writes `frame_0001.png`... into the folder `OUT`; `spritesheet` writes `OUT` (a PNG) and a
@@ -46,6 +47,9 @@ file access is confined to them, symlinks resolved.
 
 Properties (`get_property` / `set_property`): `/stage/width`, `/stage/height`, `/stage/frame_rate`,
 `/scenes/0/name`, `/scenes/0/layers/2/visible|locked|outline|name`.
+
+The full tool catalogue, an example session, the bridge and the security model are in `docs/mcp.md` at the repository
+root (the table above lists only the first generation of tools).
 
 Where the code lives: `src/mcp/commands.rs` (editing commands, plain functions over the document with JSON Schemas),
 `src/mcp/mod.rs` (the `AppHooks` implementation: outline, library, properties, queries, render, export, open, save),

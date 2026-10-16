@@ -62,6 +62,9 @@ fn crop(image: &ColorImage, rect: Option<&egui::Rect>, ppp: f32) -> ColorImage {
     rect.map_or_else(|| image.clone(), |rect| image.region(rect, Some(ppp)))
 }
 
+/// Most frames a screenshot requested over MCP waits for the stage to catch up with the document.
+const MAX_SHOT_WAIT_FRAMES: u32 = 120;
+
 /// What the render worker was last asked for; two requests with equal keys draw the same pixels.
 #[derive(Debug, Clone, PartialEq)]
 struct RenderKey {
@@ -126,6 +129,8 @@ pub struct AniApp {
     pub(crate) edits: u64,
     shot: Option<ShotRun>,
     mcp_shots: HashMap<u64, Vec<PendingShot>>,
+    /// Frames an agent's screenshot has waited for the stage to settle.
+    shot_waited: u32,
     next_shot: u64,
     title: String,
     pub(crate) audio: crate::audio::Audio,
@@ -184,6 +189,7 @@ impl AniApp {
             edits: 0,
             shot: options.shot.clone().map(|plan| ShotRun { plan, stage: ShotStage::Settling { frames: 0 } }),
             mcp_shots: HashMap::new(),
+            shot_waited: 0,
             next_shot: 1,
             title: String::new(),
             audio: crate::audio::Audio::default(),
@@ -370,8 +376,28 @@ impl AniApp {
         self.sync.revision = 0;
     }
 
+    /// True when the stage on screen shows the document as it is now: nothing changed since the last render request
+    /// and the worker has answered it.
+    fn settled(&self) -> bool {
+        let frame = self.host.session().doc().editor.state.frame;
+        self.sync.fingerprint.as_ref() == Some(&self.fingerprint())
+            && self.sync.shown.is_some()
+            && self.sync.shown == self.sync.requested
+            && self.sync.requested.as_ref().is_some_and(|k| k.frame == frame)
+    }
+
     fn collect_shots(&mut self, ctx: &Context) {
-        let pending: Vec<PendingShot> = std::mem::take(&mut self.host.hooks_mut().shots);
+        // A screenshot asked for by an agent waits until the stage shows what the agent just did (but not for ever).
+        let waiting = !self.host.hooks_mut().shots.is_empty();
+        let ready = !waiting || self.settled() || self.shot_waited >= MAX_SHOT_WAIT_FRAMES;
+        if waiting && !ready {
+            self.shot_waited = self.shot_waited.saturating_add(1);
+            ctx.request_repaint();
+        }
+        let pending: Vec<PendingShot> = if ready { std::mem::take(&mut self.host.hooks_mut().shots) } else { Vec::new() };
+        if ready {
+            self.shot_waited = 0;
+        }
         if !pending.is_empty() {
             let tag = self.next_shot;
             self.next_shot = self.next_shot.saturating_add(1);

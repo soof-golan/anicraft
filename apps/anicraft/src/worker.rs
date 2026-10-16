@@ -229,6 +229,12 @@ fn serve(jobs: &Receiver<Job>, done: &Sender<Done>, wake: &dyn Fn(), document: &
     let mut ev = evaluator_for(document, media, false);
     loop {
         let mut job = jobs.recv().map_err(|_| ())?;
+        // A new document ends this revision at once. Looking at it only after draining the queue would answer the
+        // renders queued behind it with the old document.
+        if let Job::Load { .. } = job {
+            *carry = Some(job);
+            return Ok(());
+        }
         // Latest wins: skip older renders and thumbnails of the same name.
         loop {
             match jobs.try_recv() {
@@ -247,10 +253,6 @@ fn serve(jobs: &Receiver<Job>, done: &Sender<Done>, wake: &dyn Fn(), document: &
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return Err(()),
             }
-        }
-        if let Job::Load { .. } = job {
-            *carry = Some(job);
-            return Ok(());
         }
         answer(&mut ev, document, media, job, done, wake);
     }
@@ -339,6 +341,32 @@ mod tests {
             last = id;
         }
         assert_eq!(last, 20, "the newest request is always answered");
+    }
+
+    #[test]
+    fn a_render_queued_behind_a_load_sees_the_new_document() {
+        let worker = RenderWorker::spawn(|| {}).unwrap();
+        worker.send(Job::Load { document: Box::new(Document::default()), media: Some(Box::new(MediaStore::new())) });
+        worker.send(Job::Render(job(0)));
+        assert!(matches!(worker.wait(Duration::from_secs(20)), Some(Done::Frame { .. })));
+        // The editor sends a Load and its Render back to back; the worker must not answer with the previous document.
+        for round in 1..=30_u64 {
+            let mut doc = Document::default();
+            doc.background_color = Rgba8 { r: 255, g: 0, b: 0, a: 255 };
+            worker.send(Job::Load { document: Box::new(doc), media: None });
+            worker.send(Job::Render(RenderJob { id: round, ..job(0) }));
+            match worker.wait(Duration::from_secs(20)) {
+                Some(Done::Frame { id, image, .. }) => {
+                    assert_eq!(id, round);
+                    assert_eq!(image.premultiplied_rgba.get(..4), Some(&[255, 0, 0, 255][..]), "round {round} drew the old document");
+                }
+                other => panic!("unexpected answer {other:?}"),
+            }
+            // Back to white for the next round, again without waiting in between.
+            worker.send(Job::Load { document: Box::new(Document::default()), media: None });
+            worker.send(Job::Render(job(0)));
+            assert!(matches!(worker.wait(Duration::from_secs(20)), Some(Done::Frame { .. })));
+        }
     }
 
     #[test]
