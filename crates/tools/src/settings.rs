@@ -308,25 +308,73 @@ impl Default for PaintBrushSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[expect(clippy::struct_excessive_bools, reason = "independent snapping switches")]
 pub struct SnapSettings {
-    /// Snap to the anchor points of other shapes.
+    /// Snap to the anchor points of other shapes (and the edges of other objects when moving).
     pub objects: bool,
     /// Snap to whole stage pixels.
     pub pixels: bool,
-    /// Snap to the grid.
+    /// Snap to the grid (spacing and colour are the document's, see [`crate::guides`]).
     pub grid: bool,
-    /// Snap to the guides.
+    /// Snap to the guides (the document's).
     pub guides: bool,
-    /// Grid spacing in pixels.
-    pub grid_size: f64,
-    /// Horizontal guides (y positions).
-    pub guides_y: Vec<f64>,
-    /// Vertical guides (x positions).
-    pub guides_x: Vec<f64>,
+    /// Smart guides: show lines where a moved object lines up with the edges and centres of others, and snap to them.
+    #[serde(default)]
+    pub smart_guides: bool,
+    /// Snap align: keep set distances from the stage edges and between objects.
+    #[serde(default)]
+    pub align: bool,
+    /// Snap align: distance from the stage edge (horizontal, vertical) in pixels.
+    #[serde(default)]
+    pub edge_margin: [f64; 2],
+    /// Snap align: distance between objects (horizontal, vertical) in pixels.
+    #[serde(default)]
+    pub object_spacing: [f64; 2],
+    /// Snap align: also line up with the centre of the stage.
+    #[serde(default)]
+    pub center_align: bool,
+    /// How far from a line the pointer attracts.
+    #[serde(default)]
+    pub accuracy: SnapAccuracy,
+}
+
+/// How near to a line snapping starts (the Snap Align "snap accuracy" choice).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SnapAccuracy {
+    /// Must be close: 4 screen points.
+    Close,
+    /// Normal: 8 screen points.
+    #[default]
+    Normal,
+    /// Can be distant: 16 screen points.
+    Distant,
+}
+
+impl SnapAccuracy {
+    /// The reach in screen points.
+    #[must_use]
+    pub const fn points(self) -> f64 {
+        match self {
+            Self::Close => 4.0,
+            Self::Normal => 8.0,
+            Self::Distant => 16.0,
+        }
+    }
 }
 
 impl Default for SnapSettings {
     fn default() -> Self {
-        Self { objects: false, pixels: false, grid: false, guides: false, grid_size: 10.0, guides_y: Vec::new(), guides_x: Vec::new() }
+        Self {
+            objects: false,
+            pixels: false,
+            grid: false,
+            guides: false,
+            smart_guides: false,
+            align: false,
+            edge_margin: [0.0; 2],
+            object_spacing: [0.0; 2],
+            center_align: false,
+            accuracy: SnapAccuracy::Normal,
+        }
     }
 }
 

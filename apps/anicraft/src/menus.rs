@@ -84,6 +84,8 @@ pub enum MenuAction {
     ToggleAutoKeyframe,
     /// Tabs, templates, Save All, Find and the other document-level items.
     Doc(DocAction),
+    /// Magnification, grid, guides, snapping, align and transform.
+    Layout(crate::layout_ui::LayoutEvent),
 }
 
 /// What the menus need to know to enable, disable and check items.
@@ -123,6 +125,10 @@ pub struct MenuView {
     pub commands: Vec<String>,
     /// The History, Output and Compiler Errors panels that are open.
     pub open_doc_panels: Vec<PanelId>,
+    /// The guides, grid and snapping switches, the pasteboard and the Align and Transform panels.
+    pub layout: crate::layout_ui::MenuState,
+    /// The Align panel's "Align to Stage" switch, applied to Modify > Align as well.
+    pub align_to_stage: bool,
 }
 
 impl MenuView {
@@ -342,13 +348,14 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Zoom Out", "Ctrl+-", true), MenuAction::ZoomOut);
             push(item(ui, "Fit in Window", "Ctrl+0", true), MenuAction::ZoomFit);
             push(item(ui, "Actual Size (100%)", "Ctrl+1", true), MenuAction::Zoom100);
+            for action in crate::layout_ui::view_items(ui, &view.layout) {
+                push(true, action);
+            }
             ui.separator();
             push(check(ui, "Onion Skin", "", view.onion), MenuAction::ToggleOnion);
             push(check(ui, "Onion Skin Outlines", "", view.onion_outlines), MenuAction::ToggleOnionOutlines);
             ui.separator();
             push(check(ui, "Rulers", "Ctrl+Shift+R", view.rulers), MenuAction::ToggleRulers);
-            push(check(ui, "Grid", "Ctrl+'", view.grid), MenuAction::ToggleGrid);
-            push(check(ui, "Guides", "Ctrl+;", view.guides), MenuAction::ToggleGuides);
             ui.separator();
             push(item(ui, "Light / Dark Theme", "", true), MenuAction::ToggleTheme);
             ui.menu_button("Show Panel", |ui| {
@@ -432,6 +439,9 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                     push(item(ui, "Trace Bitmap...", "", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::trace_bitmap())));
                 });
             });
+            for action in crate::layout_ui::align_items(ui, &view.layout, view.align_to_stage) {
+                push(true, action);
+            }
             push(item(ui, "Unlock All", "Ctrl+Alt+Shift+L", true), command("modify.unlock_all"));
             ui.separator();
             ui.menu_button("Shape", |ui| {
@@ -491,6 +501,9 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(check(ui, "Scene", "Shift+F2", view.scene_panel), MenuAction::ToggleScenePanel);
             push(check(ui, "Motion Editor", "", view.motion_editor), MenuAction::ToggleMotionEditor);
             push(check(ui, "Parenting View", "", view.parenting_view), MenuAction::ToggleParentingView);
+            for action in crate::layout_ui::window_items(ui, &view.layout) {
+                push(true, action);
+            }
         });
         ui.menu_button("Help", |ui| {
             push(item(ui, "Keyboard Shortcuts and About", "F1", true), MenuAction::Dialog(Dialog::About));

@@ -13,7 +13,6 @@ use anicraft_cli::mcp::find::{Hit, Query};
 use anim_scene::Document;
 use anim_session::Session;
 use anim_ui::PanelId;
-use anim_ui::stage::Guide;
 use anim_ui::timeline::TimelineViewState;
 use serde_json::Value;
 
@@ -34,7 +33,7 @@ pub fn panel_title(panel: PanelId) -> String {
         p if p == HISTORY_PANEL => "History".to_owned(),
         p if p == ERRORS_PANEL => "Compiler Errors".to_owned(),
         p if p == ACTIONS_PANEL => "Actions".to_owned(),
-        other => crate::toolui::panel_title(other),
+        other => crate::layout_ui::panel_title(other).unwrap_or_else(|| crate::toolui::panel_title(other)),
     }
 }
 
@@ -114,7 +113,6 @@ impl StepLog {
 #[derive(Debug, Clone, Default)]
 pub struct DocView {
     pub stage: Option<anim_ui::StageView>,
-    pub guides: Vec<Guide>,
     pub timeline: TimelineViewState,
     pub steps: StepLog,
 }

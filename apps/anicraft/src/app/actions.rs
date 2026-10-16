@@ -10,7 +10,7 @@ use anim_scene::edit;
 use anim_scene::timeline::LayerKind;
 use anim_scene::{Element, LibraryItem, TimelineId};
 use anim_ui::library::{LibraryAction, LibraryEvent};
-use anim_ui::stage::{Guide, StageEvent};
+use anim_ui::stage::StageEvent;
 use anim_ui::timeline::{DropPlacement, FrameAction, FrameSelection, LayerEvent, TimelineEvent};
 use anim_ui::{PropertyEdit, TransportEvent};
 use egui::Context;
@@ -145,11 +145,18 @@ impl AniApp {
                 let canvas = self.stage_canvas();
                 self.ui.stage.view = anim_ui::StageView::actual_size(canvas.size(), self.ui.stage.doc_size);
             }
+            MenuAction::Layout(event) => self.layout_event(event),
             MenuAction::ToggleOnion => self.ui.onion.enabled = !self.ui.onion.enabled,
             MenuAction::ToggleOnionOutlines => self.ui.onion.outlines = !self.ui.onion.outlines,
             MenuAction::ToggleRulers => self.ui.stage.show_rulers = !self.ui.stage.show_rulers,
-            MenuAction::ToggleGrid => self.ui.stage.show_grid = !self.ui.stage.show_grid,
-            MenuAction::ToggleGuides => self.ui.stage.show_guides = !self.ui.stage.show_guides,
+            MenuAction::ToggleGrid => {
+                let visible = !anicraft_tools::guides::read(self.host.session().doc().document()).grid_visible;
+                self.run("grid.set", &json!({ "visible": visible }));
+            }
+            MenuAction::ToggleGuides => {
+                let visible = !anicraft_tools::guides::read(self.host.session().doc().document()).guides_visible;
+                self.run("guides.set", &json!({ "visible": visible }));
+            }
             MenuAction::ToggleTheme => {
                 self.ui.theme = self.ui.theme.toggled();
                 self.ui.theme.apply(ctx);
@@ -297,15 +304,17 @@ impl AniApp {
                 self.host.session_mut().doc_mut().editor.state.view.zoom = f64::from(view.zoom);
             }
             StageEvent::Pointer(pointer) => self.stage_pointer(&pointer),
-            StageEvent::GuideAdded(guide) => self.ui.stage.guides.push(guide),
+            StageEvent::GuideAdded(guide) => {
+                self.run("guides.add", &json!({ "axis": crate::layout_ui::axis_name(guide.axis), "position": guide.pos }));
+            }
             StageEvent::GuideMoved { index, pos } => {
-                if let Some(guide) = self.ui.stage.guides.get_mut(index) {
-                    *guide = Guide { axis: guide.axis, pos };
+                if let Some((axis, at)) = crate::layout_ui::guide_slot(&self.ui.stage.guides, index) {
+                    self.run("guides.move", &json!({ "axis": axis, "index": at, "position": pos }));
                 }
             }
             StageEvent::GuideRemoved { index } => {
-                if index < self.ui.stage.guides.len() {
-                    self.ui.stage.guides.remove(index);
+                if let Some((axis, at)) = crate::layout_ui::guide_slot(&self.ui.stage.guides, index) {
+                    self.run("guides.remove", &json!({ "axis": axis, "index": at }));
                 }
             }
             StageEvent::DropLibraryItem { id, pos } => self.drop_library_item(id, Point::new(f64::from(pos.x), f64::from(pos.y))),

@@ -357,14 +357,6 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 if ui.checkbox(&mut grid, "Snap to grid").changed() {
                     set(json!({ "snap": { "grid": grid } }));
                 }
-                if s.snap.grid {
-                    ui.horizontal(|ui| {
-                        ui.label("Grid size");
-                        if let Some(v) = number(ui, s.snap.grid_size, 1.0..=500.0, " px") {
-                            set(json!({ "snap": { "grid_size": v } }));
-                        }
-                    });
-                }
                 let mut guides = s.snap.guides;
                 if ui.checkbox(&mut guides, "Snap to guides").changed() {
                     set(json!({ "snap": { "guides": guides } }));

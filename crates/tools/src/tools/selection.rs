@@ -10,6 +10,7 @@ use crate::event::{Key, Modifiers, PointerEvent, PointerKind, ToolEvent};
 use crate::hit::{candidates, elements_in_rect, pick};
 use crate::overlay::{Cursor, Overlay, Role};
 use crate::selection::{ElementRef, Selection};
+use crate::snap::{MoveSnap, snap_move};
 use crate::tool::{Tool, ToolId, ToolOutput};
 
 /// Arrow-key nudge in stage pixels (shift multiplies it by ten).
@@ -111,6 +112,12 @@ fn constrain(delta: Vec2, modifiers: Modifiers) -> Vec2 {
     let step = std::f64::consts::FRAC_PI_4;
     let angle = (delta.y.atan2(delta.x) / step).round() * step;
     Vec2::new(len * angle.cos(), len * angle.sin())
+}
+
+/// The distance a drag moves the selection by, after constraining and snapping.
+fn moved(ctx: &ToolContext<'_>, start: Point, current: Point, modifiers: Modifiers) -> MoveSnap {
+    let delta = constrain(current - start, modifiers);
+    ctx.selection_bounds().map_or_else(|| MoveSnap { delta, overlay: Vec::new() }, |bounds| snap_move(ctx, bounds, delta))
 }
 
 impl SelectionTool {
@@ -224,7 +231,7 @@ impl SelectionTool {
                 commands.push(ToolCommand::SetSelection { selection: Selection { items: vec![hit], scope: ctx.selection.scope.clone() } });
             }
             State::Moving { start, modifiers, .. } => {
-                let delta = constrain(p.pos - start, modifiers);
+                let delta = moved(ctx, start, p.pos, modifiers).delta;
                 if delta.hypot() > 1.0e-9 {
                     if modifiers.alt {
                         commands.push(ToolCommand::DuplicateSelection);
@@ -326,10 +333,12 @@ impl Tool for SelectionTool {
 
     fn overlay(&self, ctx: &ToolContext<'_>) -> Vec<Overlay> {
         let mut out = Vec::new();
-        let ghost = match &self.state {
-            State::Moving { start, current, modifiers } => Some(constrain(*current - *start, *modifiers)),
-            _ => None,
-        };
+        let mut ghost = None;
+        if let State::Moving { start, current, modifiers } = &self.state {
+            let snapped = moved(ctx, *start, *current, *modifiers);
+            ghost = Some(snapped.delta);
+            out.extend(snapped.overlay);
+        }
         for item in &ctx.selection.items {
             if let Some(bounds) = ctx.stage_bounds(item) {
                 out.push(Overlay::Rect { rect: bounds, role: Role::Selection });

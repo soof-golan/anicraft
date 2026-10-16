@@ -63,6 +63,10 @@ impl AniApp {
         events.extend(self.parenting_view(&ctx));
         events.extend(self.motion_editor(&ctx));
         self.doc_dialogs(&ctx);
+        let aids = self.layout_menu_state();
+        let to_stage = self.ui.arrange.to_stage;
+        events.extend(crate::layout_ui::dialog(&ctx, &mut self.ui.arrange).into_iter().map(|e| UiEvent::Menu(MenuAction::Layout(e))));
+        events.extend(crate::layout_ui::stage_context_menu(&ctx, &mut self.ui.arrange, &aids, to_stage).into_iter().map(UiEvent::Menu));
 
         for event in events {
             self.handle(&ctx, event);
@@ -91,6 +95,8 @@ impl AniApp {
             PanelId::Library,
             PanelId::Custom(toolui::COLOUR_PANEL),
             PanelId::Custom(toolui::SWATCHES_PANEL),
+            PanelId::Custom(crate::layout_ui::ALIGN_PANEL),
+            PanelId::Custom(crate::layout_ui::TRANSFORM_PANEL),
         ]
         .into_iter()
         .filter(|p| !self.ui.layout.contains(p))
@@ -105,8 +111,8 @@ impl AniApp {
             onion: self.ui.onion.enabled,
             onion_outlines: self.ui.onion.outlines,
             rulers: self.ui.stage.show_rulers,
-            grid: self.ui.stage.show_grid,
-            guides: self.ui.stage.show_guides,
+            grid: anicraft_tools::guides::read(doc.document()).grid_visible,
+            guides: anicraft_tools::guides::read(doc.document()).guides_visible,
             has_selection: !doc.editor.state.selection.is_empty(),
             closed_panels,
             recent: self.recent_paths(),
@@ -123,6 +129,21 @@ impl AniApp {
             user_templates: self.ui.docs.templates.iter().map(|t| (t.category.clone(), t.name.clone(), t.path.clone())).collect(),
             commands: self.ui.docs.commands.clone(),
             open_doc_panels: crate::docs::DOC_PANELS.into_iter().filter(|p| self.ui.layout.contains(p)).collect(),
+            layout: self.layout_menu_state(),
+            align_to_stage: self.ui.arrange.to_stage,
+        }
+    }
+
+    /// What the View, Modify and Window menus and the stage menu need of the guides, grid and snapping.
+    pub(super) fn layout_menu_state(&self) -> crate::layout_ui::MenuState {
+        let doc = self.host.session().doc();
+        crate::layout_ui::MenuState {
+            aids: anicraft_tools::guides::read(doc.document()),
+            snap: doc.editor.state.settings.snap.clone(),
+            pasteboard: self.ui.arrange.pasteboard,
+            align_open: self.ui.layout.contains(&PanelId::Custom(crate::layout_ui::ALIGN_PANEL)),
+            transform_open: self.ui.layout.contains(&PanelId::Custom(crate::layout_ui::TRANSFORM_PANEL)),
+            has_selection: !doc.editor.state.selection.is_empty(),
         }
     }
 
@@ -194,11 +215,14 @@ impl AniApp {
         let to_stage = state.in_place.unwrap_or(anim_core::Affine::IDENTITY);
         let bg = doc.document().background_color;
         let selection = state.selection.items.clone();
+        let selected_count = selection.len();
+        let zoom_percent = self.ui.stage.view.zoom * 100.0;
         let rects = view::selection_rects(doc.document(), &state.timeline, &selection);
         let accent = self.ui.theme.palette().accent;
         let tool = state.active_tool;
         let settings = state.settings.clone();
         let swatches = anicraft_tools::swatches::read(doc.document());
+        let aids = anicraft_tools::guides::read(doc.document());
         let bitmaps: Vec<String> = doc.document().library.bitmaps().map(|b| b.name.clone()).collect();
         let history_view = {
             let history = session.history();
@@ -222,7 +246,8 @@ impl AniApp {
         };
 
         let st = &mut self.ui;
-        st.stage.grid_size = num::f64_to_f32(settings.snap.grid_size.clamp(1.0, 1000.0));
+        crate::layout_ui::sync_stage(&mut st.stage, &aids);
+        st.stage.texture_margin = if st.arrange.pasteboard { crate::layout_ui::PASTEBOARD_MARGIN } else { 0.0 };
         st.stage.doc_size = vec2(num::f64_to_f32(doc.document().width), num::f64_to_f32(doc.document().height));
         st.stage.stage_color = egui::Color32::from_rgb(bg.r, bg.g, bg.b);
         st.stage.cursor = st.tool_cursor;
@@ -245,7 +270,7 @@ impl AniApp {
                 }
                 PanelId::Stage => {
                     ui.vertical(|ui| {
-                        edit_bar(ui, &crumbs, &scene_names, root_scene, editing_in_place, events);
+                        edit_bar(ui, &crumbs, &scene_names, root_scene, editing_in_place, (zoom_percent, st.arrange.pasteboard), events);
                         let bar = 34.0;
                         let rest = (ui.available_height() - bar).max(40.0);
                         ui.allocate_ui(vec2(ui.available_width(), rest), |ui| {
@@ -297,6 +322,16 @@ impl AniApp {
                 }
                 p if *p == crate::docs::ERRORS_PANEL => {
                     events.extend(crate::docs_ui::errors_panel(ui, &st.docs).into_iter().map(|a| UiEvent::Menu(MenuAction::Doc(a))));
+                }
+                PanelId::Custom(crate::layout_ui::ALIGN_PANEL) => {
+                    for e in crate::layout_ui::align_panel(ui, &st.arrange, selected_count) {
+                        events.push(UiEvent::Menu(MenuAction::Layout(e)));
+                    }
+                }
+                PanelId::Custom(crate::layout_ui::TRANSFORM_PANEL) => {
+                    for e in crate::layout_ui::transform_panel(ui, &mut st.arrange.transform, selected_count) {
+                        events.push(UiEvent::Menu(MenuAction::Layout(e)));
+                    }
                 }
                 PanelId::Custom(_) => {}
             }
@@ -594,7 +629,15 @@ const fn kind_glyph(kind: anim_scene::timeline::LayerKind) -> &'static str {
 
 /// The edit bar above the stage: the scene menu and the breadcrumb of the timelines entered, each level a button
 /// that leaves the levels below it. A symbol edited in place is marked.
-fn edit_bar(ui: &mut egui::Ui, crumbs: &[String], scenes: &[String], root_scene: Option<usize>, in_place: bool, events: &mut Vec<UiEvent>) {
+fn edit_bar(
+    ui: &mut egui::Ui,
+    crumbs: &[String],
+    scenes: &[String],
+    root_scene: Option<usize>,
+    in_place: bool,
+    (zoom_percent, pasteboard): (f32, bool),
+    events: &mut Vec<UiEvent>,
+) {
     ui.horizontal(|ui| {
         if crumbs.len() > 1 && ui.button("<").on_hover_text("Back one level").clicked() {
             events.push(UiEvent::Menu(MenuAction::Command { id: "edit.exit_to", params: serde_json::json!({ "depth": crumbs.len().saturating_sub(2) }) }));
@@ -623,6 +666,25 @@ fn edit_bar(ui: &mut egui::Ui, crumbs: &[String], scenes: &[String], root_scene:
         if in_place {
             ui.label(RichText::new("editing in place").weak());
         }
+        // Right-aligned: the magnification menu and the pasteboard (clip) switch.
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            egui::ComboBox::from_id_salt("edit-bar-zoom").selected_text(format!("{zoom_percent:.0}%")).width(78.0).show_ui(ui, |ui| {
+                if ui.selectable_label(false, "Show Frame").clicked() {
+                    events.push(UiEvent::Menu(MenuAction::Layout(crate::layout_ui::LayoutEvent::ShowFrame)));
+                }
+                if ui.selectable_label(false, "Show All").clicked() {
+                    events.push(UiEvent::Menu(MenuAction::Layout(crate::layout_ui::LayoutEvent::ShowAll)));
+                }
+                for percent in crate::layout_ui::PRESETS {
+                    if ui.selectable_label(false, format!("{percent}%")).clicked() {
+                        events.push(UiEvent::Menu(MenuAction::Layout(crate::layout_ui::LayoutEvent::Magnify(percent))));
+                    }
+                }
+            });
+            if ui.selectable_label(!pasteboard, "Clip Content").on_hover_text("Hide what lies outside the stage").clicked() {
+                events.push(UiEvent::Menu(MenuAction::Layout(crate::layout_ui::LayoutEvent::TogglePasteboard)));
+            }
+        });
     });
 }
 

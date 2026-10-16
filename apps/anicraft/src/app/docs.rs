@@ -319,7 +319,6 @@ impl AniApp {
         self.ui.drag_base = None;
         let outgoing_view = DocView {
             stage: Some(self.ui.stage.view),
-            guides: std::mem::take(&mut self.ui.stage.guides),
             timeline: std::mem::replace(&mut self.ui.timeline, incoming.view.timeline.clone()),
             steps: std::mem::take(&mut self.docs.steps),
         };
@@ -327,7 +326,6 @@ impl AniApp {
         let previous = self.docs.tabs.active;
         self.docs.tabs.parked.push(Parked { id: previous, session: incoming.session, view: outgoing_view });
         self.docs.steps = incoming.view.steps;
-        self.ui.stage.guides = incoming.view.guides;
         self.docs.tabs.active = id;
         self.reset_view_for_new_document();
         if let Some(view) = incoming.view.stage {

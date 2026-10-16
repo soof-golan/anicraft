@@ -66,6 +66,9 @@ pub struct RenderJob {
     pub transparent: bool,
     /// The symbol in `target` is edited in place: draw this context dimmed behind it.
     pub in_place: Option<InPlace>,
+    /// How far the image reaches beyond the stage on every side, as a fraction of the stage size (the pasteboard).
+    /// With a margin, `size` is the size of the whole image and only the stage has the background colour.
+    pub margin: f32,
 }
 
 /// What the worker is asked.
@@ -168,7 +171,10 @@ pub fn render_job(ev: &mut Evaluator<'_>, job: &RenderJob) -> Result<Image, Stri
         (doc.width.max(1.0), doc.height.max(1.0))
     };
     ev.set_options(EvalOptions { advance_movie_clips: job.playing, ..*ev.options() });
-    let view = Affine::scale_non_uniform(f64::from(width) / doc_w, f64::from(height) / doc_h);
+    // The image covers the stage grown by `margin` of its size on every side (the pasteboard).
+    let margin = f64::from(job.margin.max(0.0));
+    let span = 1.0 + 2.0 * margin;
+    let view = Affine::scale_non_uniform(f64::from(width) / (doc_w * span), f64::from(height) / (doc_h * span)) * Affine::translate((margin * doc_w, margin * doc_h));
     let background = if job.transparent { Background::Transparent } else { Background::FromDisplayList };
     let options = RenderOptions::new(width, height).with_view(view).with_background(background);
     let list = target_list(ev, &job.target, job.frame);
@@ -189,7 +195,18 @@ pub fn render_job(ev: &mut Evaluator<'_>, job: &RenderJob) -> Result<Image, Stri
         (Target::Scene(scene), Some(o)) if o.before > 0 || o.after > 0 => ev.onion(*scene, job.frame, o.before, o.after),
         _ => Vec::new(),
     };
-    let mut canvas = solid(width, height, if job.transparent { None } else { background_colour });
+    let mut canvas = if margin > 0.0 {
+        // Only the stage itself has the background colour; the pasteboard around it shows what lies on it.
+        let mut canvas = solid(width, height, None);
+        if !job.transparent {
+            let (from, to) = (margin / span, (1.0 + margin) / span);
+            let px = |fraction: f64, size: u32| num::round_f64_to_u32(fraction * f64::from(size));
+            fill_rect(&mut canvas, [px(from, width), px(from, height), px(to, width), px(to, height)], background_colour);
+        }
+        canvas
+    } else {
+        solid(width, height, if job.transparent { None } else { background_colour })
+    };
     for (mut list, alpha) in onion {
         anim_timeline::fade(&mut list, alpha);
         let layer = anim_render::render(&list, ev.images(), &options.clone().with_background(Background::Transparent)).map_err(|e| e.to_string())?;
@@ -222,6 +239,24 @@ pub(crate) fn solid(width: u32, height: u32, colour: Option<Rgba8>) -> Image {
         data.extend_from_slice(&pixel);
     }
     Image { width, height, premultiplied_rgba: data }
+}
+
+/// Paints the pixel rectangle `[x0, y0, x1, y1)` of a premultiplied image with `colour` (nothing for `None`).
+fn fill_rect(image: &mut Image, [x0, y0, x1, y1]: [u32; 4], colour: Option<Rgba8>) {
+    let Some(c) = colour else { return };
+    let a = u16::from(c.a);
+    let mul = |v: u8| u8::try_from(u16::from(v).saturating_mul(a).saturating_add(127).checked_div(255).unwrap_or(0)).unwrap_or(255);
+    let pixel = [mul(c.r), mul(c.g), mul(c.b), c.a];
+    let width = num::u32_to_usize(image.width);
+    for y in y0..y1.min(image.height) {
+        let row = num::u32_to_usize(y).saturating_mul(width);
+        for x in x0..x1.min(image.width) {
+            let at = row.saturating_add(num::u32_to_usize(x)).saturating_mul(4);
+            if let Some(slot) = image.premultiplied_rgba.get_mut(at..at.saturating_add(4)) {
+                slot.copy_from_slice(&pixel);
+            }
+        }
+    }
 }
 
 /// Source-over of `src` onto `dst` (both premultiplied, same size).
@@ -355,7 +390,7 @@ mod tests {
     use super::*;
 
     fn job(frame: u32) -> RenderJob {
-        RenderJob { id: 7, target: Target::Scene(0), frame, size: [110, 80], onion: None, playing: false, transparent: false, in_place: None }
+        RenderJob { id: 7, target: Target::Scene(0), frame, size: [110, 80], onion: None, playing: false, transparent: false, in_place: None, margin: 0.0 }
     }
 
     #[test]

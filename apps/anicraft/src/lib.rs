@@ -28,6 +28,7 @@ pub mod commands;
 pub mod docs;
 pub mod docs_ui;
 pub mod files;
+pub mod layout_ui;
 pub mod macros;
 pub mod mcp;
 pub mod menus;

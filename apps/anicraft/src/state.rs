@@ -135,6 +135,8 @@ pub struct UiState {
     pub parenting_view: bool,
     /// The Motion Editor window, the custom ease editor and the stage handles of motion paths and shape hints.
     pub motion: crate::motion_ui::MotionUi,
+    /// The Align and Transform panels, the grid, guides and snapping dialogs, the pasteboard and the stage menu.
+    pub arrange: crate::layout_ui::LayoutUi,
     pub panel_rects: HashMap<String, Rect>,
     pub export: Option<ExportStatus>,
     /// Pointer drag in progress: the document as it was before the first edit of the gesture.
@@ -158,6 +160,7 @@ impl UiState {
         let size = vec2(anim_core::num::f64_to_f32(doc_size.0), anim_core::num::f64_to_f32(doc_size.1));
         let mut layout = dock::default_layout();
         crate::toolui::open_colour_panels(&mut layout);
+        crate::layout_ui::open_panels(&mut layout);
         Self {
             theme,
             layout,
@@ -183,6 +186,7 @@ impl UiState {
             scene_panel: false,
             parenting_view: false,
             motion: crate::motion_ui::MotionUi::default(),
+            arrange: crate::layout_ui::LayoutUi::default(),
             panel_rects: HashMap::new(),
             export: None,
             drag_base: None,

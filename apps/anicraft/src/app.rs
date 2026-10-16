@@ -14,6 +14,7 @@ mod docs;
 mod draw;
 mod fileops;
 mod input;
+mod layout_actions;
 mod library_preview;
 mod testmovie;
 mod toolui_events;
@@ -87,6 +88,7 @@ struct RenderKey {
     onion: Option<(u32, u32)>,
     playing: bool,
     in_place: Option<InPlace>,
+    margin: f32,
 }
 
 #[derive(Debug, Default)]
@@ -346,7 +348,7 @@ impl AniApp {
                 "scale-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::scale_rotate())),
                 "trace-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::trace_bitmap())),
                 "paste-dialog" => self.ui.dialog = Some(crate::state::Dialog::Shape(crate::shape_ui::ShapeDialog::paste_special())),
-                _ => {}
+                other => self.layout_shot(other),
             }
         }
     }
@@ -455,6 +457,7 @@ impl AniApp {
             onion,
             playing: self.ui.playback.is_some() || self.ui.test_movie.is_some(),
             in_place,
+            margin: self.ui.stage.texture_margin,
         };
         if self.sync.requested.as_ref() != Some(&key) {
             self.sync.next_id = self.sync.next_id.saturating_add(1);
@@ -468,6 +471,7 @@ impl AniApp {
                 playing: key.playing,
                 transparent: false,
                 in_place: key.in_place.clone(),
+                margin: key.margin,
             }));
             self.sync.inflight.insert(id, key.clone());
             self.sync.requested = Some(key);

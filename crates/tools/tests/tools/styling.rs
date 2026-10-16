@@ -128,7 +128,9 @@ fn eraser_tip_and_faucet() {
 fn snapping_moves_drawn_corners_to_the_grid() {
     let mut e = editor();
     e.state.settings.snap.grid = true;
-    e.state.settings.snap.grid_size = 25.0;
+    let mut layout = anicraft_tools::guides::read(&e.document);
+    layout.grid = [25.0, 25.0];
+    anicraft_tools::guides::write(&mut e.document, &layout);
     e.state.settings.stroke_enabled = false;
     drag(&mut e, ToolId::Rectangle, (52.0, 48.0), (148.0, 103.0));
     let b = shape_at(&e, 0).shape.bounds().unwrap();
