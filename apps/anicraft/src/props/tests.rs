@@ -457,6 +457,27 @@ fn primitive_doc(oval: bool) -> AniDoc {
 }
 
 #[test]
+fn a_width_profile_turns_the_stroke_into_a_pointed_outline() {
+    let mut doc = AniDoc::default();
+    let mut path = anim_core::BezPath::new();
+    path.move_to((0.0, 50.0));
+    path.line_to((200.0, 50.0));
+    let shape = EdgeShape::from_paths(&[anim_shape::PathInput::new(path, None, Some(StrokeStyle::plain(12.0, RED)))]);
+    edit::add_element(&mut doc.editor.document, &SCENE, 0, 0, Element::Shape(anim_scene::ShapeElement::new(shape))).unwrap();
+    doc.editor.state.selection = Selection::one(ElementRef::top_level(0, 0, 0));
+    assert!(rows(&doc).iter().any(|i| i == "stroke_profile"));
+    // Uniform is what the stroke already is.
+    set(&mut doc, "stroke_profile", json!("Uniform"));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    assert_eq!(s.shape.strokes.len(), 1);
+    set(&mut doc, "stroke_profile", json!("Width Profile 1"));
+    let Element::Shape(s) = selected(&doc) else { panic!("not a shape") };
+    assert!(s.shape.strokes.is_empty(), "the stroke became a fill");
+    assert!(s.shape.fill_at(anim_core::Point::new(100.0, 54.0)).is_some());
+    assert!(s.shape.fill_at(anim_core::Point::new(3.0, 54.0)).is_none(), "pointed at the start");
+}
+
+#[test]
 fn a_rectangle_primitive_shows_and_edits_its_parameters() {
     let mut doc = primitive_doc(false);
     let ids = rows(&doc);

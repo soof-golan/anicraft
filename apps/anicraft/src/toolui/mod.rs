@@ -111,7 +111,9 @@ pub struct ToolUi {
 }
 
 /// Tools the toolbox groups under another tool's button, as `(tool, group's first tool)`.
-const GROUPS: [(&str, &str); 10] = [
+const GROUPS: [(&str, &str); 12] = [
+    ("width", "pencil"),
+    ("paintbrush", "brush"),
     ("gradient_transform", "transform"),
     ("translation_3d", "rotation_3d"),
     ("oval", "rect"),
@@ -138,6 +140,8 @@ pub fn with_extra_tools(mut tools: Vec<ToolItem>) -> Vec<ToolItem> {
         ("oval", ToolItem::new("rect_primitive", "Rectangle Primitive Tool", Icon::RectanglePrimitive, None)),
         ("rect_primitive", ToolItem::new("oval_primitive", "Oval Primitive Tool", Icon::OvalPrimitive, None)),
         ("oval_primitive", ToolItem::new("polystar", "PolyStar Tool", Icon::PolyStar, None)),
+        ("pencil", ToolItem::new("width", "Width Tool", Icon::Width, Some('u'))),
+        ("brush", ToolItem::new("paintbrush", "Paint Brush Tool", Icon::PaintBrush, None)),
     ];
     for (after, item) in extras {
         if tools.iter().any(|t| t.id == item.id) {
@@ -181,6 +185,8 @@ mod tests {
         assert!(grouped.iter().any(|g| ids(g) == ["rotation_3d", "translation_3d"]));
         assert!(grouped.iter().any(|g| ids(g) == ["rect", "oval", "rect_primitive", "oval_primitive", "polystar"]));
         assert!(grouped.iter().any(|g| ids(g) == ["pen", "add_anchor", "delete_anchor", "convert_anchor"]));
+        assert!(grouped.iter().any(|g| ids(g) == ["pencil", "width"]));
+        assert!(grouped.iter().any(|g| ids(g) == ["brush", "paintbrush"]));
         assert!(grouped.iter().any(|g| ids(g) == ["bucket", "ink"]));
         // Every tool shows up in exactly one group.
         assert_eq!(grouped.iter().map(Vec::len).sum::<usize>(), tools.len());

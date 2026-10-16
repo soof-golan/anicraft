@@ -1,5 +1,7 @@
 //! Shape properties: fill and stroke colour, alpha, width, style, caps, joins and scaling.
 
+use anicraft_tools::WidthProfile;
+use anicraft_tools::widthline::apply_profile;
 use anim_core::{Rgba8, num};
 use anim_display::{Cap, Join, StrokeScale};
 use anim_scene::{PrimitiveKind, ShapeElement};
@@ -100,6 +102,8 @@ pub(super) fn describe(s: &ShapeElement, out: &mut Vec<Property>) {
                 Property::new("stroke_width", "Width", PropValue::number_in(base.weight, 0.0, 200.0).precision(2, 0.1).with_suffix(" px")).in_section(STROKE),
             );
             out.push(Property::new("stroke_style", "Style", PropValue::choice(style_index(stroke), &style_options(&s.shape.strokes))).in_section(STROKE));
+            let profiles: Vec<&str> = WidthProfile::PRESETS.iter().map(WidthProfile::label).collect();
+            out.push(Property::new("stroke_profile", "Width profile", PropValue::choice(0, &profiles)).in_section(STROKE));
             let cap = CAPS.iter().position(|(_, c)| *c == base.caps).unwrap_or(1);
             out.push(Property::new("stroke_cap", "Cap", PropValue::choice(cap, &names(&CAPS))).in_section(STROKE));
             let join = JOINS.iter().position(|(_, j)| *j == base.joints).unwrap_or(1);
@@ -249,6 +253,15 @@ fn apply_style(s: &mut ShapeElement, id: &str, value: &PropValue) -> Result<(), 
             }
         }
         "stroke_style" => set_style(s, choice(value).ok_or_else(|| wrong(id))?)?,
+        "stroke_profile" => {
+            let profile = WidthProfile::PRESETS.get(choice(value).ok_or_else(|| wrong(id))?).ok_or_else(|| wrong(id))?;
+            // The uniform profile is what a stroke already is; the others turn it into a filled outline.
+            if *profile != WidthProfile::Uniform {
+                s.shape = apply_profile(&s.shape, profile).ok_or_else(|| "the shape has no stroke to give a width profile".to_owned())?;
+                // The outline no longer matches the primitive's parameters.
+                s.primitive = None;
+            }
+        }
         "stroke_cap" => {
             let cap = CAPS.get(choice(value).ok_or_else(|| wrong(id))?).map(|(_, c)| *c).ok_or_else(|| wrong(id))?;
             for stroke in &mut s.shape.strokes {

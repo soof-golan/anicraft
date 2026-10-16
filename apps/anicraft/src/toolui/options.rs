@@ -2,7 +2,7 @@
 //! Animate (object drawing, snapping, pencil mode, brush and eraser settings, bucket gap size, rectangle and oval
 //! settings).
 
-use anicraft_tools::{BrushMode, EraserMode, GapSize, LassoMode, PencilMode, PolyStarStyle, TipShape, ToolId, ToolSettings};
+use anicraft_tools::{BrushMode, EraserMode, GapSize, LassoMode, PaintBrushStyle, PencilMode, PolyStarStyle, TipShape, ToolId, ToolSettings};
 use anim_scene::TextKind;
 use egui::Ui;
 use serde::Serialize;
@@ -155,6 +155,39 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 if ui.add_enabled(enabled, egui::DragValue::new(&mut size).range(0.0..=1.0).speed(0.01).fixed_decimals(2)).changed() {
                     set(json!({ "polystar": { "star_point_size": size } }));
                 }
+                ui.end_row();
+            }
+            ToolId::PaintBrush => {
+                ui.label("Brush");
+                if let Some(style) = combo(ui, "paintbrush-style", s.paint_brush.style, &PaintBrushStyle::ALL, PaintBrushStyle::label) {
+                    set(json!({ "paint_brush": { "style": patch(style) } }));
+                }
+                ui.end_row();
+                ui.label("Size");
+                if let Some(v) = number(ui, s.paint_brush.size, 0.5..=500.0, " px") {
+                    set(json!({ "paint_brush": { "size": v } }));
+                }
+                ui.end_row();
+                if s.paint_brush.style.is_pattern() {
+                    ui.label("Spacing");
+                    if let Some(v) = number(ui, s.paint_brush.spacing, 10.0..=1000.0, " %") {
+                        set(json!({ "paint_brush": { "spacing": v } }));
+                    }
+                    ui.end_row();
+                }
+                ui.label("Smoothing");
+                let mut smoothing = s.paint_brush.smoothing;
+                if ui.add(egui::Slider::new(&mut smoothing, 0.0..=100.0).fixed_decimals(0)).changed() {
+                    set(json!({ "paint_brush": { "smoothing": smoothing } }));
+                }
+                ui.end_row();
+                ui.label("");
+                ui.weak("Paints with the stroke colour.");
+                ui.end_row();
+            }
+            ToolId::Width => {
+                ui.label("");
+                ui.weak("Select a shape, drag out from its stroke to widen it there. The Properties panel offers ready-made width profiles.");
                 ui.end_row();
             }
             ToolId::Lasso => {
