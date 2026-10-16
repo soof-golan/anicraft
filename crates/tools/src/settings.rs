@@ -237,6 +237,73 @@ impl Default for LassoSettings {
     }
 }
 
+/// The brushes of the Paint Brush tool. The first four are art brushes (one outline whose width follows a rule),
+/// the rest pattern brushes (a tile repeated along the path).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaintBrushStyle {
+    /// A flat nib held at 45 degrees: thick across the nib, thin along it.
+    #[default]
+    Calligraphic,
+    /// Pointed at both ends.
+    Tapered,
+    /// An uneven, grainy width.
+    Charcoal,
+    /// The same width everywhere.
+    Marker,
+    Dots,
+    Stars,
+    Arrows,
+    Dashes,
+    Chain,
+}
+
+impl PaintBrushStyle {
+    /// All brushes in the order the options menu lists them.
+    pub const ALL: [Self; 9] =
+        [Self::Calligraphic, Self::Tapered, Self::Charcoal, Self::Marker, Self::Dots, Self::Stars, Self::Arrows, Self::Dashes, Self::Chain];
+
+    /// The menu label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Calligraphic => "Art: Calligraphic",
+            Self::Tapered => "Art: Tapered",
+            Self::Charcoal => "Art: Charcoal",
+            Self::Marker => "Art: Marker",
+            Self::Dots => "Pattern: Dots",
+            Self::Stars => "Pattern: Stars",
+            Self::Arrows => "Pattern: Arrows",
+            Self::Dashes => "Pattern: Dashes",
+            Self::Chain => "Pattern: Chain",
+        }
+    }
+
+    /// True for the brushes that repeat a tile along the path.
+    #[must_use]
+    pub const fn is_pattern(self) -> bool {
+        matches!(self, Self::Dots | Self::Stars | Self::Arrows | Self::Dashes | Self::Chain)
+    }
+}
+
+/// The Paint Brush tool's options.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PaintBrushSettings {
+    pub style: PaintBrushStyle,
+    /// Width of an art brush, or size of a pattern tile, in pixels.
+    pub size: f64,
+    /// Pattern brushes: the distance between tiles as a percentage of the tile size.
+    pub spacing: f64,
+    /// How much the path is smoothed, 0 to 100.
+    pub smoothing: f64,
+}
+
+impl Default for PaintBrushSettings {
+    fn default() -> Self {
+        Self { style: PaintBrushStyle::Calligraphic, size: 12.0, spacing: 130.0, smoothing: 50.0 }
+    }
+}
+
 /// Snapping switches of the View > Snapping menu.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[expect(clippy::struct_excessive_bools, reason = "independent snapping switches")]
@@ -336,6 +403,9 @@ pub struct ToolSettings {
     /// How the Lasso tool selects.
     #[serde(default)]
     pub lasso: LassoSettings,
+    /// The Paint Brush tool's brush.
+    #[serde(default)]
+    pub paint_brush: PaintBrushSettings,
     /// Snapping switches.
     #[serde(default)]
     pub snap: SnapSettings,
@@ -372,6 +442,7 @@ impl Default for ToolSettings {
             oval: OvalSettings::default(),
             polystar: PolyStarSettings::default(),
             lasso: LassoSettings::default(),
+            paint_brush: PaintBrushSettings::default(),
             snap: SnapSettings::default(),
             text: TextSettings::default(),
             hit_tolerance: 4.0,

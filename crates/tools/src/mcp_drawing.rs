@@ -16,8 +16,9 @@ use serde_json::{Value, json};
 use crate::command::ToolCommand;
 use crate::mcp::{ToolHost, atomic, down, drag, draw_box, fail, finite_all, result_of, run, split_style, up, with_style};
 use crate::script::ToolScript;
-use crate::settings::PolyStarStyle;
+use crate::settings::{PaintBrushStyle, PolyStarStyle};
 use crate::tool::ToolId;
+use crate::widthline::{WidthProfile, apply_profile};
 
 fn invalid(message: impl Into<String>) -> CommandError {
     CommandError::invalid_params(message.into())
@@ -245,6 +246,74 @@ fn anchor_convert<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Co
     anchor_with(host, params, ToolId::ConvertAnchor)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PaintBrushParams {
+    points: Vec<[f64; 2]>,
+    style: Option<PaintBrushStyle>,
+    size: Option<f64>,
+    spacing: Option<f64>,
+}
+
+fn draw_paintbrush<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let (style, rest) = split_style(params)?;
+    let p: PaintBrushParams = parse_params(&rest)?;
+    if p.points.len() < 2 {
+        return Err(invalid("a brush stroke needs at least two points"));
+    }
+    if p.points.iter().any(|q| !q[0].is_finite() || !q[1].is_finite()) {
+        return Err(invalid("coordinates must be finite numbers"));
+    }
+    finite_all(&[p.size.unwrap_or(1.0), p.spacing.unwrap_or(100.0)])?;
+    if p.size.is_some_and(|s| s <= 0.0) || p.spacing.is_some_and(|s| s <= 0.0) {
+        return Err(invalid("size and spacing must be positive"));
+    }
+    let (first, rest_points) = p.points.split_first().ok_or_else(|| invalid("a brush stroke needs points"))?;
+    let (last, middle) = rest_points.split_last().ok_or_else(|| invalid("a brush stroke needs at least two points"))?;
+    let mut events = vec![down(first[0], first[1])];
+    events.extend(middle.iter().map(|q| drag(q[0], q[1])));
+    events.push(up(last[0], last[1]));
+    atomic(host.editor_mut(), |ed| {
+        with_style(ed, &style, |ed| {
+            let brush = &mut ed.state.settings.paint_brush;
+            brush.style = p.style.unwrap_or(brush.style);
+            brush.size = p.size.unwrap_or(brush.size);
+            brush.spacing = p.spacing.unwrap_or(brush.spacing);
+            let report = run(ed, &ToolScript { tool: Some(ToolId::PaintBrush), events })?;
+            Ok(result_of(ed, &report))
+        })
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WidthParams {
+    profile: WidthProfile,
+}
+
+fn stroke_width<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
+    let p: WidthParams = parse_params(params)?;
+    atomic(host.editor_mut(), |ed| {
+        let mut commands = Vec::new();
+        for target in &ed.state.selection.items {
+            let baked = ed.with_context(|ctx| match ctx.resolve(target)?.element {
+                Element::Shape(s) => apply_profile(&s.shape, &p.profile),
+                _ => None,
+            });
+            if let Some(shape) = baked {
+                commands.push(ToolCommand::ReplaceShape { target: target.clone(), shape });
+            }
+        }
+        if commands.is_empty() {
+            return Err(invalid("select shapes that have strokes first"));
+        }
+        ed.run_commands(&commands).map_err(fail)?;
+        Ok(json!({ "converted": commands.len() }))
+    })
+}
+
+const SCHEMA_PAINTBRUSH: &str = r##"{"type":"object","required":["points"],"properties":{"points":{"type":"array","minItems":2,"items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"style":{"enum":["calligraphic","tapered","charcoal","marker","dots","stars","arrows","dashes","chain"]},"size":{"type":"number","exclusiveMinimum":0},"spacing":{"type":"number","exclusiveMinimum":0,"description":"Pattern brushes: distance between tiles as a percentage of the tile size"},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
+const SCHEMA_WIDTH: &str = r##"{"type":"object","required":["profile"],"properties":{"profile":{"description":"A preset (\"uniform\", \"taper_both\", \"taper_start\", \"taper_end\", \"swell\", \"pinch\") or {\"points\":[{\"at\":0..1,\"width\":px}]}"}},"additionalProperties":false}"##;
 const SCHEMA_BOX: &str = r##"{"type":"object","required":["x","y","width","height"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number","exclusiveMinimum":0},"height":{"type":"number","exclusiveMinimum":0},"corner_radius":{"type":"number","minimum":0},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_POLYSTAR: &str = r##"{"type":"object","required":["x","y","radius"],"properties":{"x":{"type":"number","description":"Centre"},"y":{"type":"number"},"radius":{"type":"number","exclusiveMinimum":0},"sides":{"type":"integer","minimum":3,"maximum":32},"star":{"type":"boolean"},"point_size":{"type":"number","minimum":0,"maximum":1,"description":"Star point size: inner radius as a fraction of the outer one"},"rotation_degrees":{"type":"number"},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_PRIMITIVE: &str = r##"{"type":"object","description":"Change the selected rectangle or oval primitives","properties":{"width":{"type":"number","minimum":0},"height":{"type":"number","minimum":0},"corner_radius":{"type":"number","minimum":0},"radii":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"top left, top right, bottom right, bottom left"},"lock":{"type":"boolean"},"start_angle":{"type":"number"},"end_angle":{"type":"number"},"inner_radius":{"type":"number","minimum":0,"maximum":99},"close_path":{"type":"boolean"}},"additionalProperties":false}"##;
@@ -269,6 +338,12 @@ pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
         CommandSpec::new("primitive.set", "Set Primitive", primitive_set::<D>)
             .with_schema(SCHEMA_PRIMITIVE)
             .describe("Change the size, corner radii, start and end angle or inner radius of the selected rectangle or oval primitives."),
+        CommandSpec::new("draw.paintbrush", "Paint Brush", draw_paintbrush::<D>)
+            .with_schema(SCHEMA_PAINTBRUSH)
+            .describe("Paint a stroke along a path with an art brush (calligraphic, tapered, charcoal, marker) or a pattern brush (dots, stars, arrows, dashes, chain), in the stroke colour."),
+        CommandSpec::new("stroke.width", "Width Profile", stroke_width::<D>)
+            .with_schema(SCHEMA_WIDTH)
+            .describe("Give the strokes of the selected shapes a variable-width profile. The strokes become filled outlines that follow the profile."),
         CommandSpec::new("select.lasso", "Lasso Select", select_lasso::<D>).with_schema(SCHEMA_LASSO).describe(
             "Select what lies inside a polygon: shapes are cut along it and the part inside is selected, whole objects are selected when it encloses them.",
         ),

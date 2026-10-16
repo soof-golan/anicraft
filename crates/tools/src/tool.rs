@@ -8,8 +8,9 @@ use crate::event::{Key, ToolEvent};
 use crate::overlay::{Cursor, Overlay};
 use crate::tools::{
     AddAnchorTool, BoneTool, BrushTool, ConvertAnchorTool, DeleteAnchorTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool,
-    InkBottleTool, LassoTool, LineTool, OvalPrimitiveTool, OvalTool, PaintBucketTool, PenTool, PencilTool, PolyStarTool, RectanglePrimitiveTool, RectangleTool,
-    Rotation3DTool, SelectionTool, SubselectionTool, TextTool, Translation3DTool, ZoomTool, bone_under, bones_overlay,
+    InkBottleTool, LassoTool, LineTool, OvalPrimitiveTool, OvalTool, PaintBrushTool, PaintBucketTool, PenTool, PencilTool, PolyStarTool,
+    RectanglePrimitiveTool, RectangleTool, Rotation3DTool, SelectionTool, SubselectionTool, TextTool, Translation3DTool, WidthTool, ZoomTool, bone_under,
+    bones_overlay,
 };
 
 /// Every tool.
@@ -43,11 +44,13 @@ pub enum ToolId {
     PolyStar,
     RectanglePrimitive,
     OvalPrimitive,
+    Width,
+    PaintBrush,
 }
 
 impl ToolId {
     /// All tools in toolbox order.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 29] = [
         Self::Selection,
         Self::Subselection,
         Self::FreeTransform,
@@ -67,7 +70,9 @@ impl ToolId {
         Self::OvalPrimitive,
         Self::PolyStar,
         Self::Pencil,
+        Self::Width,
         Self::Brush,
+        Self::PaintBrush,
         Self::Bone,
         Self::PaintBucket,
         Self::InkBottle,
@@ -108,6 +113,8 @@ impl ToolId {
             Self::PolyStar => "polystar",
             Self::RectanglePrimitive => "rect_primitive",
             Self::OvalPrimitive => "oval_primitive",
+            Self::Width => "width",
+            Self::PaintBrush => "paintbrush",
         }
     }
 
@@ -148,6 +155,8 @@ impl ToolId {
             Self::PolyStar => "PolyStar Tool",
             Self::RectanglePrimitive => "Rectangle Primitive Tool",
             Self::OvalPrimitive => "Oval Primitive Tool",
+            Self::Width => "Width Tool",
+            Self::PaintBrush => "Paint Brush Tool",
         }
     }
 
@@ -198,6 +207,10 @@ impl ToolId {
             Self::OvalPrimitive => {
                 "Drag to draw an oval that stays editable: change its start and end angle and inner radius in the Properties panel afterwards."
             }
+            Self::Width => {
+                "Drag outward from a stroke to make it wider at that place, inward to make it thinner; every drag adds a width point and the stroke becomes a filled outline that follows them."
+            }
+            Self::PaintBrush => "Drag to paint with the chosen art or pattern brush in the stroke colour.",
         }
     }
 
@@ -229,8 +242,9 @@ impl ToolId {
             Self::AddAnchor => '=',
             Self::DeleteAnchor => '-',
             Self::ConvertAnchor => 'c',
+            Self::Width => 'u',
             // Reached from the flyout of the tool they share a button with.
-            Self::PolyStar | Self::RectanglePrimitive | Self::OvalPrimitive => '\0',
+            Self::PolyStar | Self::RectanglePrimitive | Self::OvalPrimitive | Self::PaintBrush => '\0',
         }
     }
 
@@ -337,6 +351,8 @@ pub struct ToolSet {
     polystar: PolyStarTool,
     rect_primitive: RectanglePrimitiveTool,
     oval_primitive: OvalPrimitiveTool,
+    width: WidthTool,
+    paint_brush: PaintBrushTool,
 }
 
 impl Default for ToolSet {
@@ -379,6 +395,8 @@ impl ToolSet {
             polystar: PolyStarTool::default(),
             rect_primitive: RectanglePrimitiveTool::default(),
             oval_primitive: OvalPrimitiveTool::default(),
+            width: WidthTool::default(),
+            paint_brush: PaintBrushTool::default(),
         }
     }
 
@@ -417,6 +435,8 @@ impl ToolSet {
             ToolId::PolyStar => &mut self.polystar,
             ToolId::RectanglePrimitive => &mut self.rect_primitive,
             ToolId::OvalPrimitive => &mut self.oval_primitive,
+            ToolId::Width => &mut self.width,
+            ToolId::PaintBrush => &mut self.paint_brush,
         }
     }
 
@@ -449,6 +469,8 @@ impl ToolSet {
             ToolId::PolyStar => &self.polystar,
             ToolId::RectanglePrimitive => &self.rect_primitive,
             ToolId::OvalPrimitive => &self.oval_primitive,
+            ToolId::Width => &self.width,
+            ToolId::PaintBrush => &self.paint_brush,
         }
     }
 

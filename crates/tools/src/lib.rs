@@ -60,6 +60,7 @@ pub mod state;
 pub mod swatches;
 pub mod tool;
 pub mod tools;
+pub mod widthline;
 
 pub use apply::{Applied, ApplyError, apply};
 pub use command::{CaretMotion, ToolCommand};
@@ -72,8 +73,9 @@ pub use overlay::{Compass, Cursor, Marker, Node, Overlay, Role};
 pub use script::{ScriptReport, ScriptStep, ToolInfo, ToolScript, catalog, run_script};
 pub use selection::{ElementRef, Selection};
 pub use settings::{
-    BrushMode, EraserMode, GapSize, LassoMode, LassoSettings, OvalSettings, PencilMode, PolyStarSettings, PolyStarStyle, SnapSettings, TextSettings, TipShape,
-    ToolSettings,
+    BrushMode, EraserMode, GapSize, LassoMode, LassoSettings, OvalSettings, PaintBrushSettings, PaintBrushStyle, PencilMode, PolyStarSettings, PolyStarStyle,
+    SnapSettings, TextSettings, TipShape, ToolSettings,
 };
 pub use state::{EditorState, View};
 pub use tool::{Tool, ToolId, ToolOutput, ToolSet};
+pub use widthline::{WidthPoint, WidthProfile};

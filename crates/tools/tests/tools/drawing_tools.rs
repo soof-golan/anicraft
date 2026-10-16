@@ -220,3 +220,67 @@ fn the_subselection_tool_converts_an_anchor_with_alt() {
     send_all(&mut e, vec![PointerEvent::down(200.0, 100.0).with_modifiers(alt).into(), PointerEvent::up(200.0, 100.0).with_modifiers(alt).into()]);
     assert!(shape_at(&e, 0).shape.edges.iter().flat_map(|edge| edge.segments.iter()).any(|s| matches!(s, anim_shape::Segment::Cubic { .. })));
 }
+
+fn thick_line(e: &mut anicraft_tools::Editor) {
+    e.state.settings.stroke = anim_shape::StrokeStyle::plain(4.0, anim_core::Rgba8::BLACK);
+    drag(e, ToolId::Line, (50.0, 100.0), (250.0, 100.0));
+}
+
+#[test]
+fn the_width_tool_widens_a_stroke_where_it_is_dragged() {
+    let mut e = editor();
+    thick_line(&mut e);
+    assert_eq!(shape_at(&e, 0).shape.strokes.len(), 1);
+    drag(&mut e, ToolId::Width, (150.0, 100.0), (150.0, 120.0));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.strokes.is_empty(), "the stroke became a fill");
+    assert!(shape.fill_at(Point::new(150.0, 115.0)).is_some(), "the line is 40 px wide where it was dragged");
+    assert!(shape.fill_at(Point::new(150.0, 85.0)).is_some(), "on both sides");
+    assert!(shape.fill_at(Point::new(60.0, 110.0)).is_none(), "far from the point it is still thin");
+    assert!(shape.fill_at(Point::new(60.0, 101.0)).is_some());
+
+    // A second drag on the same shape refines the same profile.
+    drag(&mut e, ToolId::Width, (100.0, 100.0), (100.0, 130.0));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.fill_at(Point::new(100.0, 125.0)).is_some(), "the second point widened the line at x = 100");
+    assert!(shape.fill_at(Point::new(150.0, 115.0)).is_some(), "the first point is still there");
+    assert!(e.undo());
+    assert!(shape_at(&e, 0).shape.fill_at(Point::new(100.0, 125.0)).is_none(), "undo takes the last width point back");
+}
+
+#[test]
+fn width_presets_taper_the_ends() {
+    let mut e = editor();
+    thick_line(&mut e);
+    e.state.settings.stroke = anim_shape::StrokeStyle::plain(12.0, anim_core::Rgba8::BLACK);
+    drag(&mut e, ToolId::Line, (50.0, 200.0), (250.0, 200.0));
+    let shape = shape_at(&e, 0).shape.clone();
+    let baked = anicraft_tools::widthline::apply_profile(&shape, &anicraft_tools::WidthProfile::TaperBoth).unwrap();
+    assert!(baked.fill_at(Point::new(150.0, 205.0)).is_some());
+    assert!(baked.fill_at(Point::new(52.0, 205.0)).is_none(), "pointed end");
+}
+
+#[test]
+fn art_and_pattern_brushes_paint_filled_shapes() {
+    use anicraft_tools::PaintBrushStyle;
+    for style in PaintBrushStyle::ALL {
+        let mut e = editor();
+        e.state.settings.paint_brush.style = style;
+        e.state.settings.paint_brush.size = 14.0;
+        drag(&mut e, ToolId::PaintBrush, (60.0, 100.0), (260.0, 130.0));
+        assert_eq!(elements(&e).len(), 1, "{style:?}");
+        let shape = &shape_at(&e, 0).shape;
+        assert!(shape.strokes.is_empty() && !shape.fills.is_empty(), "{style:?} paints fills");
+        let b = shape.bounds().unwrap();
+        assert!(b.x0 < 80.0 && b.x1 > 240.0, "{style:?}: {b:?}");
+    }
+    // A pattern brush leaves gaps between its tiles.
+    let mut e = editor();
+    e.state.settings.paint_brush.style = PaintBrushStyle::Dots;
+    e.state.settings.paint_brush.size = 8.0;
+    e.state.settings.paint_brush.spacing = 200.0;
+    drag(&mut e, ToolId::PaintBrush, (60.0, 100.0), (260.0, 100.0));
+    let shape = &shape_at(&e, 0).shape;
+    let hits = (0..200).filter(|i| shape.fill_at(Point::new(60.0 + f64::from(*i), 100.0)).is_some()).count();
+    assert!(hits > 20 && hits < 120, "dots with gaps cover part of the line: {hits}");
+}
