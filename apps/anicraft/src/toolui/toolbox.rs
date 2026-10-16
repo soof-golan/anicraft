@@ -121,6 +121,20 @@ fn paint_tool(painter: &egui::Painter, rect: Rect, tool: &ToolItem, colour: Colo
             painter.line_segment([at(0.1, 0.5), at(0.9, 0.5)], stroke);
             painter.circle_filled(at(0.9, 0.5), 2.5, colour);
         }
+        "rotation_3d" | "translation_3d" => {
+            // Three axes from a centre point; the rotation tool adds the ring.
+            let centre = at(0.45, 0.55);
+            painter.line_segment([centre, at(0.9, 0.55)], Stroke::new(1.5, Color32::from_rgb(230, 70, 60)));
+            painter.line_segment([centre, at(0.45, 0.1)], Stroke::new(1.5, Color32::from_rgb(70, 190, 90)));
+            painter.line_segment([centre, at(0.1, 0.9)], Stroke::new(1.5, Color32::from_rgb(70, 120, 230)));
+            if tool.id == "rotation_3d" {
+                painter.circle_stroke(centre, rect.width() * 0.38, Stroke::new(1.0, colour));
+            } else {
+                painter.circle_filled(at(0.9, 0.55), 2.0, Color32::from_rgb(230, 70, 60));
+                painter.circle_filled(at(0.45, 0.1), 2.0, Color32::from_rgb(70, 190, 90));
+                painter.circle_filled(at(0.1, 0.9), 2.0, Color32::from_rgb(70, 120, 230));
+            }
+        }
         "ink" => {
             painter.add(egui::Shape::closed_line(vec![at(0.3, 0.35), at(0.7, 0.35), at(0.85, 0.9), at(0.15, 0.9)], stroke));
             painter.rect_stroke(Rect::from_min_max(at(0.4, 0.1), at(0.6, 0.35)), 1.0, stroke, StrokeKind::Middle);

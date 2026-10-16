@@ -111,14 +111,23 @@ pub struct ToolUi {
 }
 
 /// Tools the toolbox groups under another tool's button, as `(tool, group's first tool)`.
-const GROUPS: [(&str, &str); 6] =
-    [("gradient_transform", "transform"), ("oval", "rect"), ("rect_primitive", "rect"), ("oval_primitive", "rect"), ("polystar", "rect"), ("ink", "bucket")];
+const GROUPS: [(&str, &str); 7] = [
+    ("gradient_transform", "transform"),
+    ("translation_3d", "rotation_3d"),
+    ("oval", "rect"),
+    ("rect_primitive", "rect"),
+    ("oval_primitive", "rect"),
+    ("polystar", "rect"),
+    ("ink", "bucket"),
+];
 
 /// The toolbar items plus the tools that the shared toolbar has no button for yet.
 #[must_use]
 pub fn with_extra_tools(mut tools: Vec<ToolItem>) -> Vec<ToolItem> {
     let extras = [
         ("transform", ToolItem::new("gradient_transform", "Gradient Transform Tool", Icon::FreeTransform, Some('f'))),
+        ("gradient_transform", ToolItem::new("rotation_3d", "3D Rotation Tool", Icon::FreeTransform, Some('w'))),
+        ("rotation_3d", ToolItem::new("translation_3d", "3D Translation Tool", Icon::FreeTransform, Some('g'))),
         ("bucket", ToolItem::new("ink", "Ink Bottle Tool", Icon::PaintBucket, Some('s'))),
     ];
     for (after, item) in extras {
@@ -160,6 +169,7 @@ mod tests {
         let grouped = groups(&tools);
         let ids = |g: &[&ToolItem]| g.iter().map(|t| t.id.clone()).collect::<Vec<_>>();
         assert!(grouped.iter().any(|g| ids(g) == ["transform", "gradient_transform"]));
+        assert!(grouped.iter().any(|g| ids(g) == ["rotation_3d", "translation_3d"]));
         assert!(grouped.iter().any(|g| ids(g) == ["rect", "oval"]));
         assert!(grouped.iter().any(|g| ids(g) == ["bucket", "ink"]));
         // Every tool shows up in exactly one group.

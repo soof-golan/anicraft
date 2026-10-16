@@ -226,6 +226,11 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 }
                 ui.end_row();
             }
+            ToolId::Rotation3D | ToolId::Translation3D => {
+                ui.label("");
+                ui.weak("Select a movie clip first. Set the perspective angle and vanishing point in the document properties.");
+                ui.end_row();
+            }
             ToolId::GradientTransform => {
                 ui.label("");
                 ui.weak("Click a gradient or bitmap fill, then drag its handles.");

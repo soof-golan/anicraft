@@ -1,6 +1,6 @@
 //! Symbol instance properties: name, type, looping, colour effect, blending, visibility and the filter list.
 
-use anim_core::{BlendMode, ColorTransform, Rgba8, num};
+use anim_core::{BlendMode, ColorTransform, Matrix3D, Rgba8, num};
 use anim_display::Filter;
 use anim_scene::{ColorEffect, InstanceFilter, Library, LoopMode, SymbolInstance, SymbolKind};
 use anim_ui::property::{PropValue, Property};
@@ -33,6 +33,7 @@ const LOOPING: &str = "Looping";
 const COLOR: &str = "Color effect";
 const DISPLAY: &str = "Display";
 const FILTERS: &str = "Filters";
+const THREE_D: &str = "3D position and view";
 
 fn colour_choice(effect: ColorEffect) -> usize {
     match effect {
@@ -50,6 +51,7 @@ const SIGNED_PERCENT: Unit = Unit::new(-100.0, 100.0, 0, " %");
 const OFFSET: Unit = Unit::new(-255.0, 255.0, 0, "");
 const BLUR: Unit = Unit::new(0.0, 255.0, 1, " px");
 const STRENGTH: Unit = Unit::new(0.0, 1000.0, 0, " %");
+const DEPTH: Unit = Unit::new(-100_000.0, 100_000.0, 1, " px");
 const ANGLE: Unit = Unit::new(-360.0, 360.0, 0, " deg");
 
 /// The rows of a symbol instance.
@@ -95,6 +97,9 @@ pub(super) fn describe(i: &SymbolInstance, library: &Library, out: &mut Vec<Prop
         }
         ColorEffect::None => {}
     }
+    if matches!(kind, SymbolKind::MovieClip) {
+        describe_3d(i, out);
+    }
     let blend = BLENDS.iter().position(|(_, b)| *b == i.blend_mode).unwrap_or(0);
     let names: Vec<&str> = BLENDS.iter().map(|(n, _)| *n).collect();
     out.push(Property::new("blend", "Blending", PropValue::choice(blend, &names)).in_section(DISPLAY));
@@ -103,6 +108,36 @@ pub(super) fn describe(i: &SymbolInstance, library: &Library, out: &mut Vec<Prop
     for (n, filter) in i.filters.iter().enumerate() {
         describe_filter(n, filter, out);
     }
+}
+
+/// The 3D placement of a movie clip as position and rotation; the 3D tools write the same fields.
+fn describe_3d(i: &SymbolInstance, out: &mut Vec<Property>) {
+    let t = i.placement_3d().decompose().unwrap_or_default();
+    let [x, y, z] = t.translation;
+    let [rx, ry, rz] = t.rotation;
+    out.push(number_row("3d.x", "X", x, DEPTH, THREE_D));
+    out.push(number_row("3d.y", "Y", y, DEPTH, THREE_D));
+    out.push(number_row("3d.z", "Z", z, DEPTH, THREE_D));
+    out.push(number_row("3d.rx", "Rotation X", rx, ANGLE, THREE_D));
+    out.push(number_row("3d.ry", "Rotation Y", ry, ANGLE, THREE_D));
+    out.push(number_row("3d.rz", "Rotation Z", rz, ANGLE, THREE_D));
+}
+
+/// Sets one of the 3D fields; the placement is rebuilt from position, rotation and scale.
+fn apply_3d(i: &mut SymbolInstance, field: &str, value: &PropValue) -> Result<(), String> {
+    let v = number(value).filter(|v| v.is_finite()).ok_or_else(|| wrong(field))?;
+    let mut t = i.placement_3d().decompose().ok_or("this instance's placement cannot be edited as 3D fields")?;
+    match field {
+        "x" => t.translation[0] = v,
+        "y" => t.translation[1] = v,
+        "z" => t.translation[2] = v,
+        "rx" => t.rotation[0] = v,
+        "ry" => t.rotation[1] = v,
+        "rz" => t.rotation[2] = v,
+        _ => return Err(format!("no 3D property {field:?}")),
+    }
+    i.set_matrix_3d(Matrix3D::compose(&t));
+    Ok(())
 }
 
 fn describe_filter(n: usize, filter: &InstanceFilter, out: &mut Vec<Property>) {
@@ -208,6 +243,9 @@ pub(super) fn apply(i: &mut SymbolInstance, id: &str, value: &PropValue) -> Resu
         "blend" => i.blend_mode = BLENDS.get(choice(value).ok_or_else(wrong)?).map(|(_, b)| *b).ok_or_else(wrong)?,
         "filter.add" => add_filter(i, choice(value).ok_or_else(wrong)?)?,
         _ => {
+            if let Some(rest) = id.strip_prefix("3d.") {
+                return apply_3d(i, rest, value);
+            }
             if let Some(rest) = id.strip_prefix("adv_") {
                 return advanced(i, rest, value);
             }

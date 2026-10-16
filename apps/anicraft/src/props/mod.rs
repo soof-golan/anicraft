@@ -181,6 +181,19 @@ fn document_rows(document: &Document, out: &mut Vec<Property>) {
         Property::new("doc.fps", "Frame rate", PropValue::number_in(document.frame_rate, 1.0, 240.0).precision(2, 0.5).with_suffix(" fps"))
             .in_section("Document"),
     );
+    out.push(
+        Property::new("doc.perspective", "Perspective angle", PropValue::number_in(document.perspective_angle, 1.0, 179.0).precision(1, 0.5).with_suffix(" deg"))
+            .in_section("Document"),
+    );
+    let vanishing = document.vanishing_point.unwrap_or_else(|| anim_core::Point::new(document.width / 2.0, document.height / 2.0));
+    out.push(
+        Property::new("doc.vanishing_x", "Vanishing point X", PropValue::number_in(vanishing.x, -100_000.0, 100_000.0).precision(1, 1.0).with_suffix(" px"))
+            .in_section("Document"),
+    );
+    out.push(
+        Property::new("doc.vanishing_y", "Vanishing point Y", PropValue::number_in(vanishing.y, -100_000.0, 100_000.0).precision(1, 1.0).with_suffix(" px"))
+            .in_section("Document"),
+    );
     out.push(Property::new("doc.background", "Stage colour", PropValue::Color(document.background_color)).in_section("Document"));
     let frames: u32 = document.scenes.iter().map(anim_scene::Timeline::frame_count).sum();
     out.push(
@@ -322,6 +335,17 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
             "width" => d.width = number(value).filter(|v| *v >= 1.0).ok_or_else(|| wrong(id))?,
             "height" => d.height = number(value).filter(|v| *v >= 1.0).ok_or_else(|| wrong(id))?,
             "fps" => d.frame_rate = number(value).filter(|v| *v >= 1.0 && *v <= 1000.0).ok_or_else(|| wrong(id))?,
+            "perspective" => d.perspective_angle = number(value).filter(|v| (1.0..=179.0).contains(v)).ok_or_else(|| wrong(id))?,
+            "vanishing_x" | "vanishing_y" => {
+                let v = number(value).filter(|v| v.is_finite()).ok_or_else(|| wrong(id))?;
+                let mut p = d.vanishing_point.unwrap_or_else(|| anim_core::Point::new(d.width / 2.0, d.height / 2.0));
+                if rest == "vanishing_x" {
+                    p.x = v;
+                } else {
+                    p.y = v;
+                }
+                d.vanishing_point = Some(p);
+            }
             "background" => d.background_color = colour(value).ok_or_else(|| wrong(id))?,
             _ => return Err(format!("no document property {rest:?}")),
         }
