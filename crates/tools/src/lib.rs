@@ -46,6 +46,7 @@ pub mod freehand;
 pub mod hit;
 pub mod mcp;
 mod mcp_armature;
+pub mod modify;
 pub mod overlay;
 mod region_select;
 pub mod script;
