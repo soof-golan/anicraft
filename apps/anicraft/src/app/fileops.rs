@@ -117,7 +117,12 @@ impl AniApp {
             (Some(path), false) => path,
             (existing, _) => {
                 let name = existing.as_deref().and_then(Path::file_name).map_or_else(|| "Untitled.fla".to_owned(), |n| n.to_string_lossy().into_owned());
-                let picked = rfd::FileDialog::new().set_title("Save As").add_filter("Animate document", &["fla"]).add_filter("XFL folder", &["xfl"]).set_file_name(name).save_file();
+                let picked = rfd::FileDialog::new()
+                    .set_title("Save As")
+                    .add_filter("Animate document", &["fla"])
+                    .add_filter("XFL folder", &["xfl"])
+                    .set_file_name(name)
+                    .save_file();
                 match picked {
                     Some(path) => path,
                     None => return,
@@ -179,7 +184,11 @@ impl AniApp {
                 let picked = if format == Format::PngSeq {
                     rfd::FileDialog::new().set_title("Export PNG Sequence").pick_folder().map(|dir| dir.join(&stem))
                 } else {
-                    rfd::FileDialog::new().set_title("Export").add_filter(format.describe(), &[format.extension()]).set_file_name(format!("{stem}.{}", format.extension())).save_file()
+                    rfd::FileDialog::new()
+                        .set_title("Export")
+                        .add_filter(format.describe(), &[format.extension()])
+                        .set_file_name(format!("{stem}.{}", format.extension()))
+                        .save_file()
                 };
                 if let Some(out) = picked {
                     self.start_export(format, out);

@@ -57,7 +57,10 @@ impl AniApp {
         let session = self.host.session();
         let doc = session.doc();
         let enabled = menus::menu_commands().iter().copied().filter(|id| session.is_enabled(id)).collect();
-        let closed_panels = [PanelId::Tools, PanelId::Stage, PanelId::Timeline, PanelId::Properties, PanelId::Library].into_iter().filter(|p| !self.ui.layout.contains(p)).collect();
+        let closed_panels = [PanelId::Tools, PanelId::Stage, PanelId::Timeline, PanelId::Properties, PanelId::Library]
+            .into_iter()
+            .filter(|p| !self.ui.layout.contains(p))
+            .collect();
         MenuView {
             enabled,
             can_undo: session.history().undo_label().map(str::to_owned),
@@ -93,7 +96,13 @@ impl AniApp {
         ui.horizontal(|ui| {
             ui.label(crate::text(&text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(format!("{} | frame {frame}/{total} | {fps} fps | {zoom:.0}% | {selected} selected | render {took:.0} ms", crate::text(&scope))).weak());
+                ui.label(
+                    RichText::new(format!(
+                        "{} | frame {frame}/{total} | {fps} fps | {zoom:.0}% | {selected} selected | render {took:.0} ms",
+                        crate::text(&scope)
+                    ))
+                    .weak(),
+                );
                 if let Some(export) = &self.ui.export {
                     ui.add(egui::ProgressBar::new(export.fraction).desired_width(140.0).text(crate::text(&export.label)));
                 }
@@ -106,7 +115,13 @@ impl AniApp {
         let doc = session.doc();
         let state = &doc.editor.state;
         let model = view::timeline_model(doc.document(), &state.timeline, state.frame, self.ui.onion, self.ui.playback.is_some(), &self.ui.collapsed_layers);
-        let transport = TransportState { playing: self.ui.playback.is_some(), looping: self.ui.looping, fps: num::f64_to_f32(doc.document().frame_rate), frame: state.frame, frame_count: model.frame_count };
+        let transport = TransportState {
+            playing: self.ui.playback.is_some(),
+            looping: self.ui.looping,
+            fps: num::f64_to_f32(doc.document().frame_rate),
+            frame: state.frame,
+            frame_count: model.frame_count,
+        };
         let thumbs: HashMap<String, egui::TextureId> = self.ui.thumbs.iter().map(|(k, v)| (k.clone(), v.id())).collect();
         let rows = view::library_rows(doc.document(), &self.ui.collapsed_folders, &self.ui.library_filter, self.ui.library_selected.as_deref(), &thumbs);
         let props = crate::props::describe(doc);

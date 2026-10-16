@@ -23,8 +23,8 @@ use std::path::{Path, PathBuf};
 
 use anicraft_cli::mcp::{AniDoc, AniHooks, INSTRUCTIONS as HEADLESS_INSTRUCTIONS, VERSION};
 use anim_mcp::{
-    AnimMcp, AppHooks, Confinement, ControlConfig, ControlError, ControlInbox, ControlServer, ExportFormat, ExportRequest, HookOutcome, HookResult, HostInfo, QuerySpec,
-    RenderRequest, ScreenshotRequest, SessionHost, Ticket,
+    AnimMcp, AppHooks, Confinement, ControlConfig, ControlError, ControlInbox, ControlServer, ExportFormat, ExportRequest, HookOutcome, HookResult, HostInfo,
+    QuerySpec, RenderRequest, ScreenshotRequest, SessionHost, Ticket,
 };
 use anim_session::{Session, SizeHint};
 use serde_json::{Value, json};
@@ -191,7 +191,11 @@ impl Links {
         let mut links = Self::default();
         if let Some(port) = options.control_port {
             let server = ControlServer::start(&ControlConfig { port, token_file: options.token_file.clone() }, wake.clone())?;
-            eprintln!("anicraft: control server on {} (token file: {})", server.addr(), options.token_file.as_ref().map_or_else(|| "none".to_owned(), |p| p.display().to_string()));
+            eprintln!(
+                "anicraft: control server on {} (token file: {})",
+                server.addr(),
+                options.token_file.as_ref().map_or_else(|| "none".to_owned(), |p| p.display().to_string())
+            );
             links.server = Some(server);
         }
         if options.stdio {

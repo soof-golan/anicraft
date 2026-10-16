@@ -91,15 +91,26 @@ pub fn describe(doc: &AniDoc) -> Vec<Property> {
     let mut out = Vec::new();
     match selection.as_slice() {
         [] => {
-            out.push(Property::new("doc.width", "Width", PropValue::number_in(document.width, 1.0, 16000.0).precision(0, 1.0).with_suffix(" px")).in_section("Document"));
-            out.push(Property::new("doc.height", "Height", PropValue::number_in(document.height, 1.0, 16000.0).precision(0, 1.0).with_suffix(" px")).in_section("Document"));
-            out.push(Property::new("doc.fps", "Frame rate", PropValue::number_in(document.frame_rate, 1.0, 240.0).precision(2, 0.5).with_suffix(" fps")).in_section("Document"));
+            out.push(
+                Property::new("doc.width", "Width", PropValue::number_in(document.width, 1.0, 16000.0).precision(0, 1.0).with_suffix(" px"))
+                    .in_section("Document"),
+            );
+            out.push(
+                Property::new("doc.height", "Height", PropValue::number_in(document.height, 1.0, 16000.0).precision(0, 1.0).with_suffix(" px"))
+                    .in_section("Document"),
+            );
+            out.push(
+                Property::new("doc.fps", "Frame rate", PropValue::number_in(document.frame_rate, 1.0, 240.0).precision(2, 0.5).with_suffix(" fps"))
+                    .in_section("Document"),
+            );
             out.push(Property::new("doc.background", "Stage colour", PropValue::Color(document.background_color)).in_section("Document"));
         }
         [one] => describe_element(document, &editor.state.timeline, one, &mut out),
         many => {
             out.push(Property::new("multi", "Selected", PropValue::Text(format!("{} objects", many.len()))).in_section("Selection"));
-            if let Some(bounds) = anicraft_tools::hit::transform_rect(Affine::IDENTITY, union_bounds(document, &editor.state.timeline, many).unwrap_or(anim_core::Rect::ZERO)) {
+            if let Some(bounds) =
+                anicraft_tools::hit::transform_rect(Affine::IDENTITY, union_bounds(document, &editor.state.timeline, many).unwrap_or(anim_core::Rect::ZERO))
+            {
                 out.push(Property::new("size", "Size", PropValue::Text(format!("{:.0} x {:.0}", bounds.width(), bounds.height()))).in_section("Selection"));
             }
         }
@@ -120,12 +131,21 @@ fn describe_element(doc: &Document, id: &TimelineId, r: &ElementRef, out: &mut V
     out.push(Property::new("x", "X", PropValue::number(x).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"));
     out.push(Property::new("y", "Y", PropValue::number(y).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"));
     if let Some(b) = bounds {
-        out.push(Property::new("w", "Width", PropValue::number_in(b.width(), 0.0, 16000.0).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"));
-        out.push(Property::new("h", "Height", PropValue::number_in(b.height(), 0.0, 16000.0).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"));
+        out.push(
+            Property::new("w", "Width", PropValue::number_in(b.width(), 0.0, 16000.0).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"),
+        );
+        out.push(
+            Property::new("h", "Height", PropValue::number_in(b.height(), 0.0, 16000.0).precision(1, 0.5).with_suffix(" px")).in_section("Position and size"),
+        );
     }
-    if !matches!(el, Element::Shape(_)) && let Some(m) = el.matrix() {
+    if !matches!(el, Element::Shape(_))
+        && let Some(m) = el.matrix()
+    {
         let (rotation, _, _) = linear(m);
-        out.push(Property::new("rotation", "Rotation", PropValue::number_in(rotation, -360.0, 360.0).precision(1, 0.5).with_suffix(" deg")).in_section("Position and size"));
+        out.push(
+            Property::new("rotation", "Rotation", PropValue::number_in(rotation, -360.0, 360.0).precision(1, 0.5).with_suffix(" deg"))
+                .in_section("Position and size"),
+        );
     }
     match el {
         Element::SymbolInstance(i) => {
@@ -138,16 +158,27 @@ fn describe_element(doc: &Document, id: &TimelineId, r: &ElementRef, out: &mut V
                     LoopMode::SingleFrame => 2,
                 };
                 out.push(Property::new("loop", "Looping", PropValue::choice(mode, &LOOPS)).in_section("Looping"));
-                out.push(Property::new("first_frame", "First frame", PropValue::number_in(f64::from(i.first_frame) + 1.0, 1.0, 100_000.0).precision(0, 1.0)).in_section("Looping"));
+                out.push(
+                    Property::new("first_frame", "First frame", PropValue::number_in(f64::from(i.first_frame) + 1.0, 1.0, 100_000.0).precision(0, 1.0))
+                        .in_section("Looping"),
+                );
             }
             out.push(Property::new("effect", "Style", PropValue::choice(colour_choice(i.color_effect), &EFFECTS)).in_section("Color effect"));
             match i.color_effect {
-                ColorEffect::Brightness(b) => out.push(Property::new("brightness", "Brightness", PropValue::number_in(pct(b), -100.0, 100.0).precision(0, 1.0).with_suffix(" %")).in_section("Color effect")),
+                ColorEffect::Brightness(b) => out.push(
+                    Property::new("brightness", "Brightness", PropValue::number_in(pct(b), -100.0, 100.0).precision(0, 1.0).with_suffix(" %"))
+                        .in_section("Color effect"),
+                ),
                 ColorEffect::Tint { color, amount } => {
                     out.push(Property::new("tint", "Tint colour", PropValue::Color(color)).in_section("Color effect"));
-                    out.push(Property::new("tint_amount", "Tint", PropValue::number_in(pct(amount), 0.0, 100.0).precision(0, 1.0).with_suffix(" %")).in_section("Color effect"));
+                    out.push(
+                        Property::new("tint_amount", "Tint", PropValue::number_in(pct(amount), 0.0, 100.0).precision(0, 1.0).with_suffix(" %"))
+                            .in_section("Color effect"),
+                    );
                 }
-                ColorEffect::Alpha(a) => out.push(Property::new("alpha", "Alpha", PropValue::number_in(pct(a), 0.0, 100.0).precision(0, 1.0).with_suffix(" %")).in_section("Color effect")),
+                ColorEffect::Alpha(a) => out.push(
+                    Property::new("alpha", "Alpha", PropValue::number_in(pct(a), 0.0, 100.0).precision(0, 1.0).with_suffix(" %")).in_section("Color effect"),
+                ),
                 ColorEffect::None | ColorEffect::Advanced(_) => {}
             }
             let blend = BLENDS.iter().position(|(_, b)| *b == i.blend_mode).unwrap_or(0);
@@ -160,7 +191,10 @@ fn describe_element(doc: &Document, id: &TimelineId, r: &ElementRef, out: &mut V
             out.push(Property::new("text", "Text", PropValue::Text(t.plain_text())).in_section("Character"));
             if let Some(run) = run {
                 out.push(Property::new("font", "Family", PropValue::Text(run.face.clone())).in_section("Character"));
-                out.push(Property::new("size", "Size", PropValue::number_in(f64::from(run.size), 1.0, 1000.0).precision(1, 0.5).with_suffix(" pt")).in_section("Character"));
+                out.push(
+                    Property::new("size", "Size", PropValue::number_in(f64::from(run.size), 1.0, 1000.0).precision(1, 0.5).with_suffix(" pt"))
+                        .in_section("Character"),
+                );
                 out.push(Property::new("text_color", "Colour", PropValue::Color(run.fill_color)).in_section("Character"));
                 out.push(Property::new("bold", "Bold", PropValue::Bool(run.bold)).in_section("Character"));
                 out.push(Property::new("italic", "Italic", PropValue::Bool(run.italic)).in_section("Character"));
@@ -187,7 +221,10 @@ fn describe_element(doc: &Document, id: &TimelineId, r: &ElementRef, out: &mut V
                 if let FillStyle::Solid(c) = &stroke.solid().fill {
                     out.push(Property::new("stroke", "Stroke", PropValue::Color(*c)).in_section("Fill and stroke"));
                 }
-                out.push(Property::new("stroke_width", "Stroke width", PropValue::number_in(stroke.weight(), 0.0, 200.0).precision(2, 0.1).with_suffix(" px")).in_section("Fill and stroke"));
+                out.push(
+                    Property::new("stroke_width", "Stroke width", PropValue::number_in(stroke.weight(), 0.0, 200.0).precision(2, 0.1).with_suffix(" px"))
+                        .in_section("Fill and stroke"),
+                );
             }
         }
         Element::Bitmap(b) => {
@@ -278,7 +315,11 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
                         return Err("width and height must be positive".to_owned());
                     }
                     let k = v / cur;
-                    let about = if id == "w" { Affine::translate((anchor, 0.0)) * Affine::scale_non_uniform(k, 1.0) * Affine::translate((-anchor, 0.0)) } else { Affine::translate((0.0, anchor)) * Affine::scale_non_uniform(1.0, k) * Affine::translate((0.0, -anchor)) };
+                    let about = if id == "w" {
+                        Affine::translate((anchor, 0.0)) * Affine::scale_non_uniform(k, 1.0) * Affine::translate((-anchor, 0.0))
+                    } else {
+                        Affine::translate((0.0, anchor)) * Affine::scale_non_uniform(1.0, k) * Affine::translate((0.0, -anchor))
+                    };
                     about * m
                 }
                 _ => {
@@ -399,7 +440,10 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
 /// A message when the property is unknown or the JSON has the wrong shape.
 pub fn from_json(doc: &AniDoc, id: &str, value: &Value) -> Result<PropValue, String> {
     let props = describe(doc);
-    let current = props.iter().find(|p| p.id == id).ok_or_else(|| format!("no property {id:?} for the current selection; call stage_elements or tools_state to see it"))?;
+    let current = props
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| format!("no property {id:?} for the current selection; call stage_elements or tools_state to see it"))?;
     Ok(match &current.value {
         PropValue::Number { min, max, speed, decimals, suffix, .. } => PropValue::Number {
             value: value.as_f64().ok_or("expected a number")?,
@@ -463,7 +507,9 @@ mod tests {
         apply(&mut doc, "name", &PropValue::Text("hero".into())).unwrap();
         apply(&mut doc, "effect", &PropValue::choice(3, &EFFECTS)).unwrap();
         apply(&mut doc, "alpha", &PropValue::number(40.0)).unwrap();
-        let Some(Element::SymbolInstance(i)) = element(&doc.editor.document, &TimelineId::Scene(0), &ElementRef::top_level(0, 0, 0)) else { panic!("no instance") };
+        let Some(Element::SymbolInstance(i)) = element(&doc.editor.document, &TimelineId::Scene(0), &ElementRef::top_level(0, 0, 0)) else {
+            panic!("no instance")
+        };
         let i: &SymbolInstance = i;
         assert!((i.matrix.translation().x - 50.0).abs() < 1e-9);
         assert_eq!(i.name.as_deref(), Some("hero"));

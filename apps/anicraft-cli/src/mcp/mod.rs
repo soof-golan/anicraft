@@ -415,7 +415,8 @@ impl AppHooks<AniDoc> for AniHooks {
     }
 
     fn save(&mut self, doc: &AniDoc, file: &mut File) -> io::Result<()> {
-        let (bytes, _report) = anicraft_xfl::write_fla_bytes(&doc.editor.document, &doc.media, &doc.sidecars, &WriteOptions::default()).map_err(io::Error::other)?;
+        let (bytes, _report) =
+            anicraft_xfl::write_fla_bytes(&doc.editor.document, &doc.media, &doc.sidecars, &WriteOptions::default()).map_err(io::Error::other)?;
         file.write_all(&bytes)
     }
 }

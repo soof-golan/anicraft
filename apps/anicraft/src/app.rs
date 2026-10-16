@@ -101,7 +101,9 @@ struct Fingerprint {
 #[derive(Debug)]
 enum ShotStage {
     /// Wait for fonts, layout and the first render to settle.
-    Settling { frames: u32 },
+    Settling {
+        frames: u32,
+    },
     Requested,
 }
 
@@ -213,7 +215,8 @@ impl AniApp {
             if let [layer, keyframe, index] = parts.as_slice() {
                 let doc = self.host.session_mut().doc_mut();
                 doc.editor.state.layer = *layer;
-                doc.editor.state.selection = anicraft_tools::Selection::one(anicraft_tools::ElementRef::top_level(*layer, u32::try_from(*keyframe).unwrap_or(0), *index));
+                doc.editor.state.selection =
+                    anicraft_tools::Selection::one(anicraft_tools::ElementRef::top_level(*layer, u32::try_from(*keyframe).unwrap_or(0), *index));
             }
         }
     }
@@ -440,7 +443,11 @@ impl AniApp {
 
     /// The `--screenshot` state machine: wait until the stage shows the requested frame, then ask for the capture.
     fn drive_shot(&mut self, ctx: &Context) {
-        let ready = self.sync.shown.is_some() && self.sync.shown == self.sync.requested && self.sync.inflight.is_empty() && self.fonts && self.sync.last_error.is_none();
+        let ready = self.sync.shown.is_some()
+            && self.sync.shown == self.sync.requested
+            && self.sync.inflight.is_empty()
+            && self.fonts
+            && self.sync.last_error.is_none();
         let Some(run) = &mut self.shot else { return };
         match &mut run.stage {
             ShotStage::Settling { frames } => {

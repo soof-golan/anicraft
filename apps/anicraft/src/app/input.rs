@@ -54,7 +54,9 @@ impl AniApp {
         let canvas = self.stage_canvas();
         let screen = self.ui.stage.view.to_screen(egui::Rect::from_min_size(egui::Pos2::ZERO, canvas.size()), p.pos);
         let event = |kind: anicraft_tools::PointerKind, count: u8| {
-            ToolEvent::Pointer(PointerEvent::new(kind, pos.x, pos.y).with_modifiers(modifiers).with_click_count(count).with_screen(f64::from(screen.x), f64::from(screen.y)))
+            ToolEvent::Pointer(
+                PointerEvent::new(kind, pos.x, pos.y).with_modifiers(modifiers).with_click_count(count).with_screen(f64::from(screen.x), f64::from(screen.y)),
+            )
         };
         match p.phase {
             PointerPhase::Move => self.tool_event(&event(K::Hover, 1)),
@@ -114,7 +116,8 @@ impl AniApp {
                 ToolCommand::ZoomAt { center, factor } => {
                     let canvas = egui::Rect::from_min_size(egui::Pos2::ZERO, self.stage_canvas().size());
                     let anchor = egui::pos2(anim_core::num::f64_to_f32(center.x), anim_core::num::f64_to_f32(center.y));
-                    self.ui.stage.view = self.ui.stage.view.zoom_about(canvas, self.ui.stage.view.to_screen(canvas, anchor), anim_core::num::f64_to_f32(*factor));
+                    self.ui.stage.view =
+                        self.ui.stage.view.zoom_about(canvas, self.ui.stage.view.to_screen(canvas, anchor), anim_core::num::f64_to_f32(*factor));
                 }
                 ToolCommand::ZoomToRect { rect } => {
                     let size = Vec2::new(anim_core::num::f64_to_f32(rect.width()), anim_core::num::f64_to_f32(rect.height()));
@@ -132,8 +135,12 @@ impl AniApp {
         }
         self.ui.tool_overlay = view::overlays(&overlay, accent);
         self.ui.tool_cursor = Some(view::cursor_icon(out.cursor));
-        let gesture_over = !busy && !text_editing && (matches!(event, ToolEvent::Pointer(p) if p.kind == anicraft_tools::PointerKind::Up) || matches!(event, ToolEvent::Key(_) | ToolEvent::Cancel));
-        if (gesture_over || finished_text) && let Some(base) = self.ui.drag_base.take() {
+        let gesture_over = !busy
+            && !text_editing
+            && (matches!(event, ToolEvent::Pointer(p) if p.kind == anicraft_tools::PointerKind::Up) || matches!(event, ToolEvent::Key(_) | ToolEvent::Cancel));
+        if (gesture_over || finished_text)
+            && let Some(base) = self.ui.drag_base.take()
+        {
             let label = std::mem::take(&mut self.ui.drag_label);
             self.host.session_mut().history_mut().record(*base, label, None);
             self.edits = self.edits.saturating_add(1);

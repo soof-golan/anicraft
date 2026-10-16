@@ -208,7 +208,9 @@ impl AniApp {
         let result = self.host.session_mut().edit("Place from Library", None, |doc: &mut AniDoc| -> Result<usize, String> {
             let document = &mut doc.editor.document;
             match document.library.find(&name) {
-                Some(LibraryItem::Symbol(_)) => edit::add_symbol_instance(document, &timeline, layer, frame, &name, Affine::translate(at.to_vec2())).map_err(|e| e.to_string()),
+                Some(LibraryItem::Symbol(_)) => {
+                    edit::add_symbol_instance(document, &timeline, layer, frame, &name, Affine::translate(at.to_vec2())).map_err(|e| e.to_string())
+                }
                 Some(LibraryItem::Bitmap(b)) => {
                     let size = b.size.unwrap_or([0.0, 0.0]);
                     let m = Affine::translate((at.x - size[0] / 2.0, at.y - size[1] / 2.0));
@@ -237,7 +239,13 @@ impl AniApp {
 
     fn library_name(&self, id: u64) -> Option<String> {
         let doc = self.host.session().doc().document();
-        let rows = crate::view::library_rows(doc, &self.ui.collapsed_folders, &self.ui.library_filter, self.ui.library_selected.as_deref(), &std::collections::HashMap::new());
+        let rows = crate::view::library_rows(
+            doc,
+            &self.ui.collapsed_folders,
+            &self.ui.library_filter,
+            self.ui.library_selected.as_deref(),
+            &std::collections::HashMap::new(),
+        );
         rows.names.get(num::u32_to_usize(u32::try_from(id).ok()?)).cloned()
     }
 
@@ -388,7 +396,8 @@ impl AniApp {
     fn copy_selection(&mut self) {
         let doc = self.host.session().doc();
         let id = doc.editor.state.timeline.clone();
-        let elements: Vec<Element> = doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(doc.document(), &id, r)).map(|r| r.element.clone()).collect();
+        let elements: Vec<Element> =
+            doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(doc.document(), &id, r)).map(|r| r.element.clone()).collect();
         let count = elements.len();
         if count > 0 {
             self.ui.clipboard = elements;
@@ -406,11 +415,15 @@ impl AniApp {
             let s = &self.host.session().doc().editor.state;
             (s.timeline.clone(), s.layer, s.frame)
         };
-        let result = self.host.session_mut().edit("Paste", None, |doc| crate::commands::paste_elements(&mut doc.editor.document, &timeline, layer, frame, elements, Point::new(12.0, 12.0)));
+        let result = self
+            .host
+            .session_mut()
+            .edit("Paste", None, |doc| crate::commands::paste_elements(&mut doc.editor.document, &timeline, layer, frame, elements, Point::new(12.0, 12.0)));
         match result {
             Ok(indices) => {
                 let keyframe = self.keyframe_index(layer, frame);
-                self.host.session_mut().doc_mut().editor.state.selection = Selection { items: indices.into_iter().map(|i| ElementRef::top_level(layer, keyframe, i)).collect(), scope: None };
+                self.host.session_mut().doc_mut().editor.state.selection =
+                    Selection { items: indices.into_iter().map(|i| ElementRef::top_level(layer, keyframe, i)).collect(), scope: None };
             }
             Err(e) => {
                 self.host.session_mut().undo();
@@ -510,7 +523,8 @@ impl AniApp {
                 let doc = self.host.session().doc();
                 let layers = doc.document().timeline(&doc.editor.state.timeline).map_or(0, |t| t.layers.len());
                 let frames = self.frame_count();
-                self.ui.timeline.selection = FrameSelection { layers: (0..layers).filter_map(|l| u64::try_from(l).ok()).collect(), first: 0, last: frames.saturating_sub(1) };
+                self.ui.timeline.selection =
+                    FrameSelection { layers: (0..layers).filter_map(|l| u64::try_from(l).ok()).collect(), first: 0, last: frames.saturating_sub(1) };
             }
         }
     }
@@ -569,7 +583,11 @@ impl AniApp {
         let result = self.host.session_mut().edit("Move Frames", None, |doc| -> Result<(), String> {
             let document = &mut doc.editor.document;
             for &layer in &layers {
-                let mut keys: Vec<u32> = document.timeline(&id).and_then(|t| t.layers.get(layer)).map(|l| l.frames.iter().map(|f| f.index).filter(|i| *i >= lo && *i <= hi).collect()).unwrap_or_default();
+                let mut keys: Vec<u32> = document
+                    .timeline(&id)
+                    .and_then(|t| t.layers.get(layer))
+                    .map(|l| l.frames.iter().map(|f| f.index).filter(|i| *i >= lo && *i <= hi).collect())
+                    .unwrap_or_default();
                 // Move the keyframes furthest in the direction of travel first so they never run into each other.
                 if delta > 0 {
                     keys.reverse();
@@ -625,7 +643,8 @@ impl AniApp {
                 }
             }
             LayerEvent::RenameRequested(l) => {
-                let name = self.host.session().doc().document().timeline(&id).and_then(|t| t.layers.get(idx(l))).map(|layer| layer.name.clone()).unwrap_or_default();
+                let name =
+                    self.host.session().doc().document().timeline(&id).and_then(|t| t.layers.get(idx(l))).map(|layer| layer.name.clone()).unwrap_or_default();
                 self.ui.dialog = Some(Dialog::RenameLayer { index: idx(l), name });
             }
             LayerEvent::SetAllVisible(on) => self.all_layers(&id, "Show/Hide All Layers", |layer| layer.visible = on),
@@ -655,7 +674,8 @@ impl AniApp {
                 }
             }
             LayerEvent::Properties(l) => {
-                let name = self.host.session().doc().document().timeline(&id).and_then(|t| t.layers.get(idx(l))).map(|layer| layer.name.clone()).unwrap_or_default();
+                let name =
+                    self.host.session().doc().document().timeline(&id).and_then(|t| t.layers.get(idx(l))).map(|layer| layer.name.clone()).unwrap_or_default();
                 self.ui.dialog = Some(Dialog::RenameLayer { index: idx(l), name });
             }
             LayerEvent::Move { id: moving, target, placement } => {
@@ -670,7 +690,10 @@ impl AniApp {
                     Ok(_) => {
                         if placement == DropPlacement::Inside {
                             let parent = if from < target { target.saturating_sub(1) } else { target };
-                            let _ = self.host.session_mut().edit("Move Layer into Folder", None, |doc| edit::set_layer_parent(&mut doc.editor.document, &id, to, Some(parent)));
+                            let _ = self
+                                .host
+                                .session_mut()
+                                .edit("Move Layer into Folder", None, |doc| edit::set_layer_parent(&mut doc.editor.document, &id, to, Some(parent)));
                         }
                     }
                     Err(e) => {

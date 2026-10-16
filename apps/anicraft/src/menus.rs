@@ -23,13 +23,18 @@ pub enum ExportKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuAction {
     /// Run a registered command.
-    Command { id: &'static str, params: Value },
+    Command {
+        id: &'static str,
+        params: Value,
+    },
     New,
     Open,
     OpenRecent(PathBuf),
     Save,
     SaveAs,
-    Import { to_stage: bool },
+    Import {
+        to_stage: bool,
+    },
     Export(ExportKind),
     Quit,
     Cut,

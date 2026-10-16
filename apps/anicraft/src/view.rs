@@ -115,7 +115,13 @@ fn parent_of(name: &str) -> Option<&str> {
 
 /// The library panel's model. Items are sorted so folders come before their contents.
 #[must_use]
-pub fn library_rows(doc: &Document, collapsed: &BTreeSet<String>, filter: &str, selected: Option<&str>, thumbs: &HashMap<String, egui::TextureId>) -> LibraryRows {
+pub fn library_rows(
+    doc: &Document,
+    collapsed: &BTreeSet<String>,
+    filter: &str,
+    selected: Option<&str>,
+    thumbs: &HashMap<String, egui::TextureId>,
+) -> LibraryRows {
     let mut order: Vec<&LibraryItem> = doc.library.items.iter().collect();
     order.sort_by_key(|item| item.name().to_lowercase());
     let needle = filter.to_lowercase();
@@ -226,7 +232,11 @@ pub fn overlays(tool: &[ToolOverlay], accent: Color32) -> Vec<Overlay> {
                 out.push(Overlay::Line { a: p(*a), b: p(*b), style: OverlayStyle::line(role_colour(*role, accent)) });
             }
             ToolOverlay::Polyline { points, closed, role } => {
-                out.push(Overlay::Polygon { points: points.iter().map(|pt| p(*pt)).collect(), closed: *closed, style: OverlayStyle::line(role_colour(*role, accent)) });
+                out.push(Overlay::Polygon {
+                    points: points.iter().map(|pt| p(*pt)).collect(),
+                    closed: *closed,
+                    style: OverlayStyle::line(role_colour(*role, accent)),
+                });
             }
             ToolOverlay::Path { path, role, width: _, filled } => {
                 let colour = role_colour(*role, accent);
@@ -278,9 +288,15 @@ pub const fn cursor_icon(cursor: Cursor) -> CursorIcon {
         Cursor::Default => CursorIcon::Default,
         Cursor::Move => CursorIcon::Move,
         Cursor::Bend | Cursor::Corner | Cursor::Point | Cursor::Pivot => CursorIcon::PointingHand,
-        Cursor::Crosshair | Cursor::Pen | Cursor::PenClose | Cursor::Pencil | Cursor::Brush | Cursor::Bucket | Cursor::InkBottle | Cursor::Eraser | Cursor::Eyedropper => {
-            CursorIcon::Crosshair
-        }
+        Cursor::Crosshair
+        | Cursor::Pen
+        | Cursor::PenClose
+        | Cursor::Pencil
+        | Cursor::Brush
+        | Cursor::Bucket
+        | Cursor::InkBottle
+        | Cursor::Eraser
+        | Cursor::Eyedropper => CursorIcon::Crosshair,
         Cursor::Text => CursorIcon::Text,
         Cursor::Hand => CursorIcon::Grab,
         Cursor::Grabbing => CursorIcon::Grabbing,

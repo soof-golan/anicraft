@@ -197,7 +197,10 @@ fn expand(doc: &mut AniDoc, symbols: bool) -> Out {
                 }
             }
             Element::SymbolInstance(inst) if symbols => {
-                let content = library.find_symbol(&inst.library_item_name).and_then(|s| s.timeline.layers.iter().rev().find_map(|l| l.keyframe_at(inst.first_frame).map(|k| k.elements.clone()))).unwrap_or_default();
+                let content = library
+                    .find_symbol(&inst.library_item_name)
+                    .and_then(|s| s.timeline.layers.iter().rev().find_map(|l| l.keyframe_at(inst.first_frame).map(|k| k.elements.clone())))
+                    .unwrap_or_default();
                 touched = touched.saturating_add(1);
                 for mut member in content {
                     if let Some(m) = member.matrix() {
@@ -337,7 +340,8 @@ fn set_property(doc: &mut AniDoc, params: &Value) -> Out {
 
 fn copy_selection(doc: &mut AniDoc, _params: &Value) -> Out {
     let id = timeline(doc);
-    let elements: Vec<&Element> = doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(&doc.editor.document, &id, r)).map(|r| r.element).collect();
+    let elements: Vec<&Element> =
+        doc.editor.state.selection.items.iter().filter_map(|r| anicraft_tools::resolve_ref(&doc.editor.document, &id, r)).map(|r| r.element).collect();
     Ok(json!({ "count": elements.len(), "elements": serde_json::to_value(&elements).map_err(failed)? }))
 }
 
@@ -345,7 +349,14 @@ fn copy_selection(doc: &mut AniDoc, _params: &Value) -> Out {
 ///
 /// # Errors
 /// When the layer or keyframe does not exist.
-pub fn paste_elements(doc: &mut Document, id: &TimelineId, layer: usize, frame: u32, elements: Vec<Element>, offset: Point) -> Result<Vec<usize>, anim_scene::SceneError> {
+pub fn paste_elements(
+    doc: &mut Document,
+    id: &TimelineId,
+    layer: usize,
+    frame: u32,
+    elements: Vec<Element>,
+    offset: Point,
+) -> Result<Vec<usize>, anim_scene::SceneError> {
     let mut at = Vec::new();
     for mut element in elements {
         if let Some(m) = element.matrix() {

@@ -180,7 +180,8 @@ pub fn place_bitmap(doc: &mut AniDoc, name: &str, size: [f64; 2]) -> Result<(), 
     let (layer, frame) = (doc.editor.state.layer, doc.editor.state.frame);
     let (w, h) = (doc.document().width, doc.document().height);
     let matrix = Affine::translate(((w - size[0]) / 2.0, (h - size[1]) / 2.0));
-    let at = anim_scene::edit::add_element(&mut doc.editor.document, &id, layer, frame, Element::Bitmap(BitmapInstance::new(name, matrix))).map_err(|e| e.to_string())?;
+    let at = anim_scene::edit::add_element(&mut doc.editor.document, &id, layer, frame, Element::Bitmap(BitmapInstance::new(name, matrix)))
+        .map_err(|e| e.to_string())?;
     let keyframe = doc.document().timeline(&id).and_then(|t| t.layers.get(layer)).and_then(|l| l.keyframe_at(frame)).map_or(0, |k| k.index);
     doc.editor.state.selection = anicraft_tools::Selection::one(anicraft_tools::ElementRef::top_level(layer, keyframe, at));
     Ok(())

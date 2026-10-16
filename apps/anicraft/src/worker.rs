@@ -57,12 +57,22 @@ pub struct RenderJob {
 #[derive(Debug)]
 pub enum Job {
     /// A new revision of the document. `media` is only sent when it changed.
-    Load { document: Box<Document>, media: Option<Box<MediaStore>> },
+    Load {
+        document: Box<Document>,
+        media: Option<Box<MediaStore>>,
+    },
     Render(RenderJob),
     /// Mix the soundtrack of a scene from `from_frame` to its end.
-    Soundtrack { id: u64, scene: usize, from_frame: u32 },
+    Soundtrack {
+        id: u64,
+        scene: usize,
+        from_frame: u32,
+    },
     /// A library symbol's thumbnail.
-    Thumbnail { name: String, size: u32 },
+    Thumbnail {
+        name: String,
+        size: u32,
+    },
 }
 
 /// What the worker answers.
