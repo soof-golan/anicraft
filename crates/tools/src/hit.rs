@@ -89,9 +89,19 @@ pub fn candidates<'a>(ctx: &ToolContext<'a>) -> Vec<Candidate<'a>> {
         if !ctx.layer_editable(li) {
             continue;
         }
-        let Some(frame) = layer.keyframe_at(ctx.frame) else { continue };
-        for (i, element) in frame.elements.iter().enumerate().rev() {
-            out.push(Candidate { element_ref: ElementRef::top_level(li, frame.index, i), element, parent_to_stage: Affine::IDENTITY });
+        // Edit Multiple Frames: the keyframes anywhere in the range, the one under the playhead first.
+        let frames: Vec<&anim_scene::Frame> = match ctx.edit_range {
+            Some((lo, hi)) => {
+                let mut all: Vec<&anim_scene::Frame> = layer.frames.iter().filter(|f| f.index <= hi && f.end() > lo).collect();
+                all.sort_by_key(|f| (!f.covers(ctx.frame), f.index));
+                all
+            }
+            None => layer.keyframe_at(ctx.frame).into_iter().collect(),
+        };
+        for frame in frames {
+            for (i, element) in frame.elements.iter().enumerate().rev() {
+                out.push(Candidate { element_ref: ElementRef::top_level(li, frame.index, i), element, parent_to_stage: Affine::IDENTITY });
+            }
         }
     }
     out

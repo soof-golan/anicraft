@@ -5,6 +5,7 @@ use anicraft_tools::{Key, KeyEvent, Modifiers, PointerEvent, ToolCommand, ToolCo
 use anim_core::Point;
 use anim_session::Shortcut;
 use anim_ui::stage::{PointerPhase, StagePointer};
+use anim_ui::timeline::FrameAction;
 use egui::{Context, PointerButton, Vec2};
 use serde_json::json;
 
@@ -50,7 +51,13 @@ impl AniApp {
             return;
         }
         let modifiers = tool_modifiers(p.modifiers);
-        let pos = Point::new(f64::from(p.pos.x), f64::from(p.pos.y));
+        let mut pos = Point::new(f64::from(p.pos.x), f64::from(p.pos.y));
+        // A symbol edited in place sits at a matrix inside the stage; the tools work in the symbol's own space.
+        if let Some(m) = self.host.session().doc().editor.state.in_place
+            && m.determinant().abs() > 1e-12
+        {
+            pos = m.inverse() * pos;
+        }
         let canvas = self.stage_canvas();
         let screen = self.ui.stage.view.to_screen(egui::Rect::from_min_size(egui::Pos2::ZERO, canvas.size()), p.pos);
         let event = |kind: anicraft_tools::PointerKind, count: u8| {
@@ -89,6 +96,7 @@ impl AniApp {
                 timeline: &ed.state.timeline,
                 layer: ed.state.layer,
                 frame: ed.state.frame,
+                edit_range: ed.state.edit_range,
                 selection: &ed.state.selection,
                 settings: &ed.state.settings,
                 zoom: ed.state.view.zoom,
@@ -133,7 +141,8 @@ impl AniApp {
                 _ => {}
             }
         }
-        self.ui.tool_overlay = view::overlays(&overlay, accent);
+        let to_stage = self.host.session().doc().editor.state.in_place.unwrap_or(anim_core::Affine::IDENTITY);
+        self.ui.tool_overlay = view::overlays(&overlay, accent, to_stage);
         self.ui.tool_cursor = Some(view::cursor_icon(out.cursor));
         let gesture_over = !busy
             && !text_editing
@@ -186,8 +195,24 @@ impl AniApp {
     fn shortcut(&mut self, ctx: &Context, key: egui::Key, modifiers: egui::Modifiers, busy: bool) {
         use egui::Key as K;
         let chord = Shortcut { command: modifiers.command, shift: modifiers.shift, alt: modifiers.alt, key: key.name().to_owned() };
+        // The Edit > Timeline chords come before the plain Ctrl ones they extend.
+        let frames = match (modifiers.command, modifiers.alt, key) {
+            (true, true, K::X) => Some(FrameAction::CutFrames),
+            (true, true, K::C) => Some(FrameAction::CopyFrames),
+            (true, true, K::V) if modifiers.shift => Some(FrameAction::PasteOverwrite),
+            (true, true, K::V) => Some(FrameAction::PasteFrames),
+            (true, true, K::A) => Some(FrameAction::SelectAllFrames),
+            (false, true, K::Backspace) => Some(FrameAction::ClearFrames),
+            _ => None,
+        };
+        if let Some(action) = frames {
+            self.handle(ctx, super::actions::UiEvent::Menu(MenuAction::Frame(action)));
+            return;
+        }
         // Application-level chords first.
         let action = match (modifiers.command, modifiers.shift, key) {
+            (true, false, K::E) => Some(MenuAction::EditSymbol),
+            (false, true, K::F2) => Some(MenuAction::ToggleScenePanel),
             (true, false, K::N) => Some(MenuAction::New),
             (true, false, K::O) => Some(MenuAction::Open),
             (true, false, K::S) => Some(MenuAction::Save),

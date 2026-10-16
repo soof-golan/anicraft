@@ -33,6 +33,7 @@ impl AniApp {
         self.receive(&ctx);
         self.keyboard(&ctx);
         self.ui.theme.apply(&ctx);
+        self.sync_modes();
 
         let mut events: Vec<UiEvent> = Vec::new();
         let menu_view = self.menu_view();
@@ -42,6 +43,8 @@ impl AniApp {
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| self.dock(ui, &mut events));
         events.extend(self.dialogs(&ctx));
+        events.extend(self.scene_panel(&ctx));
+        events.extend(self.parenting_view(&ctx));
 
         for event in events {
             self.handle(&ctx, event);
@@ -76,6 +79,10 @@ impl AniApp {
             closed_panels,
             recent: self.recent_paths(),
             dirty: session.is_dirty(),
+            scene_panel: self.ui.scene_panel,
+            parenting_view: self.ui.parenting_view,
+            edit_multiple: self.ui.timeline.edit_multiple,
+            auto_keyframe: self.ui.timeline.auto_keyframe,
         }
     }
 
@@ -116,7 +123,9 @@ impl AniApp {
         let session = self.host.session();
         let doc = session.doc();
         let state = &doc.editor.state;
-        let model = view::timeline_model(doc.document(), &state.timeline, state.frame, self.ui.onion, self.ui.playback.is_some(), &self.ui.collapsed_layers);
+        let previews = self.ui.timeline.preview != anim_ui::timeline::PreviewMode::Off;
+        let model =
+            view::timeline_model(doc.document(), &state.timeline, state.frame, self.ui.onion, self.ui.playback.is_some(), &self.ui.collapsed_layers, previews);
         let transport = TransportState {
             playing: self.ui.playback.is_some(),
             looping: self.ui.looping,
@@ -131,11 +140,16 @@ impl AniApp {
         }
         let props = crate::props::describe(doc);
         let tool_id = state.active_tool.toolbar_id().to_owned();
-        let in_symbol = matches!(state.timeline, anim_scene::TimelineId::Symbol(_));
-        let scope_name = match &state.timeline {
+        let timeline_name = |id: &anim_scene::TimelineId| match id {
             anim_scene::TimelineId::Scene(i) => doc.document().scenes.get(*i).map_or_else(String::new, |s| anicraft_xfl::display_name(&s.name).into_owned()),
             anim_scene::TimelineId::Symbol(n) => anicraft_xfl::display_name(n).into_owned(),
         };
+        // The edit bar: the chain of timelines entered, outermost first, and the scenes to switch between.
+        let crumbs: Vec<String> = state.timeline_stack.iter().map(|(id, ..)| timeline_name(id)).chain(std::iter::once(timeline_name(&state.timeline))).collect();
+        let scene_names: Vec<String> = doc.document().scenes.iter().map(|s| anicraft_xfl::display_name(&s.name).into_owned()).collect();
+        let root_scene = if let anim_scene::TimelineId::Scene(i) = state.timeline_stack.first().map_or(&state.timeline, |(id, ..)| id) { Some(*i) } else { None };
+        let editing_in_place = state.in_place.is_some();
+        let to_stage = state.in_place.unwrap_or(anim_core::Affine::IDENTITY);
         let bg = doc.document().background_color;
         let selection = state.selection.items.clone();
         let rects = view::selection_rects(doc.document(), &state.timeline, &selection);
@@ -148,7 +162,7 @@ impl AniApp {
         let mut overlays = st.tool_overlay.clone();
         // The selection tool draws its own box; other tools show where the selection is.
         if overlays.is_empty() {
-            overlays.extend(rects.iter().map(|r| view::selection_box(*r, accent)));
+            overlays.extend(rects.iter().map(|r| view::selection_box(*r, accent, to_stage)));
         }
         st.stage.overlays = overlays;
         let texture = self.stage_tex.as_ref();
@@ -163,14 +177,7 @@ impl AniApp {
                 }
                 PanelId::Stage => {
                     ui.vertical(|ui| {
-                        if in_symbol {
-                            ui.horizontal(|ui| {
-                                if ui.button("< Back").clicked() {
-                                    events.push(UiEvent::Menu(MenuAction::Command { id: "edit.exit", params: serde_json::json!({}) }));
-                                }
-                                ui.label(RichText::new(crate::text(&scope_name)).strong());
-                            });
-                        }
+                        edit_bar(ui, &crumbs, &scene_names, root_scene, editing_in_place, events);
                         let bar = 34.0;
                         let rest = (ui.available_height() - bar).max(40.0);
                         ui.allocate_ui(vec2(ui.available_width(), rest), |ui| {
@@ -212,6 +219,9 @@ impl AniApp {
             Dialog::NewSymbol { .. } => "Create New Symbol",
             Dialog::RenameLayer { .. } => "Layer Name",
             Dialog::RenameItem { .. } => "Rename Item",
+            Dialog::RenameScene { .. } => "Rename Scene",
+            Dialog::LayerProperties(_) => "Layer Properties",
+            Dialog::FrameProperties(_) => "Frame Properties",
             Dialog::DocumentSettings => "Document Settings",
             Dialog::Message { title, .. } => title.as_str(),
             Dialog::Discard(_) => "Unsaved changes",
@@ -236,7 +246,85 @@ impl AniApp {
                 });
                 ok_cancel(ui, &mut confirmed, &mut keep);
             }
-            Dialog::RenameLayer { name, .. } | Dialog::RenameItem { name, .. } => {
+            Dialog::LayerProperties(p) => {
+                egui::Grid::new("layer-props").num_columns(2).show(ui, |ui| {
+                    ui.label("Name");
+                    ui.text_edit_singleline(&mut p.name);
+                    ui.end_row();
+                    ui.label("Type");
+                    ui.horizontal(|ui| {
+                        for (i, label) in ["Normal", "Guide", "Mask", "Folder"].into_iter().enumerate() {
+                            ui.radio_value(&mut p.kind, i, label);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Outline color");
+                    ui.color_edit_button_srgb(&mut p.color);
+                    ui.end_row();
+                    ui.label("Layer height");
+                    ui.horizontal(|ui| {
+                        for (h, label) in [(1_u8, "100%"), (2, "200%"), (3, "300%")] {
+                            ui.radio_value(&mut p.height, h, label);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Show");
+                    ui.checkbox(&mut p.visible, "");
+                    ui.end_row();
+                    ui.label("Lock");
+                    ui.checkbox(&mut p.locked, "");
+                    ui.end_row();
+                    ui.label("Outlines");
+                    ui.checkbox(&mut p.outline, "");
+                    ui.end_row();
+                });
+                ok_cancel(ui, &mut confirmed, &mut keep);
+            }
+            Dialog::FrameProperties(p) => {
+                egui::Grid::new("frame-props").num_columns(2).show(ui, |ui| {
+                    ui.label("Name");
+                    ui.text_edit_singleline(&mut p.label);
+                    ui.end_row();
+                    ui.label("Type");
+                    ui.horizontal(|ui| {
+                        for (i, label) in ["Name", "Comment", "Anchor"].into_iter().enumerate() {
+                            ui.radio_value(&mut p.label_kind, i, label);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Tween");
+                    ui.label(p.tween.as_str());
+                    ui.end_row();
+                    ui.label("Ease");
+                    ui.add_enabled(p.tween != "None", egui::Slider::new(&mut p.ease, -100..=100));
+                    ui.end_row();
+                    ui.label("Sound");
+                    egui::ComboBox::from_id_salt("frame-sound").selected_text(if p.sound.is_empty() { "None" } else { p.sound.as_str() }).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut p.sound, String::new(), "None");
+                        for name in p.sounds.clone() {
+                            ui.selectable_value(&mut p.sound, name.clone(), name);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Sync");
+                    ui.horizontal(|ui| {
+                        for (i, label) in ["Event", "Start", "Stop", "Stream"].into_iter().enumerate() {
+                            ui.radio_value(&mut p.sync, i, label);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Repeat");
+                    ui.horizontal(|ui| {
+                        ui.add_enabled(!p.forever, egui::DragValue::new(&mut p.repeat).range(1..=10_000));
+                        ui.checkbox(&mut p.forever, "Loop");
+                    });
+                    ui.end_row();
+                });
+                ui.label("Script");
+                ui.add(egui::TextEdit::multiline(&mut p.script).code_editor().desired_rows(5).desired_width(360.0));
+                ok_cancel(ui, &mut confirmed, &mut keep);
+            }
+            Dialog::RenameLayer { name, .. } | Dialog::RenameItem { name, .. } | Dialog::RenameScene { name, .. } => {
                 let response = ui.text_edit_singleline(name);
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     confirmed = true;
@@ -308,6 +396,146 @@ impl AniApp {
         }
         out
     }
+}
+
+impl AniApp {
+    /// The Scene panel (Window > Scene, Shift+F2): the scenes in playback order, to switch between, add, duplicate,
+    /// delete, rename and reorder.
+    fn scene_panel(&mut self, ctx: &Context) -> Vec<UiEvent> {
+        let mut out = Vec::new();
+        if !self.ui.scene_panel {
+            return out;
+        }
+        let doc = self.host.session().doc();
+        let names: Vec<String> = doc.document().scenes.iter().map(|s| anicraft_xfl::display_name(&s.name).into_owned()).collect();
+        let root = doc.editor.state.timeline_stack.first().map_or(&doc.editor.state.timeline, |entry| &entry.0);
+        let open_scene = if let anim_scene::TimelineId::Scene(i) = root { Some(*i) } else { None };
+        let selected = open_scene.unwrap_or(0);
+        let mut open = true;
+        let command = |id: &'static str, params: serde_json::Value| UiEvent::Menu(MenuAction::Command { id, params });
+        egui::Window::new("Scene").open(&mut open).default_width(220.0).resizable(true).show(ctx, |ui| {
+            for (i, name) in names.iter().enumerate() {
+                let response = ui.selectable_label(Some(i) == open_scene, crate::text(name));
+                if response.double_clicked() {
+                    out.push(UiEvent::Menu(MenuAction::Dialog(Dialog::RenameScene { index: i, name: name.clone() })));
+                } else if response.clicked() {
+                    out.push(command("editor.goto", serde_json::json!({ "scene": i, "frame": 0 })));
+                }
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Add").on_hover_text("Add Scene").clicked() {
+                    out.push(command("scene.add", serde_json::json!({ "name": format!("Scene {}", names.len().saturating_add(1)) })));
+                }
+                if ui.button("Duplicate").clicked() {
+                    out.push(command("scene.duplicate", serde_json::json!({ "scene": selected })));
+                }
+                if ui.add_enabled(names.len() > 1, egui::Button::new("Delete")).clicked() {
+                    out.push(command("scene.remove", serde_json::json!({ "scene": selected })));
+                }
+            });
+            ui.horizontal(|ui| {
+                if ui.add_enabled(selected > 0, egui::Button::new("Move Up")).clicked() {
+                    out.push(command("scene.move", serde_json::json!({ "scene": selected, "to": selected.saturating_sub(1) })));
+                }
+                if ui.add_enabled(selected.saturating_add(1) < names.len(), egui::Button::new("Move Down")).clicked() {
+                    out.push(command("scene.move", serde_json::json!({ "scene": selected, "to": selected.saturating_add(1) })));
+                }
+            });
+        });
+        self.ui.scene_panel = open;
+        out
+    }
+
+    /// The Parenting view: every layer with the folder, mask or guide layer it hangs under, to change.
+    fn parenting_view(&mut self, ctx: &Context) -> Vec<UiEvent> {
+        let mut out = Vec::new();
+        if !self.ui.parenting_view {
+            return out;
+        }
+        let doc = self.host.session().doc();
+        let rows: Vec<(String, anim_scene::timeline::LayerKind, Option<usize>)> = doc
+            .document()
+            .timeline(&doc.editor.state.timeline)
+            .map(|t| t.layers.iter().map(|l| (anicraft_xfl::display_name(&l.name).into_owned(), l.kind, l.parent_layer_index)).collect())
+            .unwrap_or_default();
+        let mut open = true;
+        egui::Window::new("Parenting View").open(&mut open).default_width(320.0).resizable(true).show(ctx, |ui| {
+            egui::Grid::new("parenting").num_columns(2).striped(true).show(ui, |ui| {
+                ui.label(RichText::new("Layer").strong());
+                ui.label(RichText::new("Parent").strong());
+                ui.end_row();
+                for (index, (name, kind, parent)) in rows.iter().enumerate() {
+                    ui.label(format!("{} {}", kind_glyph(*kind), crate::text(name)));
+                    let current = parent.and_then(|p| rows.get(p)).map_or_else(|| "None".to_owned(), |(n, ..)| crate::text(n).to_string());
+                    egui::ComboBox::from_id_salt(("parent", index)).selected_text(current).show_ui(ui, |ui| {
+                        if ui.selectable_label(parent.is_none(), "None").clicked() {
+                            out.push(UiEvent::Menu(MenuAction::Command { id: "layer.set_parent", params: serde_json::json!({ "layer": index }) }));
+                        }
+                        for (candidate, (cname, ckind, _)) in rows.iter().enumerate().take(index) {
+                            if matches!(ckind, anim_scene::timeline::LayerKind::Folder | anim_scene::timeline::LayerKind::Mask | anim_scene::timeline::LayerKind::Guide)
+                                && ui.selectable_label(*parent == Some(candidate), crate::text(cname)).clicked()
+                            {
+                                out.push(UiEvent::Menu(MenuAction::Command {
+                                    id: "layer.set_parent",
+                                    params: serde_json::json!({ "layer": index, "parent": candidate }),
+                                }));
+                            }
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+        });
+        self.ui.parenting_view = open;
+        out
+    }
+}
+
+/// A one-character marker of a layer's type.
+const fn kind_glyph(kind: anim_scene::timeline::LayerKind) -> &'static str {
+    use anim_scene::timeline::LayerKind as K;
+    match kind {
+        K::Folder => "[F]",
+        K::Mask => "[M]",
+        K::Guide => "[G]",
+        K::Camera => "[C]",
+        K::Normal | K::Guided | K::Masked => "   ",
+    }
+}
+
+/// The edit bar above the stage: the scene menu and the breadcrumb of the timelines entered, each level a button
+/// that leaves the levels below it. A symbol edited in place is marked.
+fn edit_bar(ui: &mut egui::Ui, crumbs: &[String], scenes: &[String], root_scene: Option<usize>, in_place: bool, events: &mut Vec<UiEvent>) {
+    ui.horizontal(|ui| {
+        if crumbs.len() > 1 && ui.button("<").on_hover_text("Back one level").clicked() {
+            events.push(UiEvent::Menu(MenuAction::Command { id: "edit.exit_to", params: serde_json::json!({ "depth": crumbs.len().saturating_sub(2) }) }));
+        }
+        let selected = root_scene.and_then(|i| scenes.get(i)).map_or("Scene", String::as_str);
+        egui::ComboBox::from_id_salt("edit-bar-scenes").selected_text(crate::text(selected)).width(110.0).show_ui(ui, |ui| {
+            for (i, name) in scenes.iter().enumerate() {
+                if ui.selectable_label(root_scene == Some(i), crate::text(name)).clicked() {
+                    events.push(UiEvent::Menu(MenuAction::Command { id: "editor.goto", params: serde_json::json!({ "scene": i, "frame": 0 }) }));
+                }
+            }
+        });
+        // The first crumb is the scene (or symbol) the chain started in; the scene menu stands for it.
+        let last = crumbs.len().saturating_sub(1);
+        for (depth, name) in crumbs.iter().enumerate().skip(1) {
+            ui.label(RichText::new(">").weak());
+            if depth == last {
+                ui.label(RichText::new(crate::text(name)).strong());
+            } else if ui.link(crate::text(name)).clicked() {
+                events.push(UiEvent::Menu(MenuAction::Command { id: "edit.exit_to", params: serde_json::json!({ "depth": depth }) }));
+            }
+        }
+        if crumbs.len() == 1 && root_scene.is_none() {
+            ui.label(RichText::new(crate::text(crumbs.first().map_or("", String::as_str))).strong());
+        }
+        if in_place {
+            ui.label(RichText::new("editing in place").weak());
+        }
+    });
 }
 
 fn ok_cancel(ui: &mut egui::Ui, confirmed: &mut bool, keep: &mut bool) {

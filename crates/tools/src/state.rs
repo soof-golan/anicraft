@@ -76,6 +76,22 @@ pub struct EditorState {
     pub active_tool: ToolId,
     /// The text field being edited.
     pub text_editing: Option<ElementRef>,
+    /// Edit Multiple Frames: the frames (first and last, 0-based, inclusive) whose keyframes the tools can pick and
+    /// edit together. `None`: only the keyframes under the playhead.
+    #[serde(default)]
+    pub edit_range: Option<(u32, u32)>,
+    /// Auto keyframe: changing a held frame (one inside a span) first makes it a keyframe, so the change does not
+    /// reach the rest of the span. Off by default for scripted use; the window turns it on.
+    #[serde(default)]
+    pub auto_keyframe: bool,
+    /// Edit in Place: the symbol being edited is shown in the context of the timeline it was entered from, with this
+    /// matrix (symbol space to that timeline's stage space) and the rest of the artwork dimmed. `None`: the symbol
+    /// is edited on its own stage.
+    #[serde(default)]
+    pub in_place: Option<anim_core::Affine>,
+    /// The `in_place` of each timeline in `timeline_stack`, to restore when leaving the symbol.
+    #[serde(default)]
+    pub in_place_stack: Vec<Option<anim_core::Affine>>,
 }
 
 impl EditorState {
@@ -92,6 +108,46 @@ impl EditorState {
             view: View::default(),
             active_tool: ToolId::Selection,
             text_editing: None,
+            edit_range: None,
+            auto_keyframe: false,
+            in_place: None,
+            in_place_stack: Vec::new(),
+        }
+    }
+
+    /// Enters the symbol `name` from the current timeline. With `in_place` the symbol stays in the context of the
+    /// timeline it was entered from, positioned by `to_parent` (symbol space to the current timeline's stage space);
+    /// without it the symbol gets a stage of its own.
+    pub fn enter_symbol(&mut self, name: &str, in_place: Option<anim_core::Affine>) {
+        self.timeline_stack.push((self.timeline.clone(), self.layer, self.frame));
+        self.in_place_stack.push(self.in_place);
+        self.in_place = in_place.map(|m| self.in_place.unwrap_or(anim_core::Affine::IDENTITY) * m);
+        self.timeline = TimelineId::Symbol(name.to_owned());
+        self.layer = 0;
+        self.frame = 0;
+        self.selection = Selection::empty();
+        self.edit_range = None;
+    }
+
+    /// Leaves the symbol being edited for the timeline it was entered from. False when there is none.
+    pub fn leave_symbol(&mut self) -> bool {
+        let Some((timeline, layer, frame)) = self.timeline_stack.pop() else { return false };
+        self.timeline = timeline;
+        self.layer = layer;
+        self.frame = frame;
+        self.in_place = self.in_place_stack.pop().flatten();
+        self.selection = Selection::empty();
+        self.edit_range = None;
+        true
+    }
+
+    /// Jumps straight to `depth` levels below the first timeline of the stack (the breadcrumb), leaving the symbols
+    /// above that level. `depth` 0 is the outermost timeline.
+    pub fn leave_to_depth(&mut self, depth: usize) {
+        while self.timeline_stack.len() > depth {
+            if !self.leave_symbol() {
+                break;
+            }
         }
     }
 }

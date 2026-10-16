@@ -56,6 +56,7 @@ pub fn run(file: Option<&Path>, frame: Option<u32>) -> Result<SmokeReport, Strin
         onion: None,
         playing: false,
         transparent: false,
+        in_place: None,
     };
     let image = render_job(&mut ev, &job)?;
     let first = image.premultiplied_rgba.chunks_exact(4).next().map(<[u8]>::to_vec).unwrap_or_default();

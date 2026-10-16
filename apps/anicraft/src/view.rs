@@ -4,11 +4,11 @@ use std::collections::{BTreeSet, HashMap};
 
 use anicraft_tools::{Cursor, Overlay as ToolOverlay, Role};
 use anim_core::{Rgba8, num};
-use anim_scene::timeline::{LayerKind as SceneLayerKind, TweenType};
+use anim_scene::timeline::{LabelType, LayerKind as SceneLayerKind, TweenType};
 use anim_scene::{Document, Element, LibraryItem, SymbolKind, Timeline, TimelineId};
 use anim_ui::library::{LibraryItemView, LibraryKind, LibraryModel};
 use anim_ui::stage::{MarkerShape, Overlay, OverlayStyle, PathNode};
-use anim_ui::timeline::{LayerKind, LayerRow, OnionSkin, Span, TimelineModel, TweenKind};
+use anim_ui::timeline::{LabelKind, LayerKind, LayerRow, OnionSkin, PreviewBox, Span, TimelineModel, TweenKind};
 use egui::{Color32, CursorIcon, Pos2, Rect, pos2, vec2};
 
 /// A position as the `u64` id the widgets use.
@@ -25,7 +25,16 @@ pub fn editing_timeline<'a>(doc: &'a Document, id: &TimelineId) -> Option<&'a Ti
 
 /// The timeline panel's model for the timeline being edited.
 #[must_use]
-pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionSkin, playing: bool, collapsed: &BTreeSet<u64>) -> TimelineModel {
+pub fn timeline_model(
+    doc: &Document,
+    id: &TimelineId,
+    frame: u32,
+    onion: OnionSkin,
+    playing: bool,
+    collapsed: &BTreeSet<u64>,
+    previews: bool,
+) -> TimelineModel {
+    let bounds = anicraft_tools::LibraryBounds::new(&doc.library);
     let Some(timeline) = doc.timeline(id) else { return TimelineModel { fps: 24.0, frame_count: 1, ..TimelineModel::default() } };
     let mut layers = Vec::with_capacity(timeline.layers.len());
     for (index, layer) in timeline.layers.iter().enumerate() {
@@ -70,10 +79,14 @@ pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionS
                     tween,
                     tween_broken: broken,
                     label: f.label.clone(),
+                    label_kind: match f.label_type {
+                        None | Some(LabelType::Name) => LabelKind::Name,
+                        Some(LabelType::Comment) => LabelKind::Comment,
+                        Some(LabelType::Anchor) => LabelKind::Anchor,
+                    },
                     has_script: f.actionscript.as_deref().is_some_and(|s| !s.trim().is_empty()),
                     sound: None,
-                    label_kind: anim_ui::timeline::LabelKind::default(),
-                    preview: Vec::new(),
+                    preview: if previews { preview_boxes(doc, &bounds, f, layer.color) } else { Vec::new() },
                 }
             })
             .collect();
@@ -93,6 +106,23 @@ pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionS
     }
     let used = layers.iter().filter_map(|l| l.spans.last()).map(Span::end).max().unwrap_or(1);
     TimelineModel { layers, frame_count: used.max(timeline.frame_count()).max(1), current_frame: frame, fps: num::f64_to_f32(doc.frame_rate), onion, playing }
+}
+
+/// The boxes of a keyframe's content in stage fractions, for the Frame View previews.
+fn preview_boxes(doc: &Document, bounds: &anicraft_tools::LibraryBounds<'_>, frame: &anim_scene::Frame, color: Rgba8) -> Vec<PreviewBox> {
+    let (w, h) = (doc.width.max(1.0), doc.height.max(1.0));
+    frame
+        .elements
+        .iter()
+        .filter_map(|e| anicraft_tools::hit::bounds_in_parent(bounds, e, 0))
+        .map(|r| PreviewBox {
+            x: num::f64_to_f32(r.x0 / w),
+            y: num::f64_to_f32(r.y0 / h),
+            w: num::f64_to_f32(r.width() / w),
+            h: num::f64_to_f32(r.height() / h),
+            color,
+        })
+        .collect()
 }
 
 /// Library rows in tree order with folder collapsing, and the library index each row stands for.
@@ -192,16 +222,20 @@ pub fn role_colour(role: Role, accent: Color32) -> Color32 {
     }
 }
 
-fn p(point: anim_core::Point) -> Pos2 {
+/// A point of the timeline being edited, mapped by `m` (identity unless a symbol is edited in place) to the stage.
+fn pm(m: &anim_core::Affine, point: anim_core::Point) -> Pos2 {
+    let point = *m * point;
     pos2(num::f64_to_f32(point.x), num::f64_to_f32(point.y))
 }
 
-fn r(rect: anim_core::Rect) -> Rect {
+fn rm(m: &anim_core::Affine, rect: anim_core::Rect) -> Rect {
+    let rect = anicraft_tools::hit::transform_rect(*m, rect).unwrap_or(rect);
     Rect::from_min_max(pos2(num::f64_to_f32(rect.x0), num::f64_to_f32(rect.y0)), pos2(num::f64_to_f32(rect.x1), num::f64_to_f32(rect.y1)))
 }
 
 /// Flattens a bezier path to polylines (stage pixels) for drawing.
-fn flatten(path: &anim_core::BezPath) -> Vec<(Vec<Pos2>, bool)> {
+fn flatten(path: &anim_core::BezPath, m: &anim_core::Affine) -> Vec<(Vec<Pos2>, bool)> {
+    let p = |pt| pm(m, pt);
     let mut out: Vec<(Vec<Pos2>, bool)> = Vec::new();
     anim_core::kurbo::flatten(path.iter(), 0.25, |el| match el {
         anim_core::kurbo::PathEl::MoveTo(pt) => out.push((vec![p(pt)], false)),
@@ -220,9 +254,12 @@ fn flatten(path: &anim_core::BezPath) -> Vec<(Vec<Pos2>, bool)> {
     out
 }
 
-/// Converts what the active tool wants drawn into stage overlays.
+/// Converts what the active tool wants drawn into stage overlays. `to_stage` maps the edited timeline's space to
+/// the stage (identity, but for a symbol edited in place).
 #[must_use]
-pub fn overlays(tool: &[ToolOverlay], accent: Color32) -> Vec<Overlay> {
+pub fn overlays(tool: &[ToolOverlay], accent: Color32, to_stage: anim_core::Affine) -> Vec<Overlay> {
+    let p = |pt: anim_core::Point| pm(&to_stage, pt);
+    let r = |rc: anim_core::Rect| rm(&to_stage, rc);
     let mut out = Vec::new();
     for item in tool {
         match item {
@@ -243,7 +280,7 @@ pub fn overlays(tool: &[ToolOverlay], accent: Color32) -> Vec<Overlay> {
             }
             ToolOverlay::Path { path, role, width: _, filled } => {
                 let colour = role_colour(*role, accent);
-                for (points, closed) in flatten(path) {
+                for (points, closed) in flatten(path, &to_stage) {
                     let mut style = OverlayStyle::line(colour);
                     if *filled {
                         style = style.filled(colour.gamma_multiply(0.25));
@@ -280,8 +317,8 @@ pub fn overlays(tool: &[ToolOverlay], accent: Color32) -> Vec<Overlay> {
 
 /// A selection box around a stage rectangle.
 #[must_use]
-pub fn selection_box(rect: anim_core::Rect, accent: Color32) -> Overlay {
-    Overlay::Rect { rect: r(rect), style: OverlayStyle::line(accent) }
+pub fn selection_box(rect: anim_core::Rect, accent: Color32, to_stage: anim_core::Affine) -> Overlay {
+    Overlay::Rect { rect: rm(&to_stage, rect), style: OverlayStyle::line(accent) }
 }
 
 /// Maps a tool cursor to an egui cursor icon.
@@ -345,7 +382,7 @@ mod tests {
     #[test]
     fn the_default_document_has_one_layer_one_span() {
         let doc = Document::default();
-        let model = timeline_model(&doc, &TimelineId::Scene(0), 0, OnionSkin::default(), false, &BTreeSet::new());
+        let model = timeline_model(&doc, &TimelineId::Scene(0), 0, OnionSkin::default(), false, &BTreeSet::new(), false);
         assert_eq!(model.layers.len(), 1);
         assert_eq!(model.layers.first().map(|l| l.spans.len()), Some(1));
         assert!(model.frame_count >= 1);

@@ -421,7 +421,14 @@ fn editor_goto<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Comma
     }
     if timeline != editor.state.timeline {
         editor.state.timeline_stack.clear();
+        editor.state.in_place_stack.clear();
+        editor.state.in_place = None;
+        editor.state.edit_range = None;
         editor.state.selection = Selection::empty();
+    }
+    // A scene that is switched to is the scene the document has open (the one a saved file reopens on).
+    if let TimelineId::Scene(i) = &timeline {
+        editor.document.current_timeline = *i;
     }
     editor.state.timeline = timeline;
     editor.state.layer = layer;

@@ -34,6 +34,7 @@
 )]
 
 pub mod apply;
+mod autokey;
 pub mod command;
 pub mod context;
 pub mod editor;

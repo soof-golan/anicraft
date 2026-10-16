@@ -79,8 +79,8 @@ pub fn all() -> Vec<CommandSpec<AniDoc>> {
             .describe("Sets the classic ease of the tween at `frame`: -100 (ease in) to 100 (ease out), 0 is linear.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","frame","acceleration"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"acceleration":{"type":"integer","minimum":-100,"maximum":100}}}"#),
         CommandSpec::new("timeline.set_label", "Set Frame Label", set_label)
-            .describe("Names the keyframe at `frame`; without `label` the label is removed.")
-            .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","frame"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"label":{"type":"string"}}}"#),
+            .describe("Labels the keyframe at `frame` as a `name` (default; scripts can jump to it), a `comment` or an `anchor`; without `label` the label is removed.")
+            .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","frame"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"label":{"type":"string"},"kind":{"enum":["name","comment","anchor"],"default":"name"}}}"#),
         CommandSpec::new("stage.add_symbol_instance", "Place Symbol", add_instance)
             .describe("Places an instance of a library symbol on the keyframe at `frame`, with its origin at (x, y) stage pixels.")
             .with_schema(r#"{"type":"object","additionalProperties":false,"required":["layer","frame","symbol"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"symbol":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}}}"#),
@@ -103,8 +103,15 @@ const LAYER_ONLY: &str = r#"{"type":"object","additionalProperties":false,"requi
 const LAYER_FRAME: &str = r#"{"type":"object","additionalProperties":false,"required":["layer","frame"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based"}}}"#;
 const LAYER_FRAME_COUNT: &str = r#"{"type":"object","additionalProperties":false,"required":["layer","frame","count"],"properties":{"scene":{"type":"integer","minimum":0},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1},"count":{"type":"integer","minimum":1}}}"#;
 
-/// Resolves the `scene` parameter against the document.
+/// Resolves the `scene` parameter against the document. Without it the timeline being edited is meant: the scene or
+/// symbol the editor is in (`editor_goto`, `edit_enter`, the scene panel), else the scene the document has open.
 pub(super) fn timeline(doc: &AniDoc, scene: Option<usize>) -> Result<TimelineId, CommandError> {
+    if scene.is_none() {
+        let editing = &doc.editor.state.timeline;
+        if doc.editor.document.timeline(editing).is_some() {
+            return Ok(editing.clone());
+        }
+    }
     let last = doc.editor.document.scenes.len().saturating_sub(1);
     let index = scene.unwrap_or_else(|| doc.editor.document.current_timeline.min(last));
     if index < doc.editor.document.scenes.len() {
@@ -192,6 +199,7 @@ fn scene_add(doc: &mut AniDoc, params: &Value) -> Out {
     let p: SceneAdd = parse_params(params)?;
     let at = p.at.unwrap_or(doc.editor.document.scenes.len());
     let index = edit::add_scene(&mut doc.editor.document, &p.name, at).map_err(|e| failed(&e))?;
+    super::timeline_ops::scene_added(doc, index);
     ok(json!({ "scene": index }))
 }
 
@@ -379,14 +387,21 @@ struct Name {
     frame: u32,
     #[serde(rename = "label")]
     text: Option<String>,
+    kind: Option<String>,
 }
 
 fn set_label(doc: &mut AniDoc, params: &Value) -> Out {
     let p: Name = parse_params(params)?;
     let id = timeline(doc, p.scene)?;
-    let label = p.text.as_deref().filter(|l| !l.is_empty()).map(|l| (l, LabelType::Name));
+    let kind = match p.kind.as_deref() {
+        None | Some("name") => LabelType::Name,
+        Some("comment") => LabelType::Comment,
+        Some("anchor") => LabelType::Anchor,
+        Some(other) => return Err(CommandError::invalid_params(format!("unknown label kind {other:?}"))),
+    };
+    let label = p.text.as_deref().filter(|l| !l.is_empty()).map(|l| (l, kind));
     edit::set_frame_label(&mut doc.editor.document, &id, p.layer, zero_based(p.frame)?, label).map_err(|e| failed(&e))?;
-    ok(json!({ "layer": p.layer, "frame": p.frame, "label": p.text }))
+    ok(json!({ "layer": p.layer, "frame": p.frame, "label": p.text, "kind": p.kind }))
 }
 
 #[derive(Deserialize)]

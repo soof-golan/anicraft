@@ -20,6 +20,12 @@ pub enum Dialog {
     RenameLayer { index: usize, name: String },
     /// Rename a library item.
     RenameItem { old: String, name: String },
+    /// Rename the scene at this index.
+    RenameScene { index: usize, name: String },
+    /// The Layer Properties dialog.
+    LayerProperties(LayerProps),
+    /// The Frame Properties dialog (label, ease, sound and script of a keyframe).
+    FrameProperties(FrameProps),
     /// Document settings (size, frame rate, background).
     DocumentSettings,
     /// Something went wrong that the person should read.
@@ -28,6 +34,43 @@ pub enum Dialog {
     About,
     /// The document has unsaved changes; run this action if the person agrees to discard them.
     Discard(Box<crate::menus::MenuAction>),
+}
+
+/// What the Layer Properties dialog edits.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LayerProps {
+    pub index: usize,
+    pub name: String,
+    /// 0 normal, 1 guide, 2 mask, 3 folder.
+    pub kind: usize,
+    pub color: [u8; 3],
+    /// 1, 2 or 3 times the normal row height.
+    pub height: u8,
+    pub visible: bool,
+    pub locked: bool,
+    pub outline: bool,
+}
+
+/// What the Frame Properties dialog edits: the keyframe at `frame` (0-based) of `layer`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FrameProps {
+    pub layer: usize,
+    pub frame: u32,
+    pub label: String,
+    /// 0 name, 1 comment, 2 anchor.
+    pub label_kind: usize,
+    /// What starts here: "None", "Classic", "Shape" or "Motion"; shown, changed from the Insert menu.
+    pub tween: String,
+    /// -100 to 100.
+    pub ease: i32,
+    pub sound: String,
+    /// 0 event, 1 start, 2 stop, 3 stream.
+    pub sync: usize,
+    pub repeat: u32,
+    pub forever: bool,
+    pub script: String,
+    /// The names of the sounds in the library, for the sound picker.
+    pub sounds: Vec<String>,
 }
 
 /// How a play session runs; the frame is derived from the clock, never counted.
@@ -69,7 +112,12 @@ pub struct UiState {
     pub playback: Option<Playback>,
     pub next_token: u64,
     pub clipboard: Vec<anim_scene::Element>,
-    pub frame_clipboard: Vec<(u64, u32, anim_scene::Frame)>,
+    /// The frames Copy Frames / Cut Frames took, as the clip `timeline.paste_frames` accepts.
+    pub frame_clip: Option<serde_json::Value>,
+    /// The Scene panel (Shift+F2) is open.
+    pub scene_panel: bool,
+    /// The Parenting view is open.
+    pub parenting_view: bool,
     pub panel_rects: HashMap<String, Rect>,
     pub export: Option<ExportStatus>,
     /// Pointer drag in progress: the document as it was before the first edit of the gesture.
@@ -107,7 +155,9 @@ impl UiState {
             playback: None,
             next_token: 1,
             clipboard: Vec::new(),
-            frame_clipboard: Vec::new(),
+            frame_clip: None,
+            scene_panel: false,
+            parenting_view: false,
             panel_rects: HashMap::new(),
             export: None,
             drag_base: None,

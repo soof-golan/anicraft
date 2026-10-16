@@ -85,6 +85,8 @@ pub struct ToolContext<'a> {
     pub layer: usize,
     /// The playhead.
     pub frame: u32,
+    /// Edit Multiple Frames: the frames (first and last, inclusive) whose keyframes can be picked.
+    pub edit_range: Option<(u32, u32)>,
     pub selection: &'a Selection,
     pub settings: &'a ToolSettings,
     /// Screen points per stage pixel.

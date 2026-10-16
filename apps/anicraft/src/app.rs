@@ -30,7 +30,7 @@ use serde_json::json;
 use crate::files::Loaded;
 use crate::mcp::{Host, LinkOptions, Links, PendingShot};
 use crate::state::UiState;
-use crate::worker::{Done, Job, Onion, RenderJob, RenderWorker, Target};
+use crate::worker::{Done, InPlace, Job, Onion, RenderJob, RenderWorker, Target};
 
 /// What to do with the window before closing it, for `--screenshot`.
 #[derive(Debug, Clone)]
@@ -79,6 +79,7 @@ struct RenderKey {
     size: [u32; 2],
     onion: Option<(u32, u32)>,
     playing: bool,
+    in_place: Option<InPlace>,
 }
 
 #[derive(Debug, Default)]
@@ -93,6 +94,20 @@ struct Sync {
     shown: Option<RenderKey>,
     last_took: Duration,
     last_error: Option<String>,
+}
+
+/// The context a symbol edited in place is shown in: the timeline the chain of in-place edits started from, at the
+/// frame it was left on, and the matrix that places the symbol in it.
+fn in_place_context(state: &anicraft_tools::EditorState, scenes: usize) -> Option<InPlace> {
+    let matrix = state.in_place?;
+    // The root is the last level that was not itself in place (its space is the stage's).
+    let root = state.in_place_stack.iter().rposition(Option::is_none)?;
+    let (timeline, _, frame) = state.timeline_stack.get(root)?;
+    let target = match timeline {
+        anim_scene::TimelineId::Scene(i) => Target::Scene((*i).min(scenes.saturating_sub(1))),
+        anim_scene::TimelineId::Symbol(name) => Target::Symbol(name.clone()),
+    };
+    Some(InPlace { target, frame: *frame, matrix })
 }
 
 /// A cheap summary of "the document may have changed".
@@ -329,7 +344,16 @@ impl AniApp {
         };
         let size = self.ui.stage.desired_texture_size(ctx.pixels_per_point());
         let onion = (self.ui.onion.enabled && self.ui.playback.is_none()).then_some((self.ui.onion.before, self.ui.onion.after));
-        let key = RenderKey { revision: self.sync.revision, target: target.clone(), frame: state.frame, size, onion, playing: self.ui.playback.is_some() };
+        let in_place = in_place_context(state, scenes);
+        let key = RenderKey {
+            revision: self.sync.revision,
+            target: target.clone(),
+            frame: state.frame,
+            size,
+            onion,
+            playing: self.ui.playback.is_some(),
+            in_place,
+        };
         if self.sync.requested.as_ref() != Some(&key) {
             self.sync.next_id = self.sync.next_id.saturating_add(1);
             let id = self.sync.next_id;
@@ -341,6 +365,7 @@ impl AniApp {
                 onion: onion.map(|(before, after)| Onion { before, after }),
                 playing: key.playing,
                 transparent: false,
+                in_place: key.in_place.clone(),
             }));
             self.sync.inflight.insert(id, key.clone());
             self.sync.requested = Some(key);

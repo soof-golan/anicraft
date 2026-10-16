@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 
 use super::AniApp;
 use crate::menus::MenuAction;
-use crate::state::{Dialog, ExportStatus, Playback};
+use crate::state::{Dialog, ExportStatus, FrameProps, LayerProps, Playback};
 use crate::worker::Job;
 
 /// Everything a panel can report in one frame.
@@ -31,6 +31,27 @@ pub enum UiEvent {
     Property(PropertyEdit),
     Tool(String),
     Transport(TransportEvent),
+}
+
+/// The scene model's layer type for the timeline widget's.
+const fn scene_kind(kind: anim_ui::timeline::LayerKind) -> LayerKind {
+    use anim_ui::timeline::LayerKind as K;
+    match kind {
+        K::Guide | K::Guided => LayerKind::Guide,
+        K::Mask | K::Masked => LayerKind::Mask,
+        K::Folder => LayerKind::Folder,
+        K::Normal | K::Camera => LayerKind::Normal,
+    }
+}
+
+/// The name `layer.set_kind` knows a layer type by.
+const fn kind_name(kind: LayerKind) -> &'static str {
+    match kind {
+        LayerKind::Guide => "guide",
+        LayerKind::Mask => "mask",
+        LayerKind::Folder => "folder",
+        _ => "normal",
+    }
 }
 
 /// A change to frames the Insert menu, the timeline's context menu and the function keys share.
@@ -132,6 +153,39 @@ impl AniApp {
             MenuAction::StepForward => self.step(1),
             MenuAction::StepBack => self.step(-1),
             MenuAction::Dialog(dialog) => self.ui.dialog = Some(dialog),
+            MenuAction::Frame(action) => self.frame_action(action),
+            MenuAction::AddLayer(kind) => self.add_layer(scene_kind(kind)),
+            MenuAction::AddMotionGuide => {
+                let layer = self.host.session().doc().editor.state.layer;
+                self.run("layer.add_motion_guide", &json!({ "layer": layer }));
+            }
+            MenuAction::LayerProperties => {
+                let layer = self.host.session().doc().editor.state.layer;
+                self.open_layer_properties(layer);
+            }
+            MenuAction::EditInPlace => self.edit_selected_in_place(),
+            MenuAction::EditSymbol => self.edit_symbol_of_selection(),
+            MenuAction::ToggleScenePanel => self.ui.scene_panel = !self.ui.scene_panel,
+            MenuAction::ToggleParentingView => self.ui.parenting_view = !self.ui.parenting_view,
+            MenuAction::ToggleEditMultiple => self.ui.timeline.edit_multiple = !self.ui.timeline.edit_multiple,
+            MenuAction::ToggleAutoKeyframe => self.ui.timeline.auto_keyframe = !self.ui.timeline.auto_keyframe,
+        }
+    }
+
+    /// Edit Symbols (Ctrl+E): the selected instance's symbol, else the symbol selected in the library.
+    fn edit_symbol_of_selection(&mut self) {
+        let doc = self.host.session().doc();
+        let from_stage = doc
+            .editor
+            .state
+            .selection
+            .items
+            .first()
+            .and_then(|r| anicraft_tools::resolve_ref(doc.document(), &doc.editor.state.timeline, r))
+            .and_then(|r| if let Element::SymbolInstance(i) = r.element { Some(i.library_item_name.clone()) } else { None });
+        match from_stage.or_else(|| self.ui.library_selected.clone()) {
+            Some(name) => self.edit_symbol(&name),
+            None => self.status("select a symbol instance or a library symbol first"),
         }
     }
 
@@ -152,6 +206,14 @@ impl AniApp {
         }
         if id == "layer.add" {
             self.add_layer(LayerKind::Normal);
+            return;
+        }
+        if id == "scene.add" {
+            let before = self.host.session().doc().document().scenes.len();
+            if self.run(id, &params) {
+                // A scene that was just made is the one to work in.
+                self.go_to_scene(before);
+            }
             return;
         }
         self.run(id, &params);
@@ -452,12 +514,24 @@ impl AniApp {
             }
             TimelineEvent::ToggleOnion => self.ui.onion.enabled = !self.ui.onion.enabled,
             TimelineEvent::ToggleOnionOutlines => self.ui.onion.outlines = !self.ui.onion.outlines,
+            // Scrolling, zooming, the Frame View menu and the two mode toggles are view state, applied above;
+            // `sync_modes` hands the modes to the editor.
             TimelineEvent::Scroll { .. }
             | TimelineEvent::Zoom { .. }
+            | TimelineEvent::SetFrameView { .. }
             | TimelineEvent::ToggleEditMultiple
-            | TimelineEvent::ToggleAutoKeyframe
-            | TimelineEvent::SetFrameView { .. } => {}
+            | TimelineEvent::ToggleAutoKeyframe => {}
         }
+    }
+
+    /// Hands the timeline's mode toggles to the editor: auto keyframe, and Edit Multiple Frames over the range the
+    /// onion skin markers span around the playhead.
+    pub(super) fn sync_modes(&mut self) {
+        let (auto, multiple) = (self.ui.timeline.auto_keyframe, self.ui.timeline.edit_multiple);
+        let (before, after) = (self.ui.onion.before, self.ui.onion.after);
+        let state = &mut self.host.session_mut().doc_mut().editor.state;
+        state.auto_keyframe = auto;
+        state.edit_range = multiple.then(|| (state.frame.saturating_sub(before), state.frame.saturating_add(after)));
     }
 
     fn set_current_layer(&mut self, id: u64) {
@@ -509,21 +583,22 @@ impl AniApp {
         match action {
             FrameAction::InsertFrame => self.frame_op(FrameOp::InsertFrames),
             FrameAction::RemoveFrames => self.frame_op(FrameOp::RemoveFrames),
-            FrameAction::InsertKeyframe | FrameAction::ConvertToKeyframes => self.frame_op(FrameOp::InsertKeyframe),
-            FrameAction::InsertBlankKeyframe | FrameAction::ConvertToBlankKeyframes => self.frame_op(FrameOp::InsertBlankKeyframe),
-            FrameAction::ClearKeyframe | FrameAction::ClearFrames => self.frame_op(FrameOp::ClearKeyframe),
+            FrameAction::InsertKeyframe => self.frame_op(FrameOp::InsertKeyframe),
+            FrameAction::InsertBlankKeyframe => self.frame_op(FrameOp::InsertBlankKeyframe),
+            FrameAction::ClearKeyframe => self.frame_op(FrameOp::ClearKeyframe),
+            FrameAction::ConvertToKeyframes => self.frame_range_command("timeline.convert_to_keyframes", json!({})),
+            FrameAction::ConvertToBlankKeyframes => self.frame_range_command("timeline.convert_to_keyframes", json!({ "blank": true })),
+            FrameAction::ClearFrames => self.frame_range_command("timeline.clear_frames", json!({})),
             FrameAction::CreateClassicTween => self.frame_op(FrameOp::ClassicTween),
             FrameAction::CreateShapeTween => self.frame_op(FrameOp::ShapeTween),
             FrameAction::RemoveTween => self.frame_op(FrameOp::RemoveTween),
             FrameAction::CreateMotionTween => self.status("motion tweens are not supported yet; use a classic tween"),
-            FrameAction::ReverseFrames => self.status("reversing frames is not supported yet"),
-            FrameAction::PasteOverwrite | FrameAction::Properties | FrameAction::EditLabel => self.status("not supported yet"),
-            FrameAction::CopyFrames => self.copy_frames(),
-            FrameAction::CutFrames => {
-                self.copy_frames();
-                self.frame_op(FrameOp::ClearKeyframe);
-            }
-            FrameAction::PasteFrames => self.paste_frames(),
+            FrameAction::ReverseFrames => self.frame_range_command("timeline.reverse_frames", json!({})),
+            FrameAction::CopyFrames => self.copy_frames(false),
+            FrameAction::CutFrames => self.copy_frames(true),
+            FrameAction::PasteFrames => self.paste_frames(false),
+            FrameAction::PasteOverwrite => self.paste_frames(true),
+            FrameAction::Properties | FrameAction::EditLabel => self.open_frame_properties(),
             FrameAction::SelectAllFrames => {
                 let doc = self.host.session().doc();
                 let layers = doc.document().timeline(&doc.editor.state.timeline).map_or(0, |t| t.layers.len());
@@ -534,48 +609,104 @@ impl AniApp {
         }
     }
 
-    fn copy_frames(&mut self) {
+    /// Runs a frame-range command (1-based frames, the layers of the selection) with `extra` params merged in.
+    pub(crate) fn frame_range_command(&mut self, id: &str, extra: Value) -> bool {
         let (layers, first, last) = self.timeline_target();
-        let doc = self.host.session().doc();
-        let Some(timeline) = doc.document().timeline(&doc.editor.state.timeline) else { return };
-        let mut copied = Vec::new();
-        for (row, &layer) in layers.iter().enumerate() {
-            let Some(l) = timeline.layers.get(layer) else { continue };
-            for frame in l.frames.iter().filter(|f| f.index >= first && f.index <= last) {
-                copied.push((u64::try_from(row).unwrap_or(0), frame.index.saturating_sub(first), frame.clone()));
-            }
+        let mut params = json!({ "layers": layers, "from": first.saturating_add(1), "to": last.saturating_add(1) });
+        if let (Some(p), Some(e)) = (params.as_object_mut(), extra.as_object()) {
+            p.extend(e.clone());
         }
-        let count = copied.len();
-        self.ui.frame_clipboard = copied;
-        self.status(format!("copied {count} keyframe(s)"));
+        self.run(id, &params)
     }
 
-    fn paste_frames(&mut self) {
-        if self.ui.frame_clipboard.is_empty() {
+    /// Copy Frames / Cut Frames: the selected frames become the frame clipboard.
+    fn copy_frames(&mut self, cut: bool) {
+        let (layers, first, last) = self.timeline_target();
+        let id = if cut { "timeline.cut_frames" } else { "timeline.copy_frames" };
+        let params = json!({ "layers": layers, "from": first.saturating_add(1), "to": last.saturating_add(1) });
+        let result = self.host.session_mut().execute(id, &params);
+        match result {
+            Ok(value) => {
+                let clip = value.get("clip").cloned();
+                let count = clip
+                    .as_ref()
+                    .and_then(|c| c.get("rows"))
+                    .and_then(Value::as_array)
+                    .map_or(0, |rows| rows.iter().filter_map(Value::as_array).map(Vec::len).sum::<usize>());
+                self.ui.frame_clip = clip;
+                self.status(format!("{} {count} keyframe(s)", if cut { "cut" } else { "copied" }));
+            }
+            Err(e) => self.status(format!("{id}: {e}")),
+        }
+    }
+
+    /// Paste Frames (pushing what is there to the right) or Paste and Overwrite Frames, at the first selected frame.
+    fn paste_frames(&mut self, overwrite: bool) {
+        let Some(clip) = self.ui.frame_clip.clone() else {
             self.status("no frames were copied");
             return;
-        }
+        };
         let (layers, first, _) = self.timeline_target();
-        let id = self.host.session().doc().editor.state.timeline.clone();
-        let clip = self.ui.frame_clipboard.clone();
-        let result = self.host.session_mut().edit("Paste Frames", None, |doc| -> Result<(), String> {
-            let document = &mut doc.editor.document;
-            for (row, offset, frame) in clip {
-                let Some(&layer) = usize::try_from(row).ok().and_then(|r| layers.get(r)).or_else(|| layers.first()) else { continue };
-                let at = first.saturating_add(offset);
-                edit::insert_blank_keyframe(document, &id, layer, at).map_err(|e| e.to_string())?;
-                let target = edit::keyframe_mut(document, &id, layer, at).map_err(|e| e.to_string())?;
-                target.elements = frame.elements;
-                target.label = frame.label;
-                target.tween_type = frame.tween_type;
-                target.acceleration = frame.acceleration;
-            }
-            Ok(())
-        });
-        if let Err(e) = result {
-            self.host.session_mut().undo();
-            self.status(e);
+        let layer = layers.iter().copied().min().unwrap_or(0);
+        self.run("timeline.paste_frames", &json!({ "layer": layer, "frame": first.saturating_add(1), "overwrite": overwrite, "clip": clip }));
+    }
+
+    /// Opens the Frame Properties dialog for the keyframe under the playhead on the current layer.
+    fn open_frame_properties(&mut self) {
+        let (layers, first, _) = self.timeline_target();
+        let layer = layers.first().copied().unwrap_or(0);
+        let doc = self.host.session().doc();
+        let Some(frame) = doc.document().timeline(&doc.editor.state.timeline).and_then(|t| t.layers.get(layer)).and_then(|l| l.keyframe_at(first)) else {
+            self.status("select a frame on a layer first");
+            return;
+        };
+        let sound = frame.sound.as_ref();
+        let props = FrameProps {
+            layer,
+            frame: frame.index,
+            label: frame.label.clone().unwrap_or_default(),
+            label_kind: match frame.label_type {
+                None | Some(anim_scene::timeline::LabelType::Name) => 0,
+                Some(anim_scene::timeline::LabelType::Comment) => 1,
+                Some(anim_scene::timeline::LabelType::Anchor) => 2,
+            },
+            tween: format!("{:?}", frame.tween_type),
+            ease: frame.acceleration,
+            sound: sound.map(|s| s.name.clone()).unwrap_or_default(),
+            sync: sound.map_or(0, |s| match s.sync {
+                anim_scene::timeline::SoundSync::Event => 0,
+                anim_scene::timeline::SoundSync::Start => 1,
+                anim_scene::timeline::SoundSync::Stop => 2,
+                anim_scene::timeline::SoundSync::Stream => 3,
+            }),
+            repeat: sound.map_or(1, |s| match s.loop_mode {
+                anim_scene::timeline::SoundLoop::Repeat(n) => n,
+                _ => 1,
+            }),
+            forever: sound.is_some_and(|s| matches!(s.loop_mode, anim_scene::timeline::SoundLoop::Forever)),
+            script: frame.actionscript.clone().unwrap_or_default(),
+            sounds: doc.document().library.items.iter().filter_map(|i| if let LibraryItem::Sound(s) = i { Some(s.name.clone()) } else { None }).collect(),
+        };
+        self.ui.dialog = Some(Dialog::FrameProperties(props));
+    }
+
+    /// Applies the Frame Properties dialog: label, ease, sound and script, as one undo step each command.
+    fn apply_frame_properties(&mut self, p: &FrameProps) {
+        let frame = p.frame.saturating_add(1);
+        let layer = p.layer;
+        let kinds = ["name", "comment", "anchor"];
+        let syncs = ["event", "start", "stop", "stream"];
+        self.run("timeline.set_label", &json!({ "layer": layer, "frame": frame, "label": p.label, "kind": kinds.get(p.label_kind).copied().unwrap_or("name") }));
+        if p.tween != "None" {
+            self.run("timeline.set_ease", &json!({ "layer": layer, "frame": frame, "acceleration": p.ease }));
         }
+        let sound = if p.sound.is_empty() {
+            json!({ "layer": layer, "frame": frame })
+        } else {
+            json!({ "layer": layer, "frame": frame, "sound": p.sound, "sync": syncs.get(p.sync).copied().unwrap_or("event"), "repeat": p.repeat.max(1), "forever": p.forever })
+        };
+        self.run("timeline.set_sound", &sound);
+        self.run("timeline.set_script", &json!({ "layer": layer, "frame": frame, "script": p.script }));
     }
 
     fn move_frames(&mut self, selection: &FrameSelection, delta: i32) {
@@ -658,6 +789,15 @@ impl AniApp {
             LayerEvent::SetAllOutline(on) => self.all_layers(&id, "Outline All Layers", |layer| layer.outline = on),
             LayerEvent::Add => self.add_layer(LayerKind::Normal),
             LayerEvent::AddFolder => self.add_layer(LayerKind::Folder),
+            LayerEvent::AddKind(kind) => self.add_layer(scene_kind(kind)),
+            LayerEvent::AddMotionGuide(l) => {
+                if self.run("layer.add_motion_guide", &json!({ "layer": idx(l) })) {
+                    self.status("added a motion guide layer");
+                }
+            }
+            LayerEvent::Convert { id: l, kind } => {
+                self.run("layer.set_kind", &json!({ "layer": idx(l), "kind": kind_name(scene_kind(kind)) }));
+            }
             LayerEvent::Delete(l) => {
                 let result = self.host.session_mut().edit("Delete Layer", None, |doc| edit::remove_layer(&mut doc.editor.document, &id, idx(l)));
                 match result {
@@ -679,11 +819,7 @@ impl AniApp {
                     self.status(e.to_string());
                 }
             }
-            LayerEvent::Properties(l) => {
-                let name =
-                    self.host.session().doc().document().timeline(&id).and_then(|t| t.layers.get(idx(l))).map(|layer| layer.name.clone()).unwrap_or_default();
-                self.ui.dialog = Some(Dialog::RenameLayer { index: idx(l), name });
-            }
+            LayerEvent::Properties(l) => self.open_layer_properties(idx(l)),
             LayerEvent::Move { id: moving, target, placement } => {
                 let (from, target) = (idx(moving), idx(target));
                 let to = match placement {
@@ -710,6 +846,42 @@ impl AniApp {
             }
         }
     }
+
+    /// Opens the Layer Properties dialog for the layer at `index`.
+    pub(crate) fn open_layer_properties(&mut self, index: usize) {
+        let doc = self.host.session().doc();
+        let Some(layer) = doc.document().timeline(&doc.editor.state.timeline).and_then(|t| t.layers.get(index)) else { return };
+        self.ui.dialog = Some(Dialog::LayerProperties(LayerProps {
+            index,
+            name: anicraft_xfl::display_name(&layer.name).into_owned(),
+            kind: match layer.kind {
+                LayerKind::Guide => 1,
+                LayerKind::Mask => 2,
+                LayerKind::Folder => 3,
+                _ => 0,
+            },
+            color: [layer.color.r, layer.color.g, layer.color.b],
+            height: anicraft_cli::mcp::timeline_ops::layer_height(layer),
+            visible: layer.visible,
+            locked: layer.locked,
+            outline: layer.outline,
+        }));
+    }
+
+    // ---- scenes -----------------------------------------------------------------------------------------------
+
+    /// The Scene panel and the edit bar's scene menu: shows scene `index` (0-based) for editing.
+    pub(crate) fn go_to_scene(&mut self, index: usize) {
+        if index >= self.host.session().doc().document().scenes.len() {
+            return;
+        }
+        self.stop_playback();
+        if self.run("editor.goto", &json!({ "scene": index, "frame": 0 })) {
+            self.ui.timeline.selection = FrameSelection::default();
+        }
+    }
+
+    // ---- window modes -----------------------------------------------------------------------------------------
 
     fn layer_flag(&mut self, id: &TimelineId, layer: usize, label: &str, f: impl FnOnce(&mut anim_scene::Layer)) {
         self.host.session_mut().edit(label, None, |doc| {
@@ -799,20 +971,32 @@ impl AniApp {
         }
     }
 
-    /// Edits a symbol's timeline on the stage; "Back" in the stage header returns.
+    /// Edit Symbols: a symbol's timeline on a stage of its own; the edit bar returns.
     pub(crate) fn edit_symbol(&mut self, name: &str) {
-        let doc = self.host.session_mut().doc_mut();
-        if doc.document().library.find_symbol(name).is_none() {
-            return;
+        if self.run("edit.enter_symbol", &json!({ "name": name })) {
+            self.ui.timeline.selection = FrameSelection::default();
+            self.stop_playback();
         }
-        let state = &mut doc.editor.state;
-        state.timeline_stack.push((state.timeline.clone(), state.layer, state.frame));
-        state.timeline = TimelineId::Symbol(name.to_owned());
-        state.layer = 0;
-        state.frame = 0;
-        state.selection = Selection::empty();
-        self.ui.timeline.selection = FrameSelection::default();
-        self.stop_playback();
+    }
+
+    /// Edit in Place: the selected symbol instance edited where it sits, the rest of the stage dimmed.
+    pub(crate) fn edit_selected_in_place(&mut self) {
+        let doc = self.host.session().doc();
+        let Some(target) = doc.editor.state.selection.items.first().cloned() else {
+            self.status("select a symbol instance first");
+            return;
+        };
+        let Some(resolved) = anicraft_tools::resolve_ref(doc.document(), &doc.editor.state.timeline, &target) else { return };
+        let Element::SymbolInstance(instance) = resolved.element else {
+            self.status("select a symbol instance first");
+            return;
+        };
+        let name = instance.library_item_name.clone();
+        let m = resolved.local_to_stage().as_coeffs();
+        if self.run("edit.enter_symbol", &json!({ "name": name, "in_place": true, "matrix": m })) {
+            self.ui.timeline.selection = FrameSelection::default();
+            self.stop_playback();
+        }
     }
 
     // ---- dialogs ----------------------------------------------------------------------------------------------
@@ -837,6 +1021,26 @@ impl AniApp {
                     self.status(e.to_string());
                 }
             }
+            Dialog::RenameScene { index, name } => {
+                self.run("scene.rename", &json!({ "scene": index, "name": name }));
+            }
+            Dialog::LayerProperties(p) => {
+                let kinds = ["normal", "guide", "mask", "folder"];
+                self.run(
+                    "layer.set_properties",
+                    &json!({
+                        "layer": p.index,
+                        "name": p.name,
+                        "kind": kinds.get(p.kind).copied().unwrap_or("normal"),
+                        "color": format!("#{:02x}{:02x}{:02x}", p.color[0], p.color[1], p.color[2]),
+                        "height": p.height,
+                        "visible": p.visible,
+                        "locked": p.locked,
+                        "outline": p.outline,
+                    }),
+                );
+            }
+            Dialog::FrameProperties(p) => self.apply_frame_properties(&p),
             Dialog::RenameItem { old, name } => {
                 let new_name = old.rsplit_once('/').map_or_else(|| name.clone(), |(parent, _)| format!("{parent}/{name}"));
                 self.run("library.rename_item", &json!({ "name": old, "new_name": new_name }));

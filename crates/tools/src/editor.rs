@@ -42,7 +42,10 @@ pub struct Editor {
 impl Editor {
     #[must_use]
     pub fn new(document: Document) -> Self {
-        Self { document, state: EditorState::new(), tools: ToolSet::default(), keep_history: true, undo: Vec::new(), redo: Vec::new() }
+        let mut state = EditorState::new();
+        // Open on the scene the document was saved on.
+        state.timeline = anim_scene::TimelineId::Scene(document.current_timeline.min(document.scenes.len().saturating_sub(1)));
+        Self { document, state, tools: ToolSet::default(), keep_history: true, undo: Vec::new(), redo: Vec::new() }
     }
 
     /// Makes `tool` the active tool.
@@ -59,6 +62,7 @@ impl Editor {
             timeline: &self.state.timeline,
             layer: self.state.layer,
             frame: self.state.frame,
+            edit_range: self.state.edit_range,
             selection: &self.state.selection,
             settings: &self.state.settings,
             zoom: self.state.view.zoom,
@@ -114,6 +118,7 @@ impl Editor {
                 timeline: &self.state.timeline,
                 layer: self.state.layer,
                 frame: self.state.frame,
+                edit_range: self.state.edit_range,
                 selection: &self.state.selection,
                 settings: &self.state.settings,
                 zoom: self.state.view.zoom,

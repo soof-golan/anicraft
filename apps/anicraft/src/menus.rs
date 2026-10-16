@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anicraft_cli::export::Format;
 use anim_ui::PanelId;
+use anim_ui::timeline::{FrameAction, LayerKind};
 use egui::Ui;
 use serde_json::{Value, json};
 
@@ -59,6 +60,22 @@ pub enum MenuAction {
     StepForward,
     StepBack,
     Dialog(Dialog),
+    /// A frame operation on the selected frames (Edit > Timeline, Modify > Timeline).
+    Frame(FrameAction),
+    /// A new layer of this type above the current layer (Insert > Timeline).
+    AddLayer(LayerKind),
+    /// A motion guide for the current layer.
+    AddMotionGuide,
+    /// The Layer Properties dialog for the current layer.
+    LayerProperties,
+    /// Edit the selected symbol instance in place (Edit > Edit in Place).
+    EditInPlace,
+    /// Edit a library symbol on its own stage (Edit > Edit Symbols).
+    EditSymbol,
+    ToggleScenePanel,
+    ToggleParentingView,
+    ToggleEditMultiple,
+    ToggleAutoKeyframe,
 }
 
 /// What the menus need to know to enable, disable and check items.
@@ -78,6 +95,10 @@ pub struct MenuView {
     pub closed_panels: Vec<PanelId>,
     pub recent: Vec<PathBuf>,
     pub dirty: bool,
+    pub scene_panel: bool,
+    pub parenting_view: bool,
+    pub edit_multiple: bool,
+    pub auto_keyframe: bool,
 }
 
 impl MenuView {
@@ -215,6 +236,22 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             ui.separator();
             push(item(ui, "Select All", "Ctrl+A", true), command("select.all"));
             push(item(ui, "Deselect All", "Ctrl+Shift+A", true), command("select.none"));
+            ui.separator();
+            ui.menu_button("Timeline", |ui| {
+                for (label, shortcut, action) in [
+                    ("Cut Frames", "Ctrl+Alt+X", FrameAction::CutFrames),
+                    ("Copy Frames", "Ctrl+Alt+C", FrameAction::CopyFrames),
+                    ("Paste Frames", "Ctrl+Alt+V", FrameAction::PasteFrames),
+                    ("Paste and Overwrite Frames", "", FrameAction::PasteOverwrite),
+                    ("Clear Frames", "Alt+Backspace", FrameAction::ClearFrames),
+                    ("Select All Frames", "Ctrl+Alt+A", FrameAction::SelectAllFrames),
+                ] {
+                    push(item(ui, label, shortcut, true), MenuAction::Frame(action));
+                }
+            });
+            ui.separator();
+            push(item(ui, "Edit Symbols", "Ctrl+E", true), MenuAction::EditSymbol);
+            push(item(ui, "Edit in Place", "", view.has_selection), MenuAction::EditInPlace);
         });
         ui.menu_button("View", |ui| {
             push(item(ui, "Zoom In", "Ctrl+=", true), MenuAction::ZoomIn);
@@ -245,8 +282,15 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
         ui.menu_button("Insert", |ui| {
             push(item(ui, "New Symbol...", "Ctrl+F8", true), MenuAction::Dialog(Dialog::NewSymbol { name: "Symbol 1".to_owned(), kind: 0 }));
             ui.separator();
-            push(item(ui, "Timeline: Layer", "", view.on("layer.add")), command("layer.add"));
-            push(item(ui, "Timeline: Scene", "", view.on("scene.add")), MenuAction::Command { id: "scene.add", params: json!({ "name": "Scene" }) });
+            ui.menu_button("Timeline", |ui| {
+                push(item(ui, "Layer", "", view.on("layer.add")), command("layer.add"));
+                push(item(ui, "Layer Folder", "", true), MenuAction::AddLayer(LayerKind::Folder));
+                push(item(ui, "Guide Layer", "", true), MenuAction::AddLayer(LayerKind::Guide));
+                push(item(ui, "Mask Layer", "", true), MenuAction::AddLayer(LayerKind::Mask));
+                push(item(ui, "Classic Motion Guide", "", true), MenuAction::AddMotionGuide);
+                ui.separator();
+                push(item(ui, "Scene", "", view.on("scene.add")), MenuAction::Command { id: "scene.add", params: json!({ "name": "Scene" }) });
+            });
             ui.separator();
             push(item(ui, "Frame", "F5", true), MenuAction::Command { id: "timeline.insert_frames", params: json!({ "count": 1 }) });
             push(item(ui, "Keyframe", "F6", true), command("timeline.insert_keyframe"));
@@ -278,6 +322,19 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
                 });
             });
             ui.separator();
+            ui.menu_button("Timeline", |ui| {
+                push(item(ui, "Layer Properties...", "", true), MenuAction::LayerProperties);
+                push(item(ui, "Frame Properties...", "", true), MenuAction::Frame(FrameAction::Properties));
+                push(item(ui, "Add Frame Label...", "", true), MenuAction::Frame(FrameAction::EditLabel));
+                ui.separator();
+                push(item(ui, "Reverse Frames", "", true), MenuAction::Frame(FrameAction::ReverseFrames));
+                push(item(ui, "Convert to Keyframes", "F6", true), MenuAction::Frame(FrameAction::ConvertToKeyframes));
+                push(item(ui, "Convert to Blank Keyframes", "F7", true), MenuAction::Frame(FrameAction::ConvertToBlankKeyframes));
+                ui.separator();
+                push(check(ui, "Edit Multiple Frames", "", view.edit_multiple), MenuAction::ToggleEditMultiple);
+                push(check(ui, "Auto Keyframe", "", view.auto_keyframe), MenuAction::ToggleAutoKeyframe);
+            });
+            ui.separator();
             push(item(ui, "Document...", "Ctrl+J", true), MenuAction::Dialog(Dialog::DocumentSettings));
         });
         ui.menu_button("Control", |ui| {
@@ -290,6 +347,10 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Step Backward One Frame", ",", true), MenuAction::StepBack);
             ui.separator();
             push(check(ui, "Loop Playback", "", view.looping), MenuAction::ToggleLoop);
+        });
+        ui.menu_button("Window", |ui| {
+            push(check(ui, "Scene", "Shift+F2", view.scene_panel), MenuAction::ToggleScenePanel);
+            push(check(ui, "Parenting View", "", view.parenting_view), MenuAction::ToggleParentingView);
         });
         ui.menu_button("Help", |ui| {
             push(item(ui, "Keyboard Shortcuts and About", "F1", true), MenuAction::Dialog(Dialog::About));

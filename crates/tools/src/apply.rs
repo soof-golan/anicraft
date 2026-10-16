@@ -242,9 +242,22 @@ fn delete_text(doc: &mut Document, state: &EditorState, target: &ElementRef, sta
 
 /// Applies one command.
 ///
+/// With [`EditorState::auto_keyframe`] on, a command that changes the artwork of a held frame first makes that
+/// frame a keyframe (see [`crate::autokey`]).
+///
 /// # Errors
 /// [`ApplyError`] when a reference does not resolve, an element has the wrong kind or a document edit is refused.
 pub fn apply(doc: &mut Document, state: &mut EditorState, command: &ToolCommand) -> Result<Applied, ApplyError> {
+    if state.auto_keyframe
+        && command.edits_document()
+        && let Some(rewritten) = crate::autokey::prepare(doc, state, command)?
+    {
+        return apply_one(doc, state, &rewritten);
+    }
+    apply_one(doc, state, command)
+}
+
+fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand) -> Result<Applied, ApplyError> {
     let mut changed = command.edits_document();
     match command {
         ToolCommand::SetSelection { selection } => state.selection = selection.clone(),
@@ -296,28 +309,24 @@ pub fn apply(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
             state.selection = Selection { items: Vec::new(), scope: Some(target.clone()) };
         }
         ToolCommand::EnterSymbol { target } => {
-            let name = match resolve_ref(doc, &state.timeline, target).map(|r| r.element) {
-                Some(Element::SymbolInstance(i)) => i.library_item_name.clone(),
-                Some(_) => return Err(ApplyError::WrongKind { expected: "symbol instance" }),
+            let (name, to_stage) = match resolve_ref(doc, &state.timeline, target) {
+                Some(r) => match r.element {
+                    Element::SymbolInstance(i) => (i.library_item_name.clone(), r.local_to_stage()),
+                    _ => return Err(ApplyError::WrongKind { expected: "symbol instance" }),
+                },
                 None => return Err(no_element(target)),
             };
             if doc.library.find_symbol(&name).is_none() {
                 return Err(ApplyError::NoSuchSymbol(name));
             }
-            state.timeline_stack.push((state.timeline.clone(), state.layer, state.frame));
-            state.timeline = TimelineId::Symbol(name);
-            state.layer = 0;
-            state.frame = 0;
-            state.selection = Selection::empty();
+            // Double-clicking an instance edits its symbol in place, in the context of where it sits.
+            state.enter_symbol(&name, Some(to_stage));
         }
         ToolCommand::ExitScope => {
             if let Some(scope) = state.selection.scope.take() {
                 state.selection.items = vec![scope];
-            } else if let Some((timeline, layer, frame)) = state.timeline_stack.pop() {
-                state.timeline = timeline;
-                state.layer = layer;
-                state.frame = frame;
-                state.selection = Selection::empty();
+            } else {
+                state.leave_symbol();
             }
         }
         ToolCommand::SetToolStyle { fill, stroke } => {

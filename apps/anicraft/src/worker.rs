@@ -36,8 +36,21 @@ pub struct Onion {
     pub after: u32,
 }
 
+/// Edit in Place: the timeline a symbol is edited in the context of, drawn dimmed behind the symbol.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InPlace {
+    pub target: Target,
+    /// 0-based frame of the context timeline.
+    pub frame: u32,
+    /// Symbol space to the context's stage space.
+    pub matrix: Affine,
+}
+
+/// How much of the context shows through while a symbol is edited in place.
+const CONTEXT_ALPHA: f32 = 0.35;
+
 /// One stage render.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RenderJob {
     /// Echoed in the answer, so the UI can match it to the request.
     pub id: u64,
@@ -51,6 +64,8 @@ pub struct RenderJob {
     pub playing: bool,
     /// Render without the stage background (transparent), for compositing.
     pub transparent: bool,
+    /// The symbol in `target` is edited in place: draw this context dimmed behind it.
+    pub in_place: Option<InPlace>,
 }
 
 /// What the worker is asked.
@@ -157,8 +172,19 @@ pub fn render_job(ev: &mut Evaluator<'_>, job: &RenderJob) -> Result<Image, Stri
     let background = if job.transparent { Background::Transparent } else { Background::FromDisplayList };
     let options = RenderOptions::new(width, height).with_view(view).with_background(background);
     let list = target_list(ev, &job.target, job.frame);
-    let background_colour = list.background;
-    let current = anim_render::render(&list, ev.images(), &options.clone().with_background(Background::Transparent)).map_err(|e| e.to_string())?;
+    let transparent = options.clone().with_background(Background::Transparent);
+    let (background_colour, context, current) = match &job.in_place {
+        Some(place) => {
+            // The context fixes the stage background and sits dimmed; the symbol is drawn where it is placed.
+            let mut context_list = target_list(ev, &place.target, place.frame);
+            let background_colour = context_list.background;
+            anim_timeline::fade(&mut context_list, CONTEXT_ALPHA);
+            let context = anim_render::render(&context_list, ev.images(), &transparent).map_err(|e| e.to_string())?;
+            let placed = RenderOptions::new(width, height).with_view(view * place.matrix).with_background(Background::Transparent);
+            (background_colour, Some(context), anim_render::render(&list, ev.images(), &placed).map_err(|e| e.to_string())?)
+        }
+        None => (list.background, None, anim_render::render(&list, ev.images(), &transparent).map_err(|e| e.to_string())?),
+    };
     let onion = match (&job.target, job.onion) {
         (Target::Scene(scene), Some(o)) if o.before > 0 || o.after > 0 => ev.onion(*scene, job.frame, o.before, o.after),
         _ => Vec::new(),
@@ -168,6 +194,9 @@ pub fn render_job(ev: &mut Evaluator<'_>, job: &RenderJob) -> Result<Image, Stri
         anim_timeline::fade(&mut list, alpha);
         let layer = anim_render::render(&list, ev.images(), &options.clone().with_background(Background::Transparent)).map_err(|e| e.to_string())?;
         over(&mut canvas, &layer);
+    }
+    if let Some(context) = &context {
+        over(&mut canvas, context);
     }
     over(&mut canvas, &current);
     Ok(canvas)
@@ -326,7 +355,7 @@ mod tests {
     use super::*;
 
     fn job(frame: u32) -> RenderJob {
-        RenderJob { id: 7, target: Target::Scene(0), frame, size: [110, 80], onion: None, playing: false, transparent: false }
+        RenderJob { id: 7, target: Target::Scene(0), frame, size: [110, 80], onion: None, playing: false, transparent: false, in_place: None }
     }
 
     #[test]
