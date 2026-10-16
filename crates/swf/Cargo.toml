@@ -16,6 +16,8 @@ anim-display = { workspace = true }
 anim-shape = { workspace = true }
 # Content bounds, to tessellate perspective groups into meshes.
 anim-render = { workspace = true }
+# The syntax tree of frame scripts, compiled to ActionScript 2 actions and ActionScript 3 byte code.
+anim-script = { workspace = true }
 flate2 = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }

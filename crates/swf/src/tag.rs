@@ -9,6 +9,7 @@ pub mod code {
     pub const SHOW_FRAME: u16 = 1;
     pub const SET_BACKGROUND_COLOR: u16 = 9;
     pub const DO_ACTION: u16 = 12;
+    pub const DO_ABC: u16 = 82;
     pub const DEFINE_SOUND: u16 = 14;
     pub const START_SOUND: u16 = 15;
     pub const SOUND_STREAM_HEAD: u16 = 18;

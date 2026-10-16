@@ -68,6 +68,8 @@ pub struct MovieSettings {
     pub metadata: Option<String>,
     /// Allow network access instead of local file access only.
     pub use_network: bool,
+    /// The movie holds `ActionScript` 3 code (`DoABC`), so the file attributes must say so.
+    pub actionscript3: bool,
 }
 
 impl Default for MovieSettings {
@@ -81,6 +83,7 @@ impl Default for MovieSettings {
             compression: Compression::Zlib,
             metadata: None,
             use_network: false,
+            actionscript3: false,
         }
     }
 }
@@ -379,7 +382,8 @@ impl Movie {
         inner.put_u16(frames);
 
         // FileAttributes must come first.
-        let attributes = u8::from(settings.metadata.is_some()).wrapping_shl(4) | u8::from(settings.use_network);
+        let attributes =
+            u8::from(settings.metadata.is_some()).wrapping_shl(4) | u8::from(settings.actionscript3).wrapping_shl(3) | u8::from(settings.use_network);
         write_tag(&mut inner, code::FILE_ATTRIBUTES, &[attributes, 0, 0, 0])?;
         if let Some(xmp) = &settings.metadata {
             let mut body = Vec::new();

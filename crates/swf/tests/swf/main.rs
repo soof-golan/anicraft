@@ -11,5 +11,6 @@ mod readback;
 mod render_oracle;
 mod samples;
 mod scale;
+mod script;
 mod symbol_mode;
 mod visual;

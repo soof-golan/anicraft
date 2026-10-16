@@ -10,6 +10,7 @@ pub mod filter;
 pub mod morph;
 pub mod movie;
 pub mod place;
+pub mod script;
 pub mod shape;
 mod shape_cache;
 pub mod sound;

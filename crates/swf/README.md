@@ -94,6 +94,17 @@ Sounds are passed through: `Movie::define_sound_mp3` for event sounds, and [`sou
 into per-frame `SoundStreamBlock`s for a streaming track. Shape tweens come from [`morph::MorphShapeDef`] (two
 shapes of the same structure) placed with a `ratio`.
 
+# Frame scripts
+
+[`ExportOptions::scripts`](export::ExportOptions::scripts) takes a [`script::ScriptPlan`]: for each exported frame its
+label and the statements of its frame scripts (parsed by `anim-script`). `ActionScript` 2 documents get a `DoAction`
+tag per scripted frame ([`script::as2`]); `ActionScript` 3 documents get one `DoABC` tag and a `SymbolClass` tag in the
+first frame, and the `ActionScript3` file attribute ([`script::abc`]). The `ActionScript` 3 file declares a dynamic
+`Main extends flash.display.MovieClip` whose constructor calls `addFrameScript` once per scripted frame; frame scripts
+are methods, the `var`s and `function`s of the scripts are members, and function literals are closures. Statements
+outside the supported subset are left out and listed in [`ExportReport::script_notes`](export::ExportReport).
+Scripts inside symbol timelines are not exported.
+
 # Conventions
 
 - Coordinates are pixels in the API and twips (1/20 px) in the file. Gradient matrices keep Flash's gradient space

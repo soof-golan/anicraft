@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::SwfError;
 use crate::movie::{ACTION_STOP, Frame, FrameItem, Movie, MovieSettings};
 use crate::place::{Placement, blend_code};
+use crate::script::{CompiledScripts, ScriptPlan};
 use crate::shape::{PathStyle, ShapeBuilder, ShapeDef, clean_path, filled_path_shape};
 use crate::shape_cache::ShapeCache;
 use crate::style::{FillStyle, LinePaint, LineStyle};
@@ -35,13 +36,23 @@ pub struct ExportOptions {
     pub movie: MovieSettings,
     /// Loop forever (the SWF default). When false the last frame carries a `stop()` action.
     pub loop_playback: bool,
+    /// Frame labels and frame scripts, one entry per exported frame.
+    #[serde(default)]
+    pub scripts: Option<ScriptPlan>,
 }
 
 impl ExportOptions {
     /// Looping playback with the given movie settings.
     #[must_use]
     pub const fn new(movie: MovieSettings) -> Self {
-        Self { movie, loop_playback: true }
+        Self { movie, loop_playback: true, scripts: None }
+    }
+
+    /// The same options with frame labels and scripts.
+    #[must_use]
+    pub fn with_scripts(mut self, plan: ScriptPlan) -> Self {
+        self.scripts = Some(plan);
+        self
     }
 
     /// Settings for a stage the size of `list`, with its background (white when the list has none).
@@ -83,6 +94,8 @@ pub struct ExportReport {
     pub characters: u32,
     pub bitmaps: u32,
     pub notes: Vec<ExportNote>,
+    /// Script constructs outside the supported subset, which were left out of the file.
+    pub script_notes: Vec<String>,
 }
 
 /// The finished file and its report.
@@ -583,20 +596,35 @@ pub struct DisplayListExporter {
     stage: Stage,
     loop_playback: bool,
     pending: Option<Frame>,
+    /// The labels and compiled scripts, and how many frames have been pushed.
+    labels: Vec<Option<String>>,
+    scripts: CompiledScripts,
+    pushed: usize,
+    /// `ActionScript` 3 movies stop on the last frame from their frame script, not with a `DoAction`.
+    scripted_as3: bool,
 }
 
 impl DisplayListExporter {
     /// Starts an export.
     ///
     /// # Errors
-    /// Invalid movie settings, see [`Movie::new`].
-    pub fn new(options: ExportOptions) -> Result<Self, SwfError> {
+    /// Invalid movie settings, see [`Movie::new`]; [`SwfError::ScriptTooLarge`] for an `ActionScript` 2 script the
+    /// action format cannot hold.
+    pub fn new(mut options: ExportOptions) -> Result<Self, SwfError> {
+        let plan = options.scripts.take().unwrap_or_default();
+        let scripted_as3 = plan.version == anim_script::Version::As3 && plan.has_scripts();
+        options.movie.actionscript3 = options.movie.actionscript3 || scripted_as3;
+        let scripts = crate::script::compile(&plan, !options.loop_playback)?;
         Ok(Self {
             movie: Movie::new(options.movie)?,
             converter: NodeConverter::new(),
             stage: Stage::new(),
             loop_playback: options.loop_playback,
             pending: None,
+            labels: plan.frames.into_iter().map(|f| f.label).collect(),
+            scripts,
+            pushed: 0,
+            scripted_as3,
         })
     }
 
@@ -610,7 +638,19 @@ impl DisplayListExporter {
         if let Some(frame) = self.pending.take() {
             self.movie.add_frame(&frame)?;
         }
-        self.pending = Some(self.converter.next_frame(&mut self.movie, &mut self.stage, list, images)?);
+        let mut frame = self.converter.next_frame(&mut self.movie, &mut self.stage, list, images)?;
+        frame.label = self.labels.get(self.pushed).cloned().flatten();
+        if let Some(items) = self.scripts.frames.get_mut(self.pushed) {
+            let items = std::mem::take(items);
+            if self.scripted_as3 {
+                // The code tags come before the frame's display list commands.
+                frame.items.splice(0..0, items);
+            } else {
+                frame.items.extend(items);
+            }
+        }
+        self.pushed = self.pushed.saturating_add(1);
+        self.pending = Some(frame);
         Ok(())
     }
 
@@ -620,7 +660,7 @@ impl DisplayListExporter {
     /// See [`Movie::finish`].
     pub fn finish(mut self) -> Result<ExportOutput, SwfError> {
         if let Some(mut frame) = self.pending.take() {
-            if !self.loop_playback {
+            if !self.loop_playback && !self.scripted_as3 {
                 frame.items.push(FrameItem::DoAction(ACTION_STOP.to_vec()));
             }
             self.movie.add_frame(&frame)?;
@@ -630,6 +670,7 @@ impl DisplayListExporter {
             characters: self.movie.character_count(),
             bitmaps: self.converter.bitmap_count(),
             notes: self.converter.notes.clone(),
+            script_notes: std::mem::take(&mut self.scripts.notes),
         };
         Ok(ExportOutput { swf: self.movie.finish()?, report })
     }

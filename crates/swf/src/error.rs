@@ -57,6 +57,9 @@ pub enum SwfError {
     /// The stage size is not a positive finite number of pixels.
     #[error("stage size {width}x{height} is not valid")]
     StageSize { width: f64, height: f64 },
+    /// A script construct is longer than the 16-bit offsets of `ActionScript` 2 actions can address.
+    #[error("{0} in a script is too large for ActionScript 2 actions")]
+    ScriptTooLarge(&'static str),
     /// Compressing the body failed.
     #[error("compression failed: {0}")]
     Compression(#[from] std::io::Error),
