@@ -3,26 +3,36 @@ name: ci
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE*"
+      - ".gitignore"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE*"
+      - ".gitignore"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || 'pr' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  # rust-lld links the MSVC target several times faster than link.exe. Linux has used rust-lld by default since 1.90.
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
 
 jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: rustup show
       - run: cargo fmt --all --check
 
   test:
@@ -32,15 +42,54 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      # Line tables give readable backtraces on Linux and macOS. On Windows they make the linker write a large PDB for
+      # every test binary, so the Windows job builds without debug info.
+      CARGO_PROFILE_DEV_DEBUG: ${{ matrix.os == 'windows-latest' && '0' || 'line-tables-only' }}
     steps:
       - uses: actions/checkout@v5
+      # A ReFS Dev Drive for the checkout, target dir and Cargo home: far cheaper small-file IO than NTFS + Defender.
+      - name: Windows Dev Drive
+        if: runner.os == 'Windows'
+        uses: samypr100/setup-dev-drive@v4
+        with:
+          drive-size: 16GB
+          workspace-copy: true
+          trusted-dev-drive: true
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
       - name: Linux system libraries
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev \
             libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev libfontconfig1-dev
-      - run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      # One cache entry per OS, toolchain, week and Cargo.lock. An exact hit skips the multi-GB save, so a normal push
+      # restores and never saves; the first push after a lockfile change or a new week saves once (pushes to main only).
+      - name: Cache key
+        id: key
+        shell: bash
+        run: |
+          rustc_id="$(rustc -vV | sha256sum | cut -c1-8)"
+          prefix="${{ runner.os }}-${{ runner.arch }}-ci-${rustc_id}"
+          echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
+          echo "key=${prefix}-$(date +%G%V)-${{ hashFiles('Cargo.lock') }}" >> "$GITHUB_OUTPUT"
       - uses: jdx/mr-boxington-action@v1
-      - run: mbx clippy --workspace --all-targets --locked -- -D warnings
-      - run: mbx test --workspace --locked
+        with:
+          working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
+          cache-key: ${{ steps.key.outputs.key }}
+          restore-keys: |
+            ${{ steps.key.outputs.prefix }}-
+      - name: clippy
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
+        run: mbx clippy --workspace --all-targets --locked -- -D warnings
+      - name: test
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
+        run: mbx nextest run --workspace --locked --no-fail-fast
+      - name: doctests
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || '.' }}
+        run: mbx test --doc --workspace --locked --no-fail-fast
