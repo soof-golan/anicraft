@@ -32,6 +32,8 @@ anim-mcp = { git = "https://github.com/soof-golan/anicraft-libs", branch = "main
 # Crates of this repository.
 anicraft-xfl = { path = "crates/xfl" }
 anicraft-swf = { path = "crates/swf" }
+anicraft-tools = { path = "crates/tools" }
+anicraft-cli = { path = "apps/anicraft-cli" }
 
 # Craft crates, pinned by rev like the Craft apps do.
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
@@ -61,6 +63,13 @@ flate2 = { version = "1.1", default-features = false, features = ["rust_backend"
 swf = "0.3"
 # Read-only XML tree (no unsafe, no DTD, node limit); gives byte ranges so unknown elements are kept verbatim.
 roxmltree = "0.21"
+
+# The PDF stack of anim-artwork (AI import) needs the vendored hayro/krilla of craft-libs; same patch as anicraft-libs.
+[patch.crates-io]
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "ca50d63b773c99f96e75c77ce5a1d21e7c9cda0d" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

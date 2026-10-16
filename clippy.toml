@@ -19,6 +19,13 @@ arithmetic-side-effects-allowed = [
   "anim_core::Affine",
   "anim_core::Size",
   "anim_core::Rect",
+  # egui's f32 geometry, used by the editor's view code.
+  "egui::Pos2",
+  "egui::Vec2",
+  "egui::Rect",
+  "emath::Pos2",
+  "emath::Vec2",
+  "emath::Rect",
 ]
 
 # No shared mutable state: actors own their state and talk over channels (placement rules).

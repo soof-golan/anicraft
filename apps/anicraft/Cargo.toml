@@ -1,0 +1,48 @@
+[package]
+name = "anicraft"
+description = "AniCraft: a 2D animation editor that opens and saves Adobe Animate documents (.fla / XFL)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "anicraft_app"
+
+[[bin]]
+name = "anicraft"
+path = "src/main.rs"
+
+[dependencies]
+anicraft-cli = { workspace = true }
+anicraft-tools = { workspace = true }
+anicraft-xfl = { workspace = true }
+anim-artwork = { workspace = true }
+anim-audio = { workspace = true }
+anim-core = { workspace = true }
+anim-display = { workspace = true }
+anim-export = { workspace = true }
+anim-mcp = { workspace = true }
+anim-render = { workspace = true }
+anim-scene = { workspace = true }
+anim-session = { workspace = true }
+anim-shape = { workspace = true }
+anim-timeline = { workspace = true }
+anim-ui = { workspace = true }
+clap = { workspace = true }
+color-eyre = { workspace = true }
+crossbeam-channel = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+rfd = "0.17"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+png = { workspace = true }
+tempfile = "3"
