@@ -190,6 +190,7 @@ fn node() -> BoxedStrategy<Node> {
                 .prop_map(|(transform, children, mask, filters, blend)| {
                     Node::Group(Group {
                         transform,
+                        projection: None,
                         color: ColorTransform { mul: [0.5, 2.0, f32::NAN, 1.0], add: [0.1, -3.0, 0.0, f32::INFINITY] },
                         blend: BLEND_MODES[blend],
                         mask,

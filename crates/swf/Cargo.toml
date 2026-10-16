@@ -14,6 +14,8 @@ workspace = true
 anim-core = { workspace = true }
 anim-display = { workspace = true }
 anim-shape = { workspace = true }
+# Content bounds, to tessellate perspective groups into meshes.
+anim-render = { workspace = true }
 flate2 = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
@@ -28,8 +30,6 @@ harness = false
 anicraft-xfl = { workspace = true }
 anim-timeline = { workspace = true }
 criterion = { version = "0.8", default-features = false }
-# The visual tests render the same display lists with anim-render and compare with Ruffle's picture of the SWF.
-anim-render = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }
 # The sample-gated tests (tests/samples.rs) read library XML out of the FLA zips.

@@ -68,6 +68,9 @@ pub enum ExportNote {
     DashesDropped,
     /// A mesh was emulated with one masked, transformed copy of its content per triangle.
     MeshEmulated,
+    /// A group under a perspective projection was emulated as an 8 x 8 mesh of affine triangles; SWF has no
+    /// perspective, so straight lines inside it are only approximately straight.
+    ProjectionTessellated,
     /// A bitmap fill named a bitmap that was not available and was painted grey.
     MissingBitmap,
 }
@@ -425,6 +428,9 @@ impl NodeConverter {
     }
 
     fn group_slot(&mut self, movie: &mut Movie, group: &Group, images: &ImageStore, nesting: usize, reveal: bool) -> Result<Option<Slot>, SwfError> {
+        if let Some(projection) = &group.projection {
+            return self.projected_slot(movie, group, projection, images, nesting, reveal);
+        }
         let reveal = reveal || group.color.add.get(3).is_some_and(|a| *a > 0.0);
         let children = self.convert_nodes(movie, &group.children, images, nesting.saturating_add(1), reveal)?;
         if children.is_empty() {
@@ -454,6 +460,58 @@ impl NodeConverter {
             filters: group.filters.clone(),
             clip_depth: None,
         }))
+    }
+
+    /// SWF has no perspective: a projected group becomes a mesh whose grid of points is carried to where the
+    /// projection puts them, so the picture is correct at the grid points and affine inside each cell. Cells with a
+    /// corner behind the viewer are left out.
+    fn projected_slot(
+        &mut self,
+        movie: &mut Movie,
+        group: &Group,
+        projection: &anim_core::Homography,
+        images: &ImageStore,
+        nesting: usize,
+        reveal: bool,
+    ) -> Result<Option<Slot>, SwfError> {
+        const CELLS: u32 = 8;
+        let flat = Group { projection: None, ..group.clone() };
+        let content = vec![Node::Group(flat)];
+        let Some(bounds) = anim_render::nodes_bounds(&content, images, Affine::IDENTITY) else {
+            return Ok(None);
+        };
+        let side = CELLS.saturating_add(1);
+        let mut source = Vec::new();
+        let mut target = Vec::new();
+        let mut valid = Vec::new();
+        for row in 0..side {
+            for column in 0..side {
+                let u = f64::from(column) / f64::from(CELLS);
+                let v = f64::from(row) / f64::from(CELLS);
+                let point = Point::new(bounds.x0, bounds.y0) + kurbo::Vec2::new(bounds.width() * u, bounds.height() * v);
+                let projected = projection.apply(point);
+                source.push(point);
+                valid.push(projected.is_some());
+                target.push(projected.unwrap_or(point));
+            }
+        }
+        let mut triangles = Vec::new();
+        for row in 0..CELLS {
+            for column in 0..CELLS {
+                let a = row.saturating_mul(side).saturating_add(column);
+                let b = a.saturating_add(1);
+                let c = a.saturating_add(side);
+                let d = c.saturating_add(1);
+                let ok = [a, b, c, d].iter().all(|i| usize::try_from(*i).ok().and_then(|i| valid.get(i)).copied().unwrap_or(false));
+                if ok {
+                    triangles.push([a, b, c]);
+                    triangles.push([b, d, c]);
+                }
+            }
+        }
+        let mesh = Mesh { transform: Affine::IDENTITY, content, source, target, triangles };
+        self.note(ExportNote::ProjectionTessellated);
+        self.mesh_slot(movie, &mesh, images, nesting, reveal)
     }
 
     /// A mesh warps its content triangle by triangle: each triangle is a sprite with the triangle as a clip mask
@@ -720,5 +778,26 @@ mod tests {
         }
         let list = DisplayList { size: Size::new(10.0, 10.0), background: None, nodes: vec![node] };
         assert!(matches!(export_still(&list, &ImageStore::new()), Err(SwfError::TooDeep(_))));
+    }
+
+    #[test]
+    fn a_projected_group_is_tessellated_into_a_mesh() {
+        let perspective = anim_core::Perspective::for_stage(200.0, 200.0);
+        let projection = anim_core::Matrix3D::rotation_y(40.0).then(&anim_core::Matrix3D::translation(100.0, 100.0, 0.0)).homography(&perspective);
+        let square = Node::Fill(Fill {
+            transform: Affine::IDENTITY,
+            path: kurbo::Rect::new(-40.0, -40.0, 40.0, 40.0).to_path(0.1),
+            rule: FillRule::NonZero,
+            paint: Paint::Solid(Rgba8::BLACK),
+        });
+        let list = DisplayList {
+            size: Size::new(200.0, 200.0),
+            background: None,
+            nodes: vec![Node::Group(Group { projection: Some(projection), children: vec![square], ..Group::default() })],
+        };
+        let out = export_still(&list, &ImageStore::new()).unwrap();
+        assert!(out.report.notes.contains(&ExportNote::ProjectionTessellated));
+        // 8 x 8 cells, two triangles each, a shape and a mask per triangle plus the shared content.
+        assert!(out.report.characters > 128, "{}", out.report.characters);
     }
 }
