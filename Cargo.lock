@@ -325,6 +325,7 @@ version = "0.1.0"
 dependencies = [
  "anim-core",
  "anim-display",
+ "anim-render",
  "anim-shape",
  "flate2",
  "png",

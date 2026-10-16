@@ -19,6 +19,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# The visual tests render the same display lists with anim-render and compare with Ruffle's picture of the SWF.
+anim-render = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }
 # The sample-gated tests (tests/samples.rs) read library XML out of the FLA zips.
