@@ -266,7 +266,8 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
             let is_shape = matches!(el, Element::Shape(_));
             let new = match id {
                 "x" | "y" => {
-                    let current = if is_shape { stage_bounds.map_or((m.translation().x, m.translation().y), |b| (b.x0, b.y0)) } else { (m.translation().x, m.translation().y) };
+                    let origin = (m.translation().x, m.translation().y);
+                    let current = if is_shape { stage_bounds.map_or(origin, |b| (b.x0, b.y0)) } else { origin };
                     let (dx, dy) = if id == "x" { (v - current.0, 0.0) } else { (0.0, v - current.1) };
                     Affine::translate((dx, dy)) * m
                 }
@@ -333,9 +334,9 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
         Element::Text(t) => {
             if id == "text" {
                 let new = text(value).ok_or_else(wrong)?;
-                let mut base = t.text_runs.first().cloned().ok_or("the text has no style to keep")?;
-                new.clone_into(&mut base.characters);
-                t.text_runs = vec![base];
+                let first = t.text_runs.first_mut().ok_or("the text has no style to keep")?;
+                first.characters = new;
+                t.text_runs.truncate(1);
                 return Ok(());
             }
             for run in &mut t.text_runs {
@@ -367,9 +368,7 @@ pub fn apply(doc: &mut AniDoc, id: &str, value: &PropValue) -> Result<(), String
         Element::Shape(s) => match id {
             "fill" => {
                 let c = colour(value).ok_or_else(wrong)?;
-                for fill in &mut s.shape.fills {
-                    *fill = FillStyle::Solid(c);
-                }
+                s.shape.fills.fill(FillStyle::Solid(c));
             }
             "stroke" => {
                 let c = colour(value).ok_or_else(wrong)?;

@@ -542,7 +542,7 @@ impl AniApp {
         let result = self.host.session_mut().edit("Paste Frames", None, |doc| -> Result<(), String> {
             let document = &mut doc.editor.document;
             for (row, offset, frame) in clip {
-                let Some(&layer) = usize::try_from(row).ok().and_then(|r| layers.get(r)).or(layers.first()) else { continue };
+                let Some(&layer) = usize::try_from(row).ok().and_then(|r| layers.get(r)).or_else(|| layers.first()) else { continue };
                 let at = first.saturating_add(offset);
                 edit::insert_blank_keyframe(document, &id, layer, at).map_err(|e| e.to_string())?;
                 let target = edit::keyframe_mut(document, &id, layer, at).map_err(|e| e.to_string())?;
@@ -744,7 +744,7 @@ impl AniApp {
                         if lib.find_index(&candidate).is_none() {
                             break candidate;
                         }
-                        n += 1;
+                        n = usize::saturating_add(n, 1);
                     };
                     let item_id = lib.fresh_item_id(&name);
                     lib.push(LibraryItem::Folder(anim_scene::FolderItem { name, item_id, is_expanded: true, extra: anim_scene::Extra::new() }))

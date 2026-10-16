@@ -76,7 +76,7 @@ impl AniApp {
         }
     }
 
-    fn status_bar(&mut self, ui: &mut egui::Ui) {
+    fn status_bar(&self, ui: &mut egui::Ui) {
         let doc = self.host.session().doc();
         let state = &doc.editor.state;
         let frame = state.frame.saturating_add(1);

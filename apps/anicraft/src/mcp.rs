@@ -157,8 +157,7 @@ pub type Host = SessionHost<AniDoc, GuiHooks>;
 pub fn host(doc: AniDoc, path: Option<PathBuf>, confinement: Confinement) -> Host {
     let mut session = Session::new(doc, crate::commands::registry());
     session.set_path(path);
-    let mut hooks = GuiHooks::default();
-    hooks.panels = PANELS.iter().map(|p| (*p).to_owned()).collect();
+    let hooks = GuiHooks { panels: PANELS.iter().map(|p| (*p).to_owned()).collect(), ..GuiHooks::default() };
     SessionHost::new(HostInfo { name: "anicraft".to_owned(), version: VERSION.to_owned() }, session, hooks).with_confinement(confinement)
 }
 
@@ -210,12 +209,12 @@ impl Links {
 
     /// Answers every waiting request. Call once per frame on the thread that owns the host.
     pub fn pump(&self, host: &mut Host) -> usize {
-        let mut handled = 0;
+        let mut handled = 0_usize;
         if let Some(server) = &self.server {
-            handled += server.inbox().pump(host);
+            handled = handled.saturating_add(server.inbox().pump(host));
         }
         if let Some(inbox) = &self.stdio {
-            handled += inbox.pump(host);
+            handled = handled.saturating_add(inbox.pump(host));
         }
         handled
     }

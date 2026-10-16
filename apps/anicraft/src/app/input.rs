@@ -1,5 +1,6 @@
 //! Pointer and keyboard input: stage pointer events go to the active tool, keys go to shortcuts or the tool.
 
+use anicraft_tools::PointerKind as K;
 use anicraft_tools::{Key, KeyEvent, Modifiers, PointerEvent, ToolCommand, ToolContext, ToolEvent, ToolId};
 use anim_core::Point;
 use anim_session::Shortcut;
@@ -55,7 +56,6 @@ impl AniApp {
         let event = |kind: anicraft_tools::PointerKind, count: u8| {
             ToolEvent::Pointer(PointerEvent::new(kind, pos.x, pos.y).with_modifiers(modifiers).with_click_count(count).with_screen(f64::from(screen.x), f64::from(screen.y)))
         };
-        use anicraft_tools::PointerKind as K;
         match p.phase {
             PointerPhase::Move => self.tool_event(&event(K::Hover, 1)),
             PointerPhase::Down => self.tool_event(&event(K::Down, 1)),
@@ -97,12 +97,9 @@ impl AniApp {
         let edits = out.commands.iter().any(ToolCommand::edits_document);
         if edits && self.ui.drag_base.is_none() {
             self.ui.drag_base = Some(Box::new(doc.clone()));
-            self.ui.drag_label = format!("{}", doc.editor.tools.active().label());
+            doc.editor.tools.active().label().clone_into(&mut self.ui.drag_label);
         }
-        let mut failure = None;
-        if let Err(e) = doc.editor.run_commands(&out.commands) {
-            failure = Some(e.to_string());
-        }
+        let failure = doc.editor.run_commands(&out.commands).err().map(|e| e.to_string());
         doc.editor.state.active_tool = doc.editor.tools.active();
         let busy = doc.editor.tools.is_busy();
         let text_editing = doc.editor.state.text_editing.is_some();

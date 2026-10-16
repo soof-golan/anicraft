@@ -1,4 +1,4 @@
-//! AniCraft, the desktop editor.
+//! `AniCraft`, the desktop editor.
 //!
 //! * [`app`]: the window (an `eframe` app) whose state is an `anim-session` session of an `anicraft-cli` document;
 //! * [`commands`]: the Modify and Insert commands on top of the document commands and tool commands that already
@@ -9,10 +9,18 @@
 //!
 //! The UI is a function of the document and the view state: panels report events, [`app`] turns them into commands.
 
-#![cfg_attr(
-    test,
-    allow(clippy::arithmetic_side_effects, clippy::float_cmp, clippy::needless_pass_by_value, reason = "test code")
+#![allow(
+    clippy::too_many_lines,
+    clippy::many_single_char_names,
+    clippy::struct_excessive_bools,
+    clippy::similar_names,
+    clippy::needless_pass_by_value,
+    clippy::missing_const_for_fn,
+    clippy::implicit_hasher,
+    clippy::chunks_exact_to_as_chunks,
+    reason = "immediate-mode UI code: long match-driven functions, view models that are flag sets, and pixel loops over RGBA quads"
 )]
+#![cfg_attr(test, allow(clippy::arithmetic_side_effects, clippy::float_cmp, clippy::assert_is_empty, reason = "test code"))]
 
 pub mod app;
 pub mod audio;
@@ -43,7 +51,7 @@ pub fn run(options: Options) -> color_eyre::Result<()> {
     let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
     let (width, height) = options.window.unwrap_or((1440.0, 900.0));
     let native = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([width, height]).with_min_inner_size([900.0, 560.0]).with_title("AniCraft"),
+        viewport: egui::ViewportBuilder::default().with_inner_size(egui::vec2(width, height)).with_min_inner_size([900.0, 560.0]).with_title("AniCraft"),
         renderer: eframe::Renderer::Wgpu,
         ..eframe::NativeOptions::default()
     };

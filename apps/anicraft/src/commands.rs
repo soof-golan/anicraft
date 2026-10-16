@@ -187,7 +187,7 @@ fn expand(doc: &mut AniDoc, symbols: bool) -> Out {
         }
         match element {
             Element::Group(g) => {
-                touched += 1;
+                touched = touched.saturating_add(1);
                 for mut member in g.members {
                     if let Some(m) = member.matrix() {
                         member.set_matrix(g.matrix * m);
@@ -198,7 +198,7 @@ fn expand(doc: &mut AniDoc, symbols: bool) -> Out {
             }
             Element::SymbolInstance(inst) if symbols => {
                 let content = library.find_symbol(&inst.library_item_name).and_then(|s| s.timeline.layers.iter().rev().find_map(|l| l.keyframe_at(inst.first_frame).map(|k| k.elements.clone()))).unwrap_or_default();
-                touched += 1;
+                touched = touched.saturating_add(1);
                 for mut member in content {
                     if let Some(m) = member.matrix() {
                         member.set_matrix(inst.matrix * m);
@@ -251,21 +251,23 @@ fn arrange(doc: &mut AniDoc, params: &Value) -> Out {
         }
         "forward" => {
             for k in (0..count.saturating_sub(1)).rev() {
-                if let (Some(a), Some(b)) = (order.get(k).copied(), order.get(k + 1).copied())
+                let next = k.saturating_add(1);
+                if let (Some(a), Some(b)) = (order.get(k).copied(), order.get(next).copied())
                     && selected(&a)
                     && !selected(&b)
                 {
-                    order.swap(k, k + 1);
+                    order.swap(k, next);
                 }
             }
         }
         "backward" => {
             for k in 1..count {
-                if let (Some(a), Some(b)) = (order.get(k - 1).copied(), order.get(k).copied())
+                let prev = k.saturating_sub(1);
+                if let (Some(a), Some(b)) = (order.get(prev).copied(), order.get(k).copied())
                     && selected(&b)
                     && !selected(&a)
                 {
-                    order.swap(k - 1, k);
+                    order.swap(prev, k);
                 }
             }
         }

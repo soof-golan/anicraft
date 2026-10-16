@@ -44,10 +44,8 @@ pub fn run(file: Option<&Path>, frame: Option<u32>) -> Result<SmokeReport, Strin
     let scene = document.current_timeline.min(document.scenes.len().saturating_sub(1));
     let mut ev = evaluator_for(document, &doc.media, false);
     let total = ev.scene_frames(scene);
-    let chosen = match frame {
-        Some(f) => f.saturating_sub(1).min(total.saturating_sub(1)),
-        None => first_frame_with_content(document, scene).min(total.saturating_sub(1)),
-    };
+    let wanted = frame.map_or_else(|| first_frame_with_content(document, scene), |f| f.saturating_sub(1));
+    let chosen = wanted.min(total.saturating_sub(1));
     let width = num::ceil_f64_to_i32(document.width.clamp(1.0, 1920.0));
     let height = num::ceil_f64_to_i32((document.height * (f64::from(width) / document.width.max(1.0))).clamp(1.0, 4096.0));
     let job = RenderJob {

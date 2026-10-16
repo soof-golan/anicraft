@@ -57,6 +57,11 @@ pub struct Options {
     pub window: Option<(f32, f32)>,
 }
 
+/// The part of a screenshot a panel occupies (the whole image without a panel).
+fn crop(image: &ColorImage, rect: Option<&egui::Rect>, ppp: f32) -> ColorImage {
+    rect.map_or_else(|| image.clone(), |rect| image.region(rect, Some(ppp)))
+}
+
 /// What the render worker was last asked for; two requests with equal keys draw the same pixels.
 #[derive(Debug, Clone, PartialEq)]
 struct RenderKey {
@@ -160,11 +165,11 @@ impl AniApp {
         let worker = RenderWorker::spawn(wake.clone())?;
         let links = Links::start(&options.links, wake)?;
         let rtl_fonts = anim_ui::theme::install_fallback_fonts(ctx);
-        let theme = if options.dark { Theme::Dark } else { Theme::Dark };
+        let theme = if options.dark { Theme::Dark } else { Theme::Light };
         theme.apply(ctx);
         let mut ui = UiState::new(size, theme);
         if rtl_fonts == 0 {
-            ui.status = "no installed font covers Hebrew or Arabic; right-to-left text will show boxes".to_owned();
+            "no installed font covers Hebrew or Arabic; right-to-left text will show boxes".clone_into(&mut ui.status);
         }
         let mut app = Self {
             host,
@@ -340,7 +345,7 @@ impl AniApp {
             }
             self.ui.thumb_requested.insert(symbol.name.clone());
             self.worker.send(Job::Thumbnail { name: symbol.name.clone(), size: 48 });
-            budget -= 1;
+            budget = usize::saturating_sub(budget, 1);
         }
     }
 
@@ -392,16 +397,10 @@ impl AniApp {
     fn finish_mcp_shots(&mut self, tag: u64, image: &ColorImage, ppp: f32) {
         let Some(shots) = self.mcp_shots.remove(&tag) else { return };
         for shot in shots {
-            let cropped;
-            let shown = match shot.request.panel.as_deref().and_then(|p| self.ui.panel_rects.get(&p.to_lowercase())) {
-                Some(rect) => {
-                    cropped = image.region(rect, Some(ppp));
-                    &cropped
-                }
-                None => image,
-            };
+            let rect = shot.request.panel.as_deref().and_then(|p| self.ui.panel_rects.get(&p.to_lowercase()));
+            let shown = crop(image, rect, ppp);
             let [w, h] = shown.size;
-            let rgba: Vec<u8> = shown.pixels.iter().flat_map(|p| p.to_array()).collect();
+            let rgba: Vec<u8> = shown.pixels.iter().flat_map(egui::Color32::to_array).collect();
             let result = u32::try_from(w)
                 .ok()
                 .zip(u32::try_from(h).ok())
@@ -419,17 +418,10 @@ impl AniApp {
 
     fn finish_cli_shot(&mut self, image: &ColorImage) {
         let Some(run) = self.shot.take() else { return };
-        let ppp = 1.0;
-        let cropped;
-        let shown = match run.plan.panel.as_deref().and_then(|p| self.ui.panel_rects.get(&p.to_lowercase())) {
-            Some(rect) => {
-                cropped = image.region(rect, Some(ppp));
-                &cropped
-            }
-            None => image,
-        };
+        let rect = run.plan.panel.as_deref().and_then(|p| self.ui.panel_rects.get(&p.to_lowercase()));
+        let shown = crop(image, rect, self.ctx.pixels_per_point());
         let [w, h] = shown.size;
-        let rgba: Vec<u8> = shown.pixels.iter().flat_map(|p| p.to_array()).collect();
+        let rgba: Vec<u8> = shown.pixels.iter().flat_map(egui::Color32::to_array).collect();
         let written = u32::try_from(w)
             .ok()
             .zip(u32::try_from(h).ok())

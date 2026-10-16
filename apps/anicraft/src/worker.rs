@@ -37,7 +37,7 @@ pub struct Onion {
 }
 
 /// One stage render.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderJob {
     /// Echoed in the answer, so the UI can match it to the request.
     pub id: u64,

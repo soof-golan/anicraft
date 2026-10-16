@@ -6,7 +6,7 @@ use anicraft_app::mcp::LinkOptions;
 use anicraft_app::{Options, ShotPlan};
 use clap::Parser;
 
-/// AniCraft: a 2D animation editor for Adobe Animate documents (.fla / XFL).
+/// `AniCraft`: a 2D animation editor for Adobe Animate documents (.fla / XFL).
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Args {
@@ -37,7 +37,7 @@ struct Args {
     #[arg(long, value_name = "L:K:I")]
     select: Option<String>,
 
-    /// Window size for --screenshot, as WIDTHxHEIGHT in points.
+    /// Window size for --screenshot, as `WIDTHxHEIGHT` in points.
     #[arg(long, value_name = "WxH", default_value = "1440x900")]
     size: String,
 

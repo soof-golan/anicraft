@@ -40,9 +40,9 @@ pub fn timeline_model(doc: &Document, id: &TimelineId, frame: u32, onion: OnionS
         };
         let mut depth = 0_u32;
         let mut parent = layer.parent_layer_index;
-        let mut guard = 0;
+        let mut guard = 0_u32;
         while let Some(p) = parent {
-            guard += 1;
+            guard = guard.saturating_add(1);
             if guard > 64 {
                 break;
             }
@@ -117,7 +117,7 @@ fn parent_of(name: &str) -> Option<&str> {
 #[must_use]
 pub fn library_rows(doc: &Document, collapsed: &BTreeSet<String>, filter: &str, selected: Option<&str>, thumbs: &HashMap<String, egui::TextureId>) -> LibraryRows {
     let mut order: Vec<&LibraryItem> = doc.library.items.iter().collect();
-    order.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
+    order.sort_by_key(|item| item.name().to_lowercase());
     let needle = filter.to_lowercase();
     let mut items = Vec::new();
     let mut names = Vec::new();

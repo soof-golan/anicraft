@@ -53,10 +53,12 @@ pub struct ExportRequest {
 pub fn export_job(request: ExportRequest) -> impl FnOnce(&mut JobContext<Loaded>) -> Result<Loaded, JobError> + Send + 'static {
     move |ctx| {
         let total = evaluator_for(&request.doc, &request.media, false).scene_frames(request.scene);
-        let mut span = resolve_span(total, None, None).map_err(|e| JobError::Failed(e.to_string()))?;
-        if request.format == Format::Svg {
-            span = request.frame.min(total.saturating_sub(1))..request.frame.min(total.saturating_sub(1)).saturating_add(1);
-        }
+        let span = if request.format == Format::Svg {
+            let at = request.frame.min(total.saturating_sub(1));
+            at..at.saturating_add(1)
+        } else {
+            resolve_span(total, None, None).map_err(|e| JobError::Failed(e.to_string()))?
+        };
         let job = ExportJob {
             doc: &request.doc,
             media: &request.media,
