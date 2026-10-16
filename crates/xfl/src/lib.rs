@@ -34,6 +34,7 @@
     )
 )]
 
+pub mod armature;
 pub mod diff;
 pub mod document;
 pub mod element;

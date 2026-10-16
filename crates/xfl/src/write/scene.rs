@@ -83,6 +83,9 @@ fn write_layer(out: &mut XmlOut, layer: &Layer) {
         .b_unless("autoNamed", layer.autoname, true)
         .extra(&layer.extra);
     out.open("DOMLayer", &attrs);
+    if let Some(armature) = &layer.armature {
+        write_armature(out, armature);
+    }
     out.open("frames", &Attrs::new());
     for frame in &layer.frames {
         write_frame(out, frame);
@@ -142,6 +145,9 @@ fn write_frame(out: &mut XmlOut, frame: &Frame) {
     if !frame.eases.is_empty() {
         write_tweens(out, frame);
     }
+    if let Some(pose) = &frame.pose {
+        write_pose(out, pose);
+    }
     out.open("elements", &Attrs::new());
     for element in &frame.elements {
         write_element(out, element, 0);
@@ -151,6 +157,52 @@ fn write_frame(out: &mut XmlOut, frame: &Frame) {
         out.raw("DOMFrame", child);
     }
     out.close();
+}
+
+/// Degrees with float noise from the radian conversion rounded away.
+fn degrees(radians: f64) -> String {
+    super::out::fmt_rounded(radians.to_degrees(), 9)
+}
+
+/// `<armature>` with its bones (mirrors `armature::read_armature`).
+fn write_armature(out: &mut XmlOut, armature: &anim_scene::Armature) {
+    let attrs = Attrs::new().s("name", &armature.name).s("kind", armature.kind.xfl_name()).extra(&armature.extra);
+    out.open("armature", &attrs);
+    for (index, bone) in armature.bones.iter().enumerate() {
+        let parent = bone.parent.filter(|p| *p < index).and_then(|p| u32::try_from(p).ok());
+        let mut attrs = Attrs::new()
+            .s("name", &bone.name)
+            .u_opt("parent", parent)
+            .f("x", bone.head.x)
+            .f("y", bone.head.y)
+            .f("length", bone.length)
+            .pair("angle", &degrees(bone.angle))
+            .u_opt("element", bone.element.and_then(|e| u32::try_from(e).ok()));
+        if let Some((lo, hi)) = bone.limits {
+            attrs = attrs.pair("minAngle", &degrees(lo)).pair("maxAngle", &degrees(hi));
+        }
+        let attrs = attrs.extra(&bone.extra);
+        if bone.extra.children.is_empty() {
+            out.leaf("Bone", &attrs);
+        } else {
+            out.open("Bone", &attrs);
+            for child in &bone.extra.children {
+                out.raw("Bone", child);
+            }
+            out.close();
+        }
+    }
+    for child in &armature.extra.children {
+        out.raw("armature", child);
+    }
+    out.close();
+}
+
+/// `<pose>` (mirrors `armature::read_pose`).
+fn write_pose(out: &mut XmlOut, pose: &anim_scene::Pose) {
+    let angles: Vec<String> = pose.angles.iter().map(|a| degrees(*a)).collect();
+    let attrs = Attrs::new().f_unless("x", pose.offset.x, 0.0).f_unless("y", pose.offset.y, 0.0).pair("angles", &angles.join(" "));
+    out.leaf("pose", &attrs);
 }
 
 fn sound_attrs<'a>(attrs: Attrs<'a>, sound: &'a FrameSound) -> Attrs<'a> {

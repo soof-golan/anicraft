@@ -20,6 +20,7 @@ anim-scene = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5
 anim-morph = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
 anim-text = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
 anim-timeline = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
+anim-rig = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
 anim-render = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
 anim-audio = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }
 anim-artwork = { git = "https://github.com/soof-golan/anicraft-libs", rev = "b7cb5686727cfb61bae42fa81d2426c699b69995" }

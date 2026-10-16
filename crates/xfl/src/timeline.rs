@@ -6,6 +6,7 @@ use anim_scene::{
 };
 use roxmltree::Node;
 
+use crate::armature::{read_armature, read_pose};
 use crate::element::read_elements;
 use crate::xml::{Attrs, Ctx, child, element_children, read_point_element, text_of};
 
@@ -66,6 +67,8 @@ fn read_layer(ctx: &mut Ctx<'_>, node: Node<'_, '_>, index: usize) -> Layer {
     for c in element_children(node) {
         if c.tag_name().name() == "frames" {
             read_frames(ctx, c, &mut layer);
+        } else if c.tag_name().name() == "armature" && layer.armature.is_none() {
+            layer.armature = Some(read_armature(ctx, c));
         } else {
             ctx.keep_child(&mut layer.extra, "DOMLayer", c);
         }
@@ -134,6 +137,7 @@ fn read_frame(ctx: &mut Ctx<'_>, node: Node<'_, '_>, default_index: u32) -> Fram
             "MorphShape" => frame.morph_shape_xml = Some(ctx.raw(c)),
             "motionObjectXML" => frame.motion_object_xml = Some(ctx.raw(c)),
             "SoundEnvelope" => envelope = read_envelope(ctx, c),
+            "pose" if frame.pose.is_none() => frame.pose = Some(read_pose(ctx, c)),
             "Actionscript" => read_actionscript(ctx, c, &mut frame),
             _ => ctx.keep_child(&mut frame.extra, "DOMFrame", c),
         }
