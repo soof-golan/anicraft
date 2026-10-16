@@ -47,6 +47,7 @@ pub mod hit;
 pub mod lock;
 pub mod mcp;
 mod mcp_armature;
+mod mcp_drawing;
 pub mod modify;
 pub mod overlay;
 mod region_select;

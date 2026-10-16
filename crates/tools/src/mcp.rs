@@ -125,7 +125,7 @@ enum StrokeArg {
 /// The style keys any drawing command accepts.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Style {
+pub(crate) struct Style {
     fill: Option<String>,
     stroke: Option<StrokeArg>,
     object_drawing: Option<bool>,
@@ -135,7 +135,7 @@ struct Style {
 const STYLE_KEYS: [&str; 4] = ["fill", "stroke", "object_drawing", "corner_radius"];
 
 /// Splits the style keys off the parameters.
-fn split_style(params: &Value) -> Result<(Style, Value), CommandError> {
+pub(crate) fn split_style(params: &Value) -> Result<(Style, Value), CommandError> {
     let Some(map) = params.as_object() else { return Ok((Style::default(), params.clone())) };
     let mut style = Map::new();
     let mut rest = Map::new();
@@ -192,7 +192,7 @@ fn apply_style(settings: &mut ToolSettings, style: &Style) -> Result<(), Command
 }
 
 /// Runs `f` with the style applied to the tool options, then puts the options back.
-fn with_style<T>(editor: &mut Editor, style: &Style, f: impl FnOnce(&mut Editor) -> Result<T, CommandError>) -> Result<T, CommandError> {
+pub(crate) fn with_style<T>(editor: &mut Editor, style: &Style, f: impl FnOnce(&mut Editor) -> Result<T, CommandError>) -> Result<T, CommandError> {
     let saved = editor.state.settings.clone();
     let result = apply_style(&mut editor.state.settings, style).and_then(|()| f(editor));
     editor.state.settings = saved;
@@ -273,7 +273,7 @@ fn stage_elements_json(editor: &Editor, layer: Option<usize>, frame: Option<u32>
     })
 }
 
-fn result_of(editor: &Editor, report: &ScriptReport) -> Value {
+pub(crate) fn result_of(editor: &Editor, report: &ScriptReport) -> Value {
     let frame_elements = stage_elements_json(editor, None, None);
     json!({
         "applied_commands": report.commands_applied,
@@ -462,7 +462,7 @@ struct BoxParams {
     height: f64,
 }
 
-fn draw_box<D: ToolHost>(host: &mut D, params: &Value, tool: ToolId) -> Result<Value, CommandError> {
+pub(crate) fn draw_box<D: ToolHost>(host: &mut D, params: &Value, tool: ToolId) -> Result<Value, CommandError> {
     let (style, rest) = split_style(params)?;
     let p: BoxParams = parse_params(&rest)?;
     finite_all(&[p.x, p.y, p.width, p.height])?;
@@ -1226,6 +1226,7 @@ const SCHEMA_ERASE: &str = r#"{"type":"object","required":["points"],"properties
 pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
     let mut all = tool_commands::<D>();
     all.extend(crate::mcp_armature::commands::<D>());
+    all.extend(crate::mcp_drawing::commands::<D>());
     all
 }
 

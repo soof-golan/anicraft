@@ -401,6 +401,39 @@ fn colour_and_swatch_commands_edit_the_toolbox_the_selection_and_the_palette() {
     c.err("swatches_delete", json!({ "index": 9 }));
 }
 
+#[test]
+fn primitives_polystar_lasso_and_anchors_work_over_mcp_with_undo() {
+    let mut c = Client::new();
+    c.ok("draw_rect_primitive", json!({ "x": 10, "y": 10, "width": 100, "height": 60, "corner_radius": 8, "fill": "#336699" }));
+    assert_eq!(c.stage().len(), 1);
+    c.ok("primitive_set", json!({ "width": 160 }));
+    let element = &c.editor().document.timeline(&c.editor().state.timeline).unwrap().layers[0].frames[0].elements[0];
+    let anim_scene::Element::Shape(shape) = element else { panic!("not a shape") };
+    let Some(anim_scene::PrimitiveKind::Rectangle(r)) = shape.primitive.as_ref().map(|p| &p.kind) else { panic!("not a rectangle primitive") };
+    assert_eq!((r.width, r.height, r.radii), (160.0, 60.0, [8.0; 4]));
+    c.err("primitive_set", json!({ "width": "wide" }));
+    c.ok("edit_undo", json!({}));
+    let element = &c.editor().document.timeline(&c.editor().state.timeline).unwrap().layers[0].frames[0].elements[0];
+    let anim_scene::Element::Shape(shape) = element else { panic!("not a shape") };
+    let Some(anim_scene::PrimitiveKind::Rectangle(r)) = shape.primitive.as_ref().map(|p| &p.kind) else { panic!("not a rectangle primitive") };
+    assert_eq!(r.width, 100.0, "undo restored the width");
+
+    c.ok("draw_oval_primitive", json!({ "x": 200, "y": 10, "width": 80, "height": 80 }));
+    c.ok("draw_polystar", json!({ "x": 300, "y": 200, "radius": 50, "sides": 7, "star": true, "point_size": 0.4 }));
+    assert_eq!(c.stage().len(), 3);
+    c.err("draw_polystar", json!({ "x": 0, "y": 0, "radius": 10, "sides": 2 }));
+
+    c.ok("select_none", json!({}));
+    let selected = c.ok("select_lasso", json!({ "points": [[0, 0], [400, 0], [400, 120], [0, 120]] }));
+    assert_eq!(selected["selected"], json!(2), "the two primitives are enclosed, the star is not");
+    let selected = c.ok("select_wand", json!({ "x": 20, "y": 30, "threshold": 5 }));
+    assert!(selected["selected"].as_u64().unwrap() <= 1);
+
+    // A segment of the star's outline takes an anchor.
+    c.err("anchor_add", json!({ "x": 0, "y": 0 }));
+    c.err("select_lasso", json!({ "points": [[0, 0], [1, 1]] }));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 24, ..ProptestConfig::default() })]
 
