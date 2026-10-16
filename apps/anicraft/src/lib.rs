@@ -32,6 +32,7 @@ pub mod preview;
 pub mod props;
 pub mod smoke;
 pub mod state;
+pub mod toolui;
 pub mod view;
 pub mod worker;
 

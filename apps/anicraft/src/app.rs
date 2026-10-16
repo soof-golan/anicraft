@@ -13,6 +13,7 @@ mod draw;
 mod fileops;
 mod input;
 mod library_preview;
+mod toolui_events;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

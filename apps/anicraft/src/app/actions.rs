@@ -29,8 +29,9 @@ pub enum UiEvent {
     Timeline(TimelineEvent),
     Library(LibraryEvent),
     Property(PropertyEdit),
-    Tool(String),
     Transport(TransportEvent),
+    /// The toolbox, the tool options, the Colour panel or the Swatches panel.
+    ToolUi(crate::toolui::ToolUiEvent),
 }
 
 /// The scene model's layer type for the timeline widget's.
@@ -90,8 +91,8 @@ impl AniApp {
             UiEvent::Timeline(event) => self.timeline_event(event),
             UiEvent::Library(event) => self.library_event(event),
             UiEvent::Property(edit) => self.property_edit(&edit),
-            UiEvent::Tool(id) => self.select_tool_by_id(&id),
             UiEvent::Transport(event) => self.transport_event(event),
+            UiEvent::ToolUi(event) => self.toolui_event(event),
         }
     }
 
@@ -323,7 +324,7 @@ impl AniApp {
 
     // ---- tools ------------------------------------------------------------------------------------------------
 
-    fn select_tool_by_id(&mut self, id: &str) {
+    pub(super) fn select_tool_by_id(&mut self, id: &str) {
         match ToolId::from_toolbar_id(id) {
             Some(tool) => {
                 self.host.session_mut().doc_mut().editor.select_tool(tool);

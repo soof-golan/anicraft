@@ -128,6 +128,8 @@ pub struct UiState {
     pub show_output: bool,
     pub tool_cursor: Option<egui::CursorIcon>,
     pub tool_overlay: Vec<anim_ui::stage::Overlay>,
+    /// Toolbox groups, flyouts and the Colour panel's selection.
+    pub toolui: crate::toolui::ToolUi,
 }
 
 impl UiState {
@@ -135,9 +137,11 @@ impl UiState {
     #[must_use]
     pub fn new(doc_size: (f64, f64), theme: Theme) -> Self {
         let size = vec2(anim_core::num::f64_to_f32(doc_size.0), anim_core::num::f64_to_f32(doc_size.1));
+        let mut layout = dock::default_layout();
+        crate::toolui::open_colour_panels(&mut layout);
         Self {
             theme,
-            layout: dock::default_layout(),
+            layout,
             stage: StageViewState::new(size),
             timeline: TimelineViewState::default(),
             onion: OnionSkin::default(),
@@ -148,7 +152,7 @@ impl UiState {
             preview: crate::preview::PreviewState::default(),
             thumbs: HashMap::new(),
             thumb_requested: BTreeSet::new(),
-            tools: toolbar::animate_tools(),
+            tools: crate::toolui::with_extra_tools(toolbar::animate_tools()),
             status: "Ready".to_owned(),
             dialog: None,
             looping: true,
@@ -166,6 +170,7 @@ impl UiState {
             show_output: false,
             tool_cursor: None,
             tool_overlay: Vec::new(),
+            toolui: crate::toolui::ToolUi::default(),
         }
     }
 }

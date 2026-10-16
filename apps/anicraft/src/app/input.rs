@@ -85,9 +85,14 @@ impl AniApp {
     pub(crate) fn tool_event(&mut self, event: &ToolEvent) {
         let accent = self.ui.theme.palette().accent;
         let zoom = f64::from(self.ui.stage.view.zoom);
+        let guides = self.ui.stage.guides.clone();
         let session = self.host.session_mut();
         let doc = session.doc_mut();
         doc.editor.state.view.zoom = zoom;
+        // Snapping to guides uses the guides on the stage.
+        let snap = &mut doc.editor.state.settings.snap;
+        snap.guides_x = guides.iter().filter(|g| g.axis == anim_ui::stage::Axis::Vertical).map(|g| f64::from(g.pos)).collect();
+        snap.guides_y = guides.iter().filter(|g| g.axis == anim_ui::stage::Axis::Horizontal).map(|g| f64::from(g.pos)).collect();
         let out = {
             let ed = &mut doc.editor;
             let bounds = anicraft_tools::LibraryBounds::new(&ed.document.library);

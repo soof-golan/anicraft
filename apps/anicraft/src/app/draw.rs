@@ -12,6 +12,7 @@ use super::AniApp;
 use super::actions::UiEvent;
 use crate::menus::{self, MenuAction, MenuView};
 use crate::state::Dialog;
+use crate::toolui;
 use crate::view;
 
 impl eframe::App for AniApp {
@@ -60,7 +61,15 @@ impl AniApp {
         let session = self.host.session();
         let doc = session.doc();
         let enabled = menus::menu_commands().iter().copied().filter(|id| session.is_enabled(id)).collect();
-        let closed_panels = [PanelId::Tools, PanelId::Stage, PanelId::Timeline, PanelId::Properties, PanelId::Library]
+        let closed_panels = [
+            PanelId::Tools,
+            PanelId::Stage,
+            PanelId::Timeline,
+            PanelId::Properties,
+            PanelId::Library,
+            PanelId::Custom(toolui::COLOUR_PANEL),
+            PanelId::Custom(toolui::SWATCHES_PANEL),
+        ]
             .into_iter()
             .filter(|p| !self.ui.layout.contains(p))
             .collect();
@@ -156,8 +165,13 @@ impl AniApp {
         let selection = state.selection.items.clone();
         let rects = view::selection_rects(doc.document(), &state.timeline, &selection);
         let accent = self.ui.theme.palette().accent;
+        let tool = state.active_tool;
+        let settings = state.settings.clone();
+        let swatches = anicraft_tools::swatches::read(doc.document());
+        let bitmaps: Vec<String> = doc.document().library.bitmaps().map(|b| b.name.clone()).collect();
 
         let st = &mut self.ui;
+        st.stage.grid_size = num::f64_to_f32(settings.snap.grid_size.clamp(1.0, 1000.0));
         st.stage.doc_size = vec2(num::f64_to_f32(doc.document().width), num::f64_to_f32(doc.document().height));
         st.stage.stage_color = egui::Color32::from_rgb(bg.r, bg.g, bg.b);
         st.stage.cursor = st.tool_cursor;
@@ -169,12 +183,12 @@ impl AniApp {
         st.stage.overlays = overlays;
         let texture = self.stage_tex.as_ref();
         let panel_rects = &mut st.panel_rects;
-        let output = dock::show_dock(ui, egui::Id::new("anicraft-dock"), &st.layout, PanelId::title, |ui, panel| {
-            panel_rects.insert(panel.title().to_lowercase(), ui.available_rect_before_wrap());
+        let output = dock::show_dock(ui, egui::Id::new("anicraft-dock"), &st.layout, toolui::panel_title, |ui, panel| {
+            panel_rects.insert(toolui::panel_title(*panel).to_lowercase(), ui.available_rect_before_wrap());
             match panel {
                 PanelId::Tools => {
-                    for anim_ui::ToolbarEvent::Select(id) in anim_ui::toolbar(ui, &st.tools, &tool_id) {
-                        events.push(UiEvent::Tool(id));
+                    for e in toolui::toolbox(ui, &st.tools, &tool_id, &settings, &swatches, &mut st.toolui) {
+                        events.push(UiEvent::ToolUi(e));
                     }
                 }
                 PanelId::Stage => {
@@ -194,8 +208,25 @@ impl AniApp {
                     }
                 }
                 PanelId::Properties => {
+                    egui::CollapsingHeader::new("Tool").default_open(true).show(ui, |ui| {
+                        for e in toolui::tool_options(ui, tool, &settings) {
+                            events.push(UiEvent::ToolUi(e));
+                        }
+                    });
                     for e in anim_ui::property_grid(ui, &props) {
                         events.push(UiEvent::Property(e));
+                    }
+                }
+                PanelId::Custom(toolui::COLOUR_PANEL) => {
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                        for e in toolui::colour_panel(ui, &settings, &bitmaps, &mut st.toolui) {
+                            events.push(UiEvent::ToolUi(e));
+                        }
+                    });
+                }
+                PanelId::Custom(toolui::SWATCHES_PANEL) => {
+                    for e in toolui::swatches_panel(ui, &swatches, &settings, &st.toolui) {
+                        events.push(UiEvent::ToolUi(e));
                     }
                 }
                 PanelId::Library => {

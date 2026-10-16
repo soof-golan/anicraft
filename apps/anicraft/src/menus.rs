@@ -270,7 +270,7 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             if !view.closed_panels.is_empty() {
                 ui.menu_button("Show Panel", |ui| {
                     for panel in &view.closed_panels {
-                        let clicked = ui.button(panel.title()).clicked();
+                        let clicked = ui.button(crate::toolui::panel_title(*panel)).clicked();
                         push(clicked, MenuAction::OpenPanel(*panel));
                         if clicked {
                             ui.close();

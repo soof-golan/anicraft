@@ -43,6 +43,7 @@ name = "render"
 harness = false
 
 [dev-dependencies]
+anim-shape = { workspace = true }
 base64 = "0.22"
 criterion = { version = "0.8", default-features = false }
 png = { workspace = true }
