@@ -123,7 +123,10 @@ impl<'a> Attrs<'a> {
         Self { items: Vec::new() }
     }
 
+    /// Adds a modelled attribute. It replaces an unmodelled one of the same name that `extra` added earlier, which
+    /// happens when the reader could not parse that attribute's value and kept it raw.
     fn push(mut self, name: &'a str, value: String) -> Self {
+        self.items.retain(|(n, _)| *n != name);
         self.items.push((name, value));
         self
     }
