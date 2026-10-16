@@ -10,7 +10,7 @@
     reason = "test code"
 )]
 
-mod common;
+use crate::common;
 
 use std::path::Path;
 use std::process::{Command, Stdio};

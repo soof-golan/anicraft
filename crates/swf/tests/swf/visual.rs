@@ -27,7 +27,7 @@
     clippy::too_many_arguments
 )]
 
-mod common;
+use crate::common;
 
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, TAU};
 use std::path::PathBuf;

@@ -14,8 +14,8 @@ use anicraft_xfl::{ReadOptions, decode_bitmap_bytes, read_bytes};
 use anim_archive::{ArchiveWriter, ZipWriter};
 use proptest::prelude::*;
 
-const DOM: &str = include_str!("fixtures/basic/DOMDocument.xml");
-const BALL: &str = include_str!("fixtures/basic/LIBRARY/Ball.xml");
+const DOM: &str = include_str!("../fixtures/basic/DOMDocument.xml");
+const BALL: &str = include_str!("../fixtures/basic/LIBRARY/Ball.xml");
 
 fn zip_with(dom: &[u8], symbol: &[u8]) -> Vec<u8> {
     let mut writer = ZipWriter::in_memory();

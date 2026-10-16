@@ -27,7 +27,7 @@ use anim_core::{Affine, Rgba8};
 use anim_display::{Cap, Join, Spread};
 use anim_shape::{BitmapFill, EdgeShape, FillStyle, GradientFill, GradientStop, OtherStroke, SolidStroke, StrokeKind, StrokeStyle, XflEdge, XflName};
 
-mod common;
+use crate::common;
 
 fn samples_dir() -> Option<PathBuf> {
     std::env::var_os("ANICRAFT_SAMPLES").map(PathBuf::from)

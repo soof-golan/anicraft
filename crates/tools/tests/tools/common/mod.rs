@@ -1,6 +1,7 @@
 //! Shared helpers for the tool tests: documents to draw on and short ways to drive an editor.
 
 #![allow(dead_code)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic, reason = "test code")]
 
 use anicraft_tools::{Editor, PointerEvent, ToolCommand, ToolEvent, ToolId};
 use anim_core::{Affine, BezPath, Point, Rgba8};

@@ -11,7 +11,7 @@
     clippy::missing_const_for_fn
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_swf::edge::{NoBitmaps, shape_from_edges};
 use anicraft_swf::movie::{Compression, Frame, FrameItem, Movie, MovieSettings};

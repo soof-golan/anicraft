@@ -1,6 +1,6 @@
 //! Shared by the tests that render SWFs with Ruffle's `exporter` (see `render_oracle.rs`).
 
-#![allow(dead_code, clippy::unwrap_used, clippy::indexing_slicing, clippy::arithmetic_side_effects)]
+#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::arithmetic_side_effects)]
 
 use std::path::PathBuf;
 use std::process::Command;

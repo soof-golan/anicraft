@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::arithmetic_side_effects, clippy::panic, clippy::missing_const_for_fn)]
 
-mod common;
+use crate::common;
 
 use anicraft_swf::movie::{ACTION_STOP, Compression, Frame, FrameItem, Movie, MovieSettings};
 use anicraft_swf::place::Placement;

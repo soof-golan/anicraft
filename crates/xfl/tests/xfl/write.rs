@@ -28,12 +28,12 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use proptest::prelude::*;
 
-const DOM: &str = include_str!("fixtures/basic/DOMDocument.xml");
-const BALL: &str = include_str!("fixtures/basic/LIBRARY/Ball.xml");
-const WEIRD: &str = include_str!("fixtures/basic/LIBRARY/shapes/&#060Weird&#062.xml");
-const PUBLISH: &str = include_str!("fixtures/basic/PublishSettings.xml");
-const METADATA: &str = include_str!("fixtures/basic/META-INF/metadata.xml");
-const MARKER: &str = include_str!("fixtures/basic/basic.xfl");
+const DOM: &str = include_str!("../fixtures/basic/DOMDocument.xml");
+const BALL: &str = include_str!("../fixtures/basic/LIBRARY/Ball.xml");
+const WEIRD: &str = include_str!("../fixtures/basic/LIBRARY/shapes/&#060Weird&#062.xml");
+const PUBLISH: &str = include_str!("../fixtures/basic/PublishSettings.xml");
+const METADATA: &str = include_str!("../fixtures/basic/META-INF/metadata.xml");
+const MARKER: &str = include_str!("../fixtures/basic/basic.xfl");
 
 fn bitmap_dat() -> Vec<u8> {
     let argb: [u8; 32] = [255, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 128, 100, 100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

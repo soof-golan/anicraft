@@ -16,7 +16,7 @@
     clippy::disallowed_types
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_tools::{
     Editor, Key, KeyEvent, Modifiers, PointerEvent, PointerKind, ScriptReport, ToolCommand, ToolEvent, ToolId, ToolScript, catalog, run_script,

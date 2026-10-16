@@ -3,7 +3,7 @@
 //! set) so a person can look at them.
 #![allow(clippy::arithmetic_side_effects, clippy::indexing_slicing, clippy::expect_used, clippy::unwrap_used, clippy::panic, reason = "test code")]
 
-mod common;
+use crate::common;
 
 use std::path::{Path, PathBuf};
 

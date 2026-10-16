@@ -26,12 +26,12 @@ use anim_shape::{FillStyle, StrokeKind, StrokeStyle};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 
-const DOM: &str = include_str!("fixtures/basic/DOMDocument.xml");
-const BALL: &str = include_str!("fixtures/basic/LIBRARY/Ball.xml");
-const WEIRD: &str = include_str!("fixtures/basic/LIBRARY/shapes/&#060Weird&#062.xml");
-const PUBLISH: &str = include_str!("fixtures/basic/PublishSettings.xml");
-const METADATA: &str = include_str!("fixtures/basic/META-INF/metadata.xml");
-const MARKER: &str = include_str!("fixtures/basic/basic.xfl");
+const DOM: &str = include_str!("../fixtures/basic/DOMDocument.xml");
+const BALL: &str = include_str!("../fixtures/basic/LIBRARY/Ball.xml");
+const WEIRD: &str = include_str!("../fixtures/basic/LIBRARY/shapes/&#060Weird&#062.xml");
+const PUBLISH: &str = include_str!("../fixtures/basic/PublishSettings.xml");
+const METADATA: &str = include_str!("../fixtures/basic/META-INF/metadata.xml");
+const MARKER: &str = include_str!("../fixtures/basic/basic.xfl");
 
 const WEIRD_NAME: &str = "shapes/&#060Weird&#062";
 

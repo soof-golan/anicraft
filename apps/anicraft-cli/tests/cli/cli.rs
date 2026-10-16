@@ -10,7 +10,7 @@
     reason = "test code"
 )]
 
-mod common;
+use crate::common;
 
 use common::{cli, cli_ok, mover, read_png};
 use serde_json::Value;

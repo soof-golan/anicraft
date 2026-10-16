@@ -14,7 +14,7 @@
     clippy::missing_const_for_fn
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_swf::export::{ExportOptions, export_display_lists};
 use anicraft_swf::movie::Compression;

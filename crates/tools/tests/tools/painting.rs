@@ -15,7 +15,7 @@
     clippy::many_single_char_names
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_tools::{EraserMode, Modifiers, PointerEvent, ToolCommand, ToolId};
 use anim_core::{Affine, BezPath, Point, Rgba8, Vec2};

@@ -18,7 +18,7 @@
     clippy::disallowed_types
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_tools::{Editor, mcp_commands};
 use anim_session::{CommandRegistry, McpServer, Session};

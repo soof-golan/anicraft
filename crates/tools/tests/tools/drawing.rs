@@ -15,7 +15,7 @@
     clippy::many_single_char_names
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_tools::{Key, KeyEvent, Modifiers, PointerEvent, ToolCommand, ToolEvent, ToolId};
 use anim_core::{Point, Rgba8};

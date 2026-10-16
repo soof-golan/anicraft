@@ -15,7 +15,7 @@
     clippy::many_single_char_names
 )]
 
-mod common;
+use crate::common;
 
 use anicraft_tools::{ElementRef, Key, KeyEvent, Modifiers, PointerEvent, Selection, ToolCommand, ToolEvent, ToolId, apply};
 use anim_core::{Affine, Point, Rect, Vec2};
