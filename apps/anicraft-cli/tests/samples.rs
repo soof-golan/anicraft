@@ -1,6 +1,6 @@
 //! Tests on the Adobe-authored sample files. They read `ANICRAFT_SAMPLES` and pass without doing anything when it is
-//! unset. The samples are never copied into the repository; the rendered frames go to the scratch folder (when it
-//! exists) so a person can look at them.
+//! unset. The samples are never copied into the repository; the rendered frames go to `$ANICRAFT_VISUAL_OUT` (when
+//! set) so a person can look at them.
 #![allow(clippy::arithmetic_side_effects, clippy::indexing_slicing, clippy::expect_used, clippy::unwrap_used, clippy::panic, reason = "test code")]
 
 mod common;
@@ -9,18 +9,17 @@ use std::path::{Path, PathBuf};
 
 use common::{cli_ok, read_png};
 
-const SCRATCH: &str = "/mnt/data/anim/scratch/anicraft-cli";
-
 fn sample(name: &str) -> Option<PathBuf> {
     let dir = std::env::var_os("ANICRAFT_SAMPLES")?;
     let path = Path::new(&dir).join(name);
     path.exists().then_some(path)
 }
 
-/// Where renders go: the scratch folder when it exists, else a folder under the target directory.
+/// Where renders go: `$ANICRAFT_VISUAL_OUT/anicraft-cli` when set, else a folder under the target directory (the tests
+/// read the files back, so they need somewhere to write).
 fn out_dir() -> PathBuf {
-    let scratch = Path::new(SCRATCH);
-    let dir = if scratch.parent().is_some_and(Path::is_dir) { scratch.to_path_buf() } else { Path::new(env!("CARGO_TARGET_TMPDIR")).join("anicraft-cli") };
+    let dir = std::env::var_os("ANICRAFT_VISUAL_OUT")
+        .map_or_else(|| Path::new(env!("CARGO_TARGET_TMPDIR")).join("anicraft-cli"), |root| PathBuf::from(root).join("anicraft-cli"));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
