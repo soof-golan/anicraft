@@ -127,27 +127,7 @@ pub(super) fn zero_based(frame: u32) -> Result<u32, CommandError> {
 }
 
 pub(super) fn parse_color(text: &str) -> Result<Rgba8, CommandError> {
-    let digits = text.strip_prefix('#').unwrap_or(text);
-    let byte = |i: usize| digits.get(i..i.saturating_add(2)).and_then(|s| u8::from_str_radix(s, 16).ok());
-    match digits.len() {
-        6 => Ok(Rgba8 {
-            r: byte(0).ok_or_else(|| bad_color(text))?,
-            g: byte(2).ok_or_else(|| bad_color(text))?,
-            b: byte(4).ok_or_else(|| bad_color(text))?,
-            a: 255,
-        }),
-        8 => Ok(Rgba8 {
-            r: byte(0).ok_or_else(|| bad_color(text))?,
-            g: byte(2).ok_or_else(|| bad_color(text))?,
-            b: byte(4).ok_or_else(|| bad_color(text))?,
-            a: byte(6).ok_or_else(|| bad_color(text))?,
-        }),
-        _ => Err(bad_color(text)),
-    }
-}
-
-fn bad_color(text: &str) -> CommandError {
-    CommandError::invalid_params(format!("{text:?} is not a colour like #rrggbb"))
+    Rgba8::from_hex(text).map_err(|_| CommandError::invalid_params(format!("{text:?} is not a colour like #rrggbb")))
 }
 
 /// Wraps a command's result value, so every command ends the same way.
