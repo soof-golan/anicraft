@@ -23,9 +23,14 @@ roxmltree = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
+[[bench]]
+name = "xfl"
+harness = false
+
 [dev-dependencies]
 # Only the `render_frame` example uses the rasteriser, to look at what the reader produced.
 anim-render = { workspace = true }
+criterion = { version = "0.8", default-features = false }
 png = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
