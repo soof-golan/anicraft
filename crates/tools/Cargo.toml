@@ -13,7 +13,9 @@ workspace = true
 [dependencies]
 anim-core = { workspace = true }
 anim-display = { workspace = true }
+anim-rig = { workspace = true }
 anim-scene = { workspace = true }
+anim-timeline = { workspace = true }
 # The command registry the MCP tools are registered in (see `mcp`).
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
@@ -30,6 +32,5 @@ vectorcraft-pathops = { workspace = true }
 # The demo example renders tool results to a PNG.
 anim-render = { workspace = true }
 anim-text = { workspace = true }
-anim-timeline = { workspace = true }
 png = { workspace = true }
 proptest = { workspace = true }

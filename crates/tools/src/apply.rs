@@ -8,6 +8,7 @@ use anim_core::{Affine, Point};
 use anim_scene::{Document, Element, SceneError, ShapeElement, TextRun, TimelineId, edit};
 use thiserror::Error;
 
+use crate::armature::{self, ArmatureError, NewBone};
 use crate::command::ToolCommand;
 use crate::context::resolve_ref;
 use crate::selection::{ElementRef, Selection};
@@ -27,6 +28,10 @@ pub enum ApplyError {
     NoSuchSymbol(String),
     #[error("the transform is not finite")]
     BadMatrix,
+    #[error(transparent)]
+    Armature(#[from] ArmatureError),
+    #[error("the pose is not finite")]
+    BadPose,
 }
 
 /// What applying a command did.
@@ -144,6 +149,80 @@ fn duplicate_selection(doc: &mut Document, state: &mut EditorState) -> Result<()
     }
     state.selection.items = refs;
     Ok(())
+}
+
+fn layer_mut<'a>(doc: &'a mut Document, timeline: &TimelineId, layer: usize) -> Result<&'a mut anim_scene::Layer, ApplyError> {
+    let tl = doc.timeline_mut(timeline).ok_or(SceneError::NoSuchLayer { layer, count: 0 })?;
+    let count = tl.layers.len();
+    Ok(tl.layers.get_mut(layer).ok_or(SceneError::NoSuchLayer { layer, count })?)
+}
+
+fn set_pose(doc: &mut Document, state: &EditorState, layer: usize, frame: u32, pose: &anim_scene::Pose) -> Result<(), ApplyError> {
+    if !pose.is_finite() {
+        return Err(ApplyError::BadPose);
+    }
+    let has_armature = layer_mut(doc, &state.timeline, layer)?.armature.is_some();
+    if !has_armature {
+        return Err(ArmatureError::NoArmature.into());
+    }
+    if layer_mut(doc, &state.timeline, layer)?.frames.iter().all(|f| f.index != frame) {
+        edit::insert_blank_keyframe(doc, &state.timeline, layer, frame)?;
+    }
+    armature::store_pose(layer_mut(doc, &state.timeline, layer)?, frame, pose)?;
+    Ok(())
+}
+
+/// Moves an element's transformation point to the stage point `point`; false when the element has none.
+fn set_transformation_point(doc: &mut Document, state: &EditorState, target: &ElementRef, point: Point) -> Result<bool, ApplyError> {
+    let resolved = resolve_ref(doc, &state.timeline, target).ok_or_else(|| no_element(target))?;
+    let to_stage = resolved.local_to_stage();
+    let det = to_stage.determinant();
+    if !det.is_finite() || det.abs() < 1.0e-12 {
+        return Err(ApplyError::BadMatrix);
+    }
+    let local = to_stage.inverse() * point;
+    match element_mut(doc, &state.timeline, target)? {
+        Element::Shape(s) => s.transformation_point = Some(local),
+        Element::Group(g) => g.transformation_point = Some(local),
+        Element::SymbolInstance(i) => i.transformation_point = local,
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// Applies the armature commands(the other commands never reach here).
+fn apply_armature(doc: &mut Document, state: &EditorState, command: &ToolCommand) -> Result<(), ApplyError> {
+    match command {
+        ToolCommand::AddBone { layer, frame, parent, head, tail, element, kind, name } => {
+            let spec = NewBone { parent: *parent, head: *head, tail: *tail, element: *element, name: name.clone(), kind: *kind };
+            armature::add_bone(layer_mut(doc, &state.timeline, *layer)?, *frame, &spec)?;
+        }
+        ToolCommand::SetPose { layer, frame, pose } => set_pose(doc, state, *layer, *frame, pose)?,
+        ToolCommand::SetBoneLimits { layer, bone, limits } => {
+            if limits.is_some_and(|(lo, hi)| !lo.is_finite() || !hi.is_finite()) {
+                return Err(ApplyError::BadPose);
+            }
+            let slot = armature_of(doc, &state.timeline, *layer)?.bones.get_mut(*bone).ok_or(ArmatureError::NoSuchBone(*bone))?;
+            slot.limits = limits.map(|(lo, hi)| if lo <= hi { (lo, hi) } else { (hi, lo) });
+        }
+        ToolCommand::RenameBone { layer, bone, name } => {
+            armature_of(doc, &state.timeline, *layer)?.bones.get_mut(*bone).ok_or(ArmatureError::NoSuchBone(*bone))?.name.clone_from(name);
+        }
+        ToolCommand::RemoveBone { layer, bone } => armature::remove_bone(layer_mut(doc, &state.timeline, *layer)?, *bone)?,
+        ToolCommand::RemoveArmature { layer } => {
+            let l = layer_mut(doc, &state.timeline, *layer)?;
+            if l.armature.is_none() {
+                return Err(ArmatureError::NoArmature.into());
+            }
+            armature::remove_armature(l);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn armature_of<'a>(doc: &'a mut Document, timeline: &TimelineId, layer: usize) -> Result<&'a mut anim_scene::Armature, ApplyError> {
+    layer_mut(doc, timeline, layer)?.armature.as_mut().ok_or_else(|| ArmatureError::NoArmature.into())
 }
 
 fn center_of(shape: &anim_shape::EdgeShape) -> Option<Point> {
@@ -268,21 +347,7 @@ fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
         }
         ToolCommand::DuplicateSelection => duplicate_selection(doc, state)?,
         ToolCommand::TransformSelection { matrix } => transform_selection(doc, state, *matrix)?,
-        ToolCommand::SetTransformationPoint { target, point } => {
-            let resolved = resolve_ref(doc, &state.timeline, target).ok_or_else(|| no_element(target))?;
-            let to_stage = resolved.local_to_stage();
-            let det = to_stage.determinant();
-            if !det.is_finite() || det.abs() < 1.0e-12 {
-                return Err(ApplyError::BadMatrix);
-            }
-            let local = to_stage.inverse() * *point;
-            match element_mut(doc, &state.timeline, target)? {
-                Element::Shape(s) => s.transformation_point = Some(local),
-                Element::Group(g) => g.transformation_point = Some(local),
-                Element::SymbolInstance(i) => i.transformation_point = local,
-                _ => changed = false,
-            }
-        }
+        ToolCommand::SetTransformationPoint { target, point } => changed = set_transformation_point(doc, state, target, *point)?,
         ToolCommand::DrawShape { layer, frame, shape, object_drawing } => draw_shape(doc, state, *layer, *frame, shape, *object_drawing)?,
         ToolCommand::AddElement { layer, frame, element } => {
             let timeline = state.timeline.clone();
@@ -339,6 +404,12 @@ fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
                 state.settings.stroke_enabled = true;
             }
         }
+        ToolCommand::AddBone { .. }
+        | ToolCommand::SetPose { .. }
+        | ToolCommand::SetBoneLimits { .. }
+        | ToolCommand::RenameBone { .. }
+        | ToolCommand::RemoveBone { .. }
+        | ToolCommand::RemoveArmature { .. } => apply_armature(doc, state, command)?,
         ToolCommand::ActivateTool { tool } => state.active_tool = *tool,
         ToolCommand::PanScreen { delta } => state.view.offset += *delta,
         ToolCommand::ZoomAt { center, factor } => state.view.zoom_at(*center, *factor),

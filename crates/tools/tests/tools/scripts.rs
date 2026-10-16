@@ -226,7 +226,7 @@ proptest! {
 
     #[test]
     fn random_event_streams_never_panic_and_leave_a_serialisable_document(
-        tool in 0_usize..16,
+        tool in 0_usize..17,
         events in proptest::collection::vec(arb_event(), 1..40),
     ) {
         let mut e = editor();

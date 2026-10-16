@@ -34,6 +34,7 @@
 )]
 
 pub mod apply;
+pub mod armature;
 mod autokey;
 pub mod colour;
 pub mod command;
@@ -44,6 +45,7 @@ pub mod fillfit;
 pub mod freehand;
 pub mod hit;
 pub mod mcp;
+mod mcp_armature;
 pub mod overlay;
 pub mod script;
 pub mod selection;

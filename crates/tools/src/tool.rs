@@ -7,8 +7,8 @@ use crate::context::ToolContext;
 use crate::event::{Key, ToolEvent};
 use crate::overlay::{Cursor, Overlay};
 use crate::tools::{
-    BrushTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool, PenTool,
-    PencilTool, RectangleTool, SelectionTool, SubselectionTool, TextTool, ZoomTool,
+    BoneTool, BrushTool, EraserTool, EyedropperTool, FreeTransformTool, GradientTransformTool, HandTool, InkBottleTool, LineTool, OvalTool, PaintBucketTool,
+    PenTool, PencilTool, RectangleTool, SelectionTool, SubselectionTool, TextTool, ZoomTool, bone_under, bones_overlay,
 };
 
 /// Every tool.
@@ -25,6 +25,7 @@ pub enum ToolId {
     Pen,
     Pencil,
     Brush,
+    Bone,
     PaintBucket,
     InkBottle,
     Eraser,
@@ -36,7 +37,7 @@ pub enum ToolId {
 
 impl ToolId {
     /// All tools in toolbox order.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Selection,
         Self::Subselection,
         Self::FreeTransform,
@@ -48,6 +49,7 @@ impl ToolId {
         Self::Oval,
         Self::Pencil,
         Self::Brush,
+        Self::Bone,
         Self::PaintBucket,
         Self::InkBottle,
         Self::Eyedropper,
@@ -70,6 +72,7 @@ impl ToolId {
             Self::Pen => "pen",
             Self::Pencil => "pencil",
             Self::Brush => "brush",
+            Self::Bone => "bone",
             Self::PaintBucket => "bucket",
             Self::InkBottle => "ink",
             Self::Eraser => "eraser",
@@ -100,6 +103,7 @@ impl ToolId {
             Self::Pen => "Pen Tool",
             Self::Pencil => "Pencil Tool",
             Self::Brush => "Brush Tool",
+            Self::Bone => "Bone Tool",
             Self::PaintBucket => "Paint Bucket Tool",
             Self::InkBottle => "Ink Bottle Tool",
             Self::Eraser => "Eraser Tool",
@@ -130,6 +134,9 @@ impl ToolId {
             Self::Pen => "Click for corner points, drag for smooth points; click the first point or press enter/double-click to finish; escape cancels.",
             Self::Pencil => "Drag to draw a freehand line, straightened, smoothed or left as ink depending on the pencil mode.",
             Self::Brush => "Drag to paint a filled stroke whose width follows pen pressure.",
+            Self::Bone => {
+                "Drag on the artwork to add a bone (shift snaps to 45 degrees); drag from a bone's tip to add a child bone; drag a bone's middle to pose it with inverse kinematics, a root bone's head to move the whole armature."
+            }
             Self::PaintBucket => "Click an enclosed area or a filled region to fill it with the current fill.",
             Self::InkBottle => "Click a stroke to restyle it, or a filled region to outline it, with the current stroke.",
             Self::Eraser => "Drag to erase strokes and fills under the brush; the eraser mode limits what is removed.",
@@ -154,6 +161,7 @@ impl ToolId {
             Self::Pen => 'p',
             Self::Pencil => 'y',
             Self::Brush => 'b',
+            Self::Bone => 'm',
             Self::PaintBucket => 'k',
             Self::InkBottle => 's',
             Self::Eraser => 'e',
@@ -245,6 +253,9 @@ pub struct ToolSet {
     pen: PenTool,
     pencil: PencilTool,
     brush: BrushTool,
+    bone: BoneTool,
+    /// Set while the Selection tool has handed a press on a bone to the Bone tool for posing.
+    posing_with_bone: bool,
     paint_bucket: PaintBucketTool,
     ink_bottle: InkBottleTool,
     eraser: EraserTool,
@@ -276,6 +287,8 @@ impl ToolSet {
             pen: PenTool::default(),
             pencil: PencilTool::default(),
             brush: BrushTool::default(),
+            bone: BoneTool::default(),
+            posing_with_bone: false,
             paint_bucket: PaintBucketTool,
             ink_bottle: InkBottleTool,
             eraser: EraserTool::default(),
@@ -304,6 +317,7 @@ impl ToolSet {
             ToolId::Pen => &mut self.pen,
             ToolId::Pencil => &mut self.pencil,
             ToolId::Brush => &mut self.brush,
+            ToolId::Bone => &mut self.bone,
             ToolId::PaintBucket => &mut self.paint_bucket,
             ToolId::InkBottle => &mut self.ink_bottle,
             ToolId::Eraser => &mut self.eraser,
@@ -326,6 +340,7 @@ impl ToolSet {
             ToolId::Pen => &self.pen,
             ToolId::Pencil => &self.pencil,
             ToolId::Brush => &self.brush,
+            ToolId::Bone => &self.bone,
             ToolId::PaintBucket => &self.paint_bucket,
             ToolId::InkBottle => &self.ink_bottle,
             ToolId::Eraser => &self.eraser,
@@ -350,18 +365,58 @@ impl ToolSet {
     pub fn cancel(&mut self) {
         let id = self.active;
         self.tool_mut(id).cancel();
+        if std::mem::take(&mut self.posing_with_bone) {
+            self.bone.cancel();
+            self.bone.set_pose_only(false);
+        }
     }
 
     /// True while the active tool is in the middle of a gesture.
     #[must_use]
     pub fn is_busy(&self) -> bool {
-        self.tool(self.active).is_busy()
+        self.posing_with_bone || self.tool(self.active).is_busy()
     }
 
-    /// The overlay of the active tool.
+    /// The overlay of the active tool. The Selection tool also shows the bones of an armature layer, which it can
+    /// pose.
     #[must_use]
     pub fn overlay(&self, ctx: &ToolContext<'_>) -> Vec<Overlay> {
-        self.tool(self.active).overlay(ctx)
+        let mut out = self.tool(self.active).overlay(ctx);
+        if self.active == ToolId::Selection {
+            out.extend(bones_overlay(ctx));
+        }
+        out
+    }
+
+    /// The Selection tool poses an armature when a press lands on one of its bones: the Bone tool takes the gesture
+    /// until the button is released.
+    fn route_pose(&mut self, event: &ToolEvent, ctx: &ToolContext<'_>) -> Option<ToolOutput> {
+        let ToolEvent::Pointer(p) = event else {
+            if self.posing_with_bone && matches!(event, ToolEvent::Cancel | ToolEvent::Key(_)) {
+                let mut out = self.bone.handle(event, ctx);
+                if !self.bone.is_busy() {
+                    self.posing_with_bone = false;
+                    self.bone.set_pose_only(false);
+                }
+                out.overlay = self.overlay(ctx);
+                return Some(out);
+            }
+            return None;
+        };
+        if !self.posing_with_bone {
+            if self.active != ToolId::Selection || p.kind != crate::event::PointerKind::Down || !bone_under(ctx, p.pos) {
+                return None;
+            }
+            self.bone.set_pose_only(true);
+            self.posing_with_bone = true;
+        }
+        let mut out = self.bone.handle(event, ctx);
+        if !self.bone.is_busy() {
+            self.posing_with_bone = false;
+            self.bone.set_pose_only(false);
+        }
+        out.overlay = self.overlay(ctx);
+        Some(out)
     }
 
     /// Handles an event: space-bar panning and tool shortcuts first, then the active tool.
@@ -393,9 +448,12 @@ impl ToolSet {
                 self.activate(tool);
                 let mut commands = vec![ToolCommand::ActivateTool { tool }];
                 commands.extend(self.tool_mut(tool).activated(ctx));
-                let overlay = self.tool(tool).overlay(ctx);
+                let overlay = self.overlay(ctx);
                 return ToolOutput { commands, cursor: Cursor::Default, overlay };
             }
+        }
+        if let Some(out) = self.route_pose(event, ctx) {
+            return out;
         }
         let id = self.active;
         let snapped;
@@ -411,7 +469,7 @@ impl ToolSet {
             self.activate(tool);
             out.commands.extend(self.tool_mut(tool).activated(ctx));
         }
-        out.overlay = self.tool(self.active).overlay(ctx);
+        out.overlay = self.overlay(ctx);
         out
     }
 }

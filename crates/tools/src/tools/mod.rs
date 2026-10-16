@@ -1,5 +1,6 @@
 //! The tools.
 
+mod bone;
 mod drawing;
 mod freehand;
 mod gradient;
@@ -11,6 +12,7 @@ mod text;
 mod transform;
 mod view;
 
+pub use bone::{BoneTool, bone_under, bones_overlay};
 pub use drawing::{LineTool, OvalTool, RectangleTool};
 pub use freehand::{BrushTool, PencilTool};
 pub use gradient::GradientTransformTool;

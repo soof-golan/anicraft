@@ -16,7 +16,7 @@
 //! can do with a tool an agent can do too, and each call is one undo step through the session's history. The
 //! commands come in two layers that share one pipeline:
 //!
-//! * **Raw tools**: `tools_list` describes the sixteen tools, `tools_use` feeds a JSON event script (pointer, key and
+//! * **Raw tools**: `tools_list` describes the seventeen tools, `tools_use` feeds a JSON event script (pointer, key and
 //!   text events) to a tool exactly as a person would, `tools_select` and `tools_options` choose the tool and its
 //!   options, `tools_state` and `stage_elements` read back what is selected and on the stage.
 //! * **Typed façades** for the common jobs, so a model does not have to synthesise pointer events: `draw_rectangle`,
@@ -78,12 +78,12 @@ impl SizeHint for Editor {
     }
 }
 
-fn fail(e: impl Display) -> CommandError {
+pub(crate) fn fail(e: impl Display) -> CommandError {
     CommandError::failed(e.to_string())
 }
 
 /// Runs `f`; when it fails the editor is put back as it was.
-fn atomic<T>(editor: &mut Editor, f: impl FnOnce(&mut Editor) -> Result<T, CommandError>) -> Result<T, CommandError> {
+pub(crate) fn atomic<T>(editor: &mut Editor, f: impl FnOnce(&mut Editor) -> Result<T, CommandError>) -> Result<T, CommandError> {
     let backup = editor.clone();
     let result = f(editor);
     if result.is_err() {
@@ -92,7 +92,7 @@ fn atomic<T>(editor: &mut Editor, f: impl FnOnce(&mut Editor) -> Result<T, Comma
     result
 }
 
-fn run(editor: &mut Editor, script: &ToolScript) -> Result<ScriptReport, CommandError> {
+pub(crate) fn run(editor: &mut Editor, script: &ToolScript) -> Result<ScriptReport, CommandError> {
     let report = run_script(editor, script);
     report.error.clone().map_or(Ok(report), |message| Err(CommandError::failed(message)))
 }
@@ -286,19 +286,19 @@ fn result_of(editor: &Editor, report: &ScriptReport) -> Value {
 // Event builders
 // ---------------------------------------------------------------------------------------------------------------
 
-fn down(x: f64, y: f64) -> ToolEvent {
+pub(crate) fn down(x: f64, y: f64) -> ToolEvent {
     PointerEvent::down(x, y).into()
 }
 
-fn drag(x: f64, y: f64) -> ToolEvent {
+pub(crate) fn drag(x: f64, y: f64) -> ToolEvent {
     PointerEvent::drag(x, y).into()
 }
 
-fn up(x: f64, y: f64) -> ToolEvent {
+pub(crate) fn up(x: f64, y: f64) -> ToolEvent {
     PointerEvent::up(x, y).into()
 }
 
-fn finite_all(values: &[f64]) -> Result<(), CommandError> {
+pub(crate) fn finite_all(values: &[f64]) -> Result<(), CommandError> {
     if values.iter().all(|v| v.is_finite()) { Ok(()) } else { Err(CommandError::invalid_params("coordinates must be finite numbers")) }
 }
 
@@ -1138,7 +1138,7 @@ fn swatches_use<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Comm
 
 const SCHEMA_NONE: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
 
-const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","line","rectangle","oval","pen","pencil","brush","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
+const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
 
 const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string"}},"additionalProperties":false}"#;
 const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, eraser_shape, eraser_faucet, bucket_gap, bucket_lock_fill, brush_mode, brush_shape, brush_smoothing, corner_radii, corner_lock, oval {start_angle, end_angle, inner_radius, close_path}, snap {objects, pixels, grid, guides, grid_size}, text, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
@@ -1168,6 +1168,12 @@ const SCHEMA_ERASE: &str = r#"{"type":"object","required":["points"],"properties
 /// The tool commands, ready for `CommandRegistry::register_all`.
 #[must_use]
 pub fn commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
+    let mut all = tool_commands::<D>();
+    all.extend(crate::mcp_armature::commands::<D>());
+    all
+}
+
+fn tool_commands<D: ToolHost>() -> Vec<CommandSpec<D>> {
     vec![
         CommandSpec::new("tools.list", "List Tools", tools_list::<D>)
             .transient()

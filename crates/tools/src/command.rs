@@ -4,7 +4,7 @@
 //! reference implementation used by the app, the CLI and the MCP server).
 
 use anim_core::{Affine, Point, Rect, Vec2};
-use anim_scene::Element;
+use anim_scene::{ArmatureKind, Element, Pose};
 use anim_shape::{EdgeShape, FillStyle, StrokeStyle};
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,20 @@ pub enum ToolCommand {
     ExitScope,
     /// Loads a fill and/or stroke into the toolbox (eyedropper).
     SetToolStyle { fill: Option<FillStyle>, stroke: Option<StrokeStyle> },
+    /// Adds a bone to the armature of `layer` (creating the armature of the given kind when there is none). `head`
+    /// and `tail` are stage pixels in the pose shown at `frame`; a child's head snaps to its parent's tip. The bone
+    /// moves `element` of the layer's first keyframe, when given.
+    AddBone { layer: usize, frame: u32, parent: Option<usize>, head: Point, tail: Point, element: Option<usize>, kind: ArmatureKind, name: Option<String> },
+    /// Sets the armature pose of the keyframe at `frame`, making `frame` a pose keyframe when it is not one yet.
+    SetPose { layer: usize, frame: u32, pose: Pose },
+    /// Limits how far a bone may rotate away from its rest angle (radians), or removes the limits.
+    SetBoneLimits { layer: usize, bone: usize, limits: Option<(f64, f64)> },
+    /// Renames a bone.
+    RenameBone { layer: usize, bone: usize, name: String },
+    /// Removes a bone and the bones below it.
+    RemoveBone { layer: usize, bone: usize },
+    /// Removes the armature of a layer; the layer shows its artwork at rest again.
+    RemoveArmature { layer: usize },
     /// Switches the active tool.
     ActivateTool { tool: ToolId },
     /// Pans the stage view by a screen-space delta (points).
@@ -99,6 +113,12 @@ impl ToolCommand {
                 | Self::DeleteElements { .. }
                 | Self::InsertText { .. }
                 | Self::DeleteText { .. }
+                | Self::AddBone { .. }
+                | Self::SetPose { .. }
+                | Self::SetBoneLimits { .. }
+                | Self::RenameBone { .. }
+                | Self::RemoveBone { .. }
+                | Self::RemoveArmature { .. }
         )
     }
 }
