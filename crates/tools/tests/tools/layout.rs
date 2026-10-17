@@ -13,42 +13,12 @@
 
 use crate::common;
 
-use anicraft_tools::{Editor, ToolId, mcp_commands};
+use anicraft_tools::ToolId;
 use anim_core::Rect;
-use anim_session::{CommandRegistry, McpServer, Session};
 use common::*;
-use serde_json::{Value, json};
-
-struct Client {
-    server: McpServer,
-    session: Session<Editor>,
-    next_id: u64,
-}
+use serde_json::json;
 
 impl Client {
-    fn new() -> Self {
-        let mut editor = editor();
-        editor.keep_history = false;
-        let mut registry = CommandRegistry::with_history_commands();
-        registry.register_all(mcp_commands::<Editor>()).unwrap();
-        Self { server: McpServer::new("layout-test", "0.1.0"), session: Session::new(editor, registry), next_id: 1 }
-    }
-
-    fn call(&mut self, name: &str, arguments: Value) -> (bool, Value) {
-        self.next_id += 1;
-        let message = json!({ "jsonrpc": "2.0", "id": self.next_id, "method": "tools/call", "params": { "name": name, "arguments": arguments } });
-        let reply = self.server.handle(&mut self.session, &message).expect("a response");
-        let result = &reply["result"];
-        let content = result.get("structuredContent").cloned().unwrap_or_else(|| result["content"][0]["text"].clone());
-        (result["isError"].as_bool().unwrap(), content)
-    }
-
-    fn ok(&mut self, name: &str, arguments: Value) -> Value {
-        let (is_error, content) = self.call(name, arguments);
-        assert!(!is_error, "{name} failed: {content}");
-        content
-    }
-
     fn bounds(&self) -> Vec<Rect> {
         let e = self.session.doc();
         (0..elements(e).len()).map(|i| e.with_context(|ctx| ctx.stage_bounds(&anicraft_tools::ElementRef::top_level(0, 0, i)).unwrap())).collect()

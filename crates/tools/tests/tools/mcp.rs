@@ -20,64 +20,11 @@
 
 use crate::common;
 
-use anicraft_tools::{Editor, mcp_commands};
-use anim_session::{CommandRegistry, McpServer, Session};
 use common::*;
 use proptest::prelude::*;
 use serde_json::{Value, json};
 
-fn session() -> (McpServer, Session<Editor>) {
-    let mut editor = editor();
-    editor.keep_history = false;
-    let mut registry = CommandRegistry::with_history_commands();
-    registry.register_all(mcp_commands::<Editor>()).unwrap();
-    (McpServer::new("anicraft-tools-test", "0.1.0"), Session::new(editor, registry))
-}
-
-struct Client {
-    server: McpServer,
-    session: Session<Editor>,
-    next_id: u64,
-}
-
 impl Client {
-    fn new() -> Self {
-        let (server, session) = session();
-        Self { server, session, next_id: 1 }
-    }
-
-    fn rpc(&mut self, method: &str, params: Value) -> Value {
-        self.next_id += 1;
-        let message = json!({ "jsonrpc": "2.0", "id": self.next_id, "method": method, "params": params });
-        self.server.handle(&mut self.session, &message).expect("a response")
-    }
-
-    /// Calls a tool and returns (is_error, structured content or text).
-    fn call(&mut self, name: &str, arguments: Value) -> (bool, Value) {
-        let reply = self.rpc("tools/call", json!({ "name": name, "arguments": arguments }));
-        let result = &reply["result"];
-        assert!(result.is_object(), "{reply}");
-        let is_error = result["isError"].as_bool().unwrap();
-        let content = result.get("structuredContent").cloned().unwrap_or_else(|| result["content"][0]["text"].clone());
-        (is_error, content)
-    }
-
-    fn ok(&mut self, name: &str, arguments: Value) -> Value {
-        let (is_error, content) = self.call(name, arguments);
-        assert!(!is_error, "{name} failed: {content}");
-        content
-    }
-
-    fn err(&mut self, name: &str, arguments: Value) -> String {
-        let (is_error, content) = self.call(name, arguments);
-        assert!(is_error, "{name} should fail but returned {content}");
-        content.as_str().unwrap_or_default().to_owned()
-    }
-
-    fn editor(&self) -> &Editor {
-        self.session.doc()
-    }
-
     fn stage(&mut self) -> Vec<Value> {
         self.ok("stage_elements", json!({}))["elements"].as_array().unwrap().clone()
     }
