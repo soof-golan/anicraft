@@ -73,6 +73,9 @@ pub enum ToolCommand {
     InsertText { target: ElementRef, offset: usize, text: String },
     /// Deletes the byte range `start..end` of the field's text.
     DeleteText { target: ElementRef, start: usize, end: usize },
+    /// Sets the width of a text field's box and whether the box grows with its text (dragging the box handle makes the
+    /// width fixed, double-clicking it makes the box auto-grow again).
+    SetTextBox { target: ElementRef, width: f64, auto_expand: bool },
     /// Moves the caret as the text layout sees fit.
     CaretMotion { motion: CaretMotion, extend: bool },
     /// A text field was entered for editing.
@@ -133,6 +136,7 @@ impl ToolCommand {
                 | Self::SetPrimitive { .. }
                 | Self::InsertText { .. }
                 | Self::DeleteText { .. }
+                | Self::SetTextBox { .. }
                 | Self::AddBone { .. }
                 | Self::SetPose { .. }
                 | Self::SetBoneLimits { .. }

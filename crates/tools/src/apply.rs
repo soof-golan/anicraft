@@ -321,6 +321,19 @@ fn run_position(runs: &[TextRun], offset: usize) -> Option<(usize, usize)> {
     runs.len().checked_sub(1).map(|i| (i, runs.get(i).map_or(0, |r| r.characters.len())))
 }
 
+/// Narrowest a text box may be dragged, in pixels.
+const MIN_TEXT_BOX_WIDTH: f64 = 1.0;
+
+fn set_text_box(doc: &mut Document, state: &EditorState, target: &ElementRef, width: f64, auto_expand: bool) -> Result<(), ApplyError> {
+    if !width.is_finite() {
+        return Err(ApplyError::BadMatrix);
+    }
+    let Element::Text(field) = element_mut(doc, &state.timeline, target)? else { return Err(ApplyError::WrongKind { expected: "text field" }) };
+    field.width = width.max(MIN_TEXT_BOX_WIDTH);
+    field.auto_expand = auto_expand;
+    Ok(())
+}
+
 fn insert_text(doc: &mut Document, state: &EditorState, target: &ElementRef, offset: usize, text: &str) -> Result<(), ApplyError> {
     let Element::Text(field) = element_mut(doc, &state.timeline, target)? else { return Err(ApplyError::WrongKind { expected: "text field" }) };
     if field.text_runs.is_empty() {
@@ -445,6 +458,7 @@ fn apply_one(doc: &mut Document, state: &mut EditorState, command: &ToolCommand)
         }
         ToolCommand::InsertText { target, offset, text } => insert_text(doc, state, target, *offset, text)?,
         ToolCommand::DeleteText { target, start, end } => delete_text(doc, state, target, *start, *end)?,
+        ToolCommand::SetTextBox { target, width, auto_expand } => set_text_box(doc, state, target, *width, *auto_expand)?,
         ToolCommand::CaretMotion { .. } => {}
         ToolCommand::BeginTextEdit { target } => state.text_editing = Some(target.clone()),
         ToolCommand::EndTextEdit => state.text_editing = None,

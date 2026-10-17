@@ -196,7 +196,9 @@ impl ToolId {
             Self::InkBottle => "Click a stroke to restyle it, or a filled region to outline it, with the current stroke.",
             Self::Eraser => "Drag to erase strokes and fills under the brush; the eraser mode limits what is removed.",
             Self::Eyedropper => "Click a fill or stroke to load its style into the toolbox and switch to the bucket or ink bottle.",
-            Self::Text => "Click to place a text field and type; click a field to edit it. Right-to-left text works.",
+            Self::Text => {
+                "Click to place a text field and type, or drag for a box of fixed width; click a field to edit it; drag the handle at its top right corner to set the width, double-click the handle to let the box grow with its text again. Right-to-left text works."
+            }
             Self::Hand => "Drag to pan the stage.",
             Self::Zoom => "Click to zoom in (alt zooms out); drag a rectangle to zoom to it.",
             Self::Lasso => {

@@ -72,6 +72,42 @@ fn dragging_makes_a_fixed_width_field() {
     assert!((t.width - 120.0).abs() < 1.0e-9);
 }
 
+fn box_handle(e: &anicraft_tools::Editor) -> Option<(anim_core::Point, anicraft_tools::Marker)> {
+    e.overlay().iter().find_map(|o| match o {
+        Overlay::Marker { pos, marker, role: anicraft_tools::Role::Handle, .. } => Some((*pos, *marker)),
+        _ => None,
+    })
+}
+
+#[test]
+fn dragging_the_box_handle_fixes_the_width_and_double_clicking_it_frees_it() {
+    use anicraft_tools::{Marker, PointerEvent};
+    let mut e = editor();
+    new_field(&mut e, (100.0, 50.0));
+    type_text(&mut e, "Hello wide world");
+    let (handle, marker) = box_handle(&e).expect("a handle on the field being edited");
+    assert_eq!(marker, Marker::Circle, "a circle while the box grows with its text");
+
+    // Dragging the handle makes the box a fixed width, to where the pointer was released.
+    let target = anim_core::Point::new(handle.x + 40.0, handle.y);
+    let commands = send_all(&mut e, vec![down(handle.x, handle.y), mv(handle.x + 20.0, handle.y), up(target.x, target.y)]);
+    assert!(matches!(commands.as_slice(), [ToolCommand::SetTextBox { auto_expand: false, .. }]));
+    let Element::Text(t) = elements(&e)[0] else { panic!("text") };
+    assert!(!t.auto_expand);
+    assert!((t.width - (target.x - 100.0)).abs() < 1.0e-6, "the width runs from the field's left edge to the pointer: {}", t.width);
+    assert_eq!(e.state.text_editing, Some(ElementRef::top_level(0, 0, 0)), "still editing the field");
+    assert_eq!(text_of(&e, 0), "Hello wide world");
+
+    // A square marks a fixed width; double-clicking the handle lets the box grow with its text again.
+    let (handle, marker) = box_handle(&e).expect("handle");
+    assert_eq!(marker, Marker::Square);
+    send_all(&mut e, vec![PointerEvent::down(handle.x, handle.y).with_click_count(2).into(), up(handle.x, handle.y)]);
+    let Element::Text(t) = elements(&e)[0] else { panic!("text") };
+    assert!(t.auto_expand);
+    assert_eq!(box_handle(&e).map(|(_, m)| m), Some(Marker::Circle));
+    assert!(e.undo(), "the width change is an undo step");
+}
+
 #[test]
 fn the_text_type_option_decides_what_kind_of_field_is_created() {
     for kind in [TextKind::Static, TextKind::Dynamic, TextKind::Input] {

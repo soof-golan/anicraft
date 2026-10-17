@@ -13,12 +13,14 @@ use crate::command::{CaretMotion, ToolCommand};
 use crate::context::ToolContext;
 use crate::event::{Key, Modifiers, PointerEvent, PointerKind, ToolEvent};
 use crate::hit::pick;
-use crate::overlay::{Cursor, Overlay, Role};
+use crate::overlay::{Cursor, Marker, Overlay, Role};
 use crate::selection::{ElementRef, Selection};
 use crate::tool::{Tool, ToolId, ToolOutput};
 
 /// Placeholder width of a new auto-expanding field, in pixels.
 const NEW_FIELD_WIDTH: f64 = 8.0;
+/// Pick radius of the width handle in screen points.
+const HANDLE_RADIUS: f64 = 7.0;
 
 #[derive(Debug, Clone)]
 struct Editing {
@@ -39,6 +41,12 @@ enum State {
         current: Point,
     },
     Editing(Editing),
+    /// Dragging the width handle of the field being edited.
+    ResizingBox {
+        edit: Editing,
+        start: Point,
+        current: Point,
+    },
 }
 
 /// Creates and edits text fields.
@@ -101,7 +109,7 @@ impl TextTool {
 
     /// Commands that end editing, removing the field if it is empty.
     fn finish(&mut self) -> Vec<ToolCommand> {
-        let State::Editing(edit) = std::mem::take(&mut self.state) else { return Vec::new() };
+        let (State::Editing(edit) | State::ResizingBox { edit, .. }) = std::mem::take(&mut self.state) else { return Vec::new() };
         let mut commands = vec![ToolCommand::EndTextEdit];
         if edit.text.is_empty() {
             commands.push(ToolCommand::DeleteElements { targets: vec![edit.target] });
@@ -124,8 +132,49 @@ impl TextTool {
         Some((Element::Text(Box::new(field)), ElementRef::top_level(ctx.layer, keyframe, count)))
     }
 
+    /// The stage position of the width handle of the field being edited: the top right corner of its box.
+    fn handle_of(ctx: &ToolContext<'_>, edit: &Editing) -> Option<Point> {
+        let bounds = ctx.stage_bounds(&edit.target)?;
+        Some(Point::new(bounds.x1, bounds.y0))
+    }
+
+    /// The width of the box the pointer drags to, in the field's own units, and whether the pointer is far enough from
+    /// where the drag began to count as a drag.
+    fn dragged_width(ctx: &ToolContext<'_>, edit: &Editing, start: Point, to: Point) -> Option<f64> {
+        if start.distance(to) < ctx.drag_threshold() {
+            return None;
+        }
+        let to_stage = ctx.resolve(&edit.target)?.local_to_stage();
+        let det = to_stage.determinant();
+        if !det.is_finite() || det.abs() < 1.0e-12 {
+            return None;
+        }
+        Some((to_stage.inverse() * to).x)
+    }
+
+    /// A press on the width handle of the field being edited: a double-click makes the box grow with its text again,
+    /// anything else starts dragging the width.
+    fn press_handle(&mut self, p: &PointerEvent, ctx: &ToolContext<'_>) -> Option<ToolOutput> {
+        let State::Editing(edit) = &self.state else { return None };
+        let handle = Self::handle_of(ctx, edit)?;
+        if handle.distance(p.pos) > HANDLE_RADIUS / ctx.zoom.max(1.0e-6) {
+            return None;
+        }
+        let Element::Text(field) = ctx.resolve(&edit.target)?.element else { return None };
+        if p.click_count >= 2 {
+            let command = ToolCommand::SetTextBox { target: edit.target.clone(), width: field.width, auto_expand: true };
+            return Some(ToolOutput::with(Cursor::Text, vec![command]));
+        }
+        let edit = edit.clone();
+        self.state = State::ResizingBox { edit, start: p.pos, current: p.pos };
+        Some(ToolOutput::cursor(Cursor::Text))
+    }
+
     fn down(&mut self, p: &PointerEvent, ctx: &ToolContext<'_>) -> ToolOutput {
         self.refresh(ctx);
+        if let Some(out) = self.press_handle(p, ctx) {
+            return out;
+        }
         if let Some(hit) = pick(ctx, p.pos)
             && let Some(resolved) = ctx.resolve(&hit.element)
             && matches!(resolved.element, Element::Text(_))
@@ -146,6 +195,14 @@ impl TextTool {
     }
 
     fn up(&mut self, p: &PointerEvent, ctx: &ToolContext<'_>) -> ToolOutput {
+        if let State::ResizingBox { edit, start, .. } = &self.state {
+            let (edit, start) = (edit.clone(), *start);
+            let width = Self::dragged_width(ctx, &edit, start, p.pos);
+            let target = edit.target.clone();
+            self.state = State::Editing(edit);
+            let commands = width.map(|width| ToolCommand::SetTextBox { target, width, auto_expand: false }).into_iter().collect();
+            return ToolOutput::with(Cursor::Text, commands);
+        }
         let State::Placing { start, .. } = self.state else { return ToolOutput::cursor(Cursor::Text) };
         self.state = State::Idle;
         if !ctx.layer_editable(ctx.layer) {
@@ -236,7 +293,7 @@ impl Tool for TextTool {
             ToolEvent::Pointer(p) => match p.kind {
                 PointerKind::Down => self.down(p, ctx),
                 PointerKind::Move => {
-                    if let State::Placing { current, .. } = &mut self.state {
+                    if let State::Placing { current, .. } | State::ResizingBox { current, .. } = &mut self.state {
                         *current = p.pos;
                     }
                     ToolOutput::cursor(Cursor::Text)
@@ -272,10 +329,18 @@ impl Tool for TextTool {
                     role: Role::Preview,
                 }]
             }
-            State::Editing(e) => {
+            State::Editing(e) | State::ResizingBox { edit: e, .. } => {
                 let mut out = Vec::new();
                 if let Some(bounds) = ctx.stage_bounds(&e.target) {
                     out.push(Overlay::Rect { rect: bounds, role: Role::Selection });
+                    if let State::ResizingBox { current, .. } = &self.state {
+                        let right = current.x.max(bounds.x0 + 1.0);
+                        out.push(Overlay::Rect { rect: anim_core::Rect::new(bounds.x0, bounds.y0, right, bounds.y1), role: Role::Preview });
+                    } else if let Some(Element::Text(field)) = ctx.resolve(&e.target).map(|r| r.element) {
+                        // A circle while the box grows with its text, a square once its width is fixed.
+                        let marker = if field.auto_expand { Marker::Circle } else { Marker::Square };
+                        out.push(Overlay::Marker { pos: Point::new(bounds.x1, bounds.y0), marker, role: Role::Handle, filled: false });
+                    }
                 }
                 out.push(Overlay::TextCursor { target: e.target.clone(), offset: e.caret, anchor: e.anchor });
                 out

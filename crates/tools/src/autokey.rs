@@ -28,6 +28,7 @@ fn refs_of<'a>(state: &'a EditorState, command: &'a ToolCommand) -> Vec<&'a Elem
         | ToolCommand::ReplaceShape { target, .. }
         | ToolCommand::SetPrimitive { target, .. }
         | ToolCommand::InsertText { target, .. }
+        | ToolCommand::SetTextBox { target, .. }
         | ToolCommand::DeleteText { target, .. } => vec![target],
         ToolCommand::DeleteElements { targets } => targets.iter().collect(),
         _ => Vec::new(),
@@ -82,6 +83,7 @@ pub fn prepare(doc: &mut Document, state: &mut EditorState, command: &ToolComman
         | ToolCommand::ReplaceShape { target, .. }
         | ToolCommand::SetPrimitive { target, .. }
         | ToolCommand::InsertText { target, .. }
+        | ToolCommand::SetTextBox { target, .. }
         | ToolCommand::DeleteText { target, .. } => point_at_new(target),
         ToolCommand::DeleteElements { targets } => targets.iter_mut().for_each(point_at_new),
         _ => {}
