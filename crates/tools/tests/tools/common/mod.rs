@@ -1,7 +1,17 @@
 //! Shared helpers for the tool tests: documents to draw on and short ways to drive an editor.
 
 #![allow(dead_code)]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic, clippy::arithmetic_side_effects, reason = "test code")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::arithmetic_side_effects,
+    clippy::needless_pass_by_value,
+    clippy::doc_markdown,
+    clippy::missing_const_for_fn,
+    reason = "test code"
+)]
 
 use anicraft_tools::{Editor, PointerEvent, ToolCommand, ToolEvent, ToolId, mcp_commands};
 use anim_core::{Affine, BezPath, Point, Rgba8};
