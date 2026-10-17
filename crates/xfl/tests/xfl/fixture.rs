@@ -11,7 +11,7 @@
     reason = "test code"
 )]
 
-use crate::common::{DOM, entries, sound_dat};
+use crate::common::{DOM, bitmap_dat, entries, sound_dat};
 
 use std::path::Path;
 
