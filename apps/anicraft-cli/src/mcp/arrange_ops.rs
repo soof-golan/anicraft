@@ -118,7 +118,7 @@ pub fn all() -> Vec<CommandSpec<AniDoc>> {
             .in_menu(&["Modify"])
             .with_shortcut("Cmd+B")
             .enabled_when(has_selection)
-            .describe("Breaks the selected objects apart: groups into their members, symbol instances into the content of their first frame, text into shapes (the glyph outlines), bitmaps into shapes filled with the bitmap and drawing objects into merge-mode shapes that merge with the others of the keyframe.")
+            .describe("Breaks the selected objects apart: groups into their members, symbol instances into the content of their first frame, text fields of several left-to-right letters into one field per letter (the next press turns each letter, like any single letter or right-to-left text, into shapes: the glyph outlines), bitmaps into shapes filled with the bitmap and drawing objects into merge-mode shapes that merge with the others of the keyframe.")
             .with_schema(NO_PARAMS),
         CommandSpec::new("modify.distribute_to_layers", "Distribute to Layers", distribute_to_layers)
             .in_menu(&["Modify", "Timeline"])
@@ -226,16 +226,10 @@ fn bitmap_shape(library: &Library, instance: &anim_scene::BitmapInstance) -> Opt
 
 /// The glyph outlines of a text field as a merge-mode shape.
 fn text_shape(engine: &mut anim_text::TextEngine, text: &anim_scene::TextElement) -> Option<ShapeElement> {
-    let rich = anim_timeline::rich_text(engine, text);
-    if rich.is_empty() {
-        return None;
-    }
-    let max_width = (!text.auto_expand && text.width.is_finite() && text.width > 0.0).then_some(text.width);
-    let layout = engine.layout(&rich, max_width);
+    let layout = super::letters::laid_out(engine, text)?;
     let nodes = engine.to_display(&layout);
-    let left = text.extra.attr("left").and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(0.0);
     let mut inputs = Vec::new();
-    collect_fills(&nodes, Affine::translate((left, 0.0)), &mut inputs, 0);
+    collect_fills(&nodes, Affine::translate((super::letters::left_of(text), 0.0)), &mut inputs, 0);
     if inputs.is_empty() {
         return None;
     }
@@ -295,14 +289,20 @@ fn expand(doc: &mut AniDoc, everything: bool) -> Out {
             }
             Element::Text(text) if everything => {
                 let engine = engine.get_or_insert_with(anim_text::TextEngine::new);
-                text_shape(engine, &text).map_or_else(
-                    || vec![Element::Text(text)],
-                    |shape| {
-                        touched = touched.saturating_add(1);
-                        loose_shapes.push(shape);
-                        Vec::new()
-                    },
-                )
+                // A field of several letters first becomes one field per letter; a letter becomes a shape.
+                if let Some(letters) = super::letters::split(engine, &text, MAX_MEMBERS) {
+                    touched = touched.saturating_add(1);
+                    letters.into_iter().map(|t| Element::Text(Box::new(t))).collect()
+                } else {
+                    text_shape(engine, &text).map_or_else(
+                        || vec![Element::Text(text)],
+                        |shape| {
+                            touched = touched.saturating_add(1);
+                            loose_shapes.push(shape);
+                            Vec::new()
+                        },
+                    )
+                }
             }
             Element::Bitmap(bitmap) if everything => bitmap_shape(&library, &bitmap).map_or_else(
                 || vec![Element::Bitmap(bitmap)],

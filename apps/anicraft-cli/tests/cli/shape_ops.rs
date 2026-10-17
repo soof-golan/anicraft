@@ -149,6 +149,40 @@ fn breaking_apart_text_and_bitmaps_gives_shapes() {
 }
 
 #[test]
+fn breaking_apart_text_gives_a_field_per_letter_then_shapes() {
+    if anim_text::TextEngine::new().families().is_empty() {
+        return;
+    }
+    let mut s = session();
+    s.execute("draw.text", &json!({ "x": 40, "y": 60, "text": "Hi!", "size": 48 })).unwrap();
+    save(&s, "shape-ops-text.fla");
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("modify.break_apart", &json!({})).unwrap();
+    let letters = objects(s.doc());
+    let texts: Vec<_> = letters.iter().filter_map(|e| if let Element::Text(t) = e { Some(t) } else { None }).collect();
+    assert_eq!(texts.len(), 3, "one field per letter: {letters:?}");
+    let plain: Vec<String> = texts.iter().map(|t| t.plain_text()).collect();
+    assert_eq!(plain, ["H", "i", "!"]);
+    let xs: Vec<f64> = texts.iter().map(|t| t.matrix.as_coeffs()[4]).collect();
+    assert!(xs[0] >= 40.0 && xs[0] < xs[1] && xs[1] < xs[2], "letters keep their order and spacing: {xs:?}");
+    // The letters are saved as fields, and the next Break Apart turns them into outlines.
+    let back = round_trip(&s);
+    assert_eq!(objects(&back).iter().filter(|e| matches!(e, Element::Text(_))).count(), 3);
+    save(&s, "shape-ops-letters.fla");
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("modify.break_apart", &json!({})).unwrap();
+    let shapes = objects(s.doc());
+    assert_eq!(shapes.len(), 1, "the outlines merge into one shape: {shapes:?}");
+    assert!(matches!(&shapes[0], Element::Shape(sh) if !sh.is_drawing_object && fill_area(&sh.shape) > 100.0));
+    // A single letter goes straight to an outline.
+    let mut single = session();
+    single.execute("draw.text", &json!({ "x": 40, "y": 60, "text": "W", "size": 48 })).unwrap();
+    single.execute("select.all", &json!({})).unwrap();
+    single.execute("modify.break_apart", &json!({})).unwrap();
+    assert!(matches!(&objects(single.doc())[0], Element::Shape(_)));
+}
+
+#[test]
 fn distributing_and_pasting_edit_the_timeline() {
     let mut s = session();
     for i in 0..3 {

@@ -17,6 +17,7 @@ pub mod doc;
 pub mod docfile;
 pub mod editing;
 pub mod find;
+mod letters;
 pub mod motion;
 mod script;
 pub mod shape_ops;
