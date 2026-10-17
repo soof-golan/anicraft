@@ -11,7 +11,7 @@
     reason = "test code"
 )]
 
-use std::io::Write;
+use crate::common::{DOM, entries};
 
 use anicraft_xfl::diff::{DiffOptions, compare_archives, compare_xml};
 use anicraft_xfl::{
@@ -24,49 +24,12 @@ use anim_scene::{
     BitmapCompression, BitmapItem, ColorEffect, Document, Element, Frame, InstanceFilter, LibraryItem, MediaStore, SoundItem, SymbolInstance, SymbolKind,
     TextElement, TextKind, TextRun,
 };
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
 use proptest::prelude::*;
-
-const DOM: &str = include_str!("../fixtures/basic/DOMDocument.xml");
-const BALL: &str = include_str!("../fixtures/basic/LIBRARY/Ball.xml");
-const WEIRD: &str = include_str!("../fixtures/basic/LIBRARY/shapes/&#060Weird&#062.xml");
-const PUBLISH: &str = include_str!("../fixtures/basic/PublishSettings.xml");
-const METADATA: &str = include_str!("../fixtures/basic/META-INF/metadata.xml");
-const MARKER: &str = include_str!("../fixtures/basic/basic.xfl");
-
-fn bitmap_dat() -> Vec<u8> {
-    let argb: [u8; 32] = [255, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 128, 100, 100, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    let mut out = vec![0x03, 0x05];
-    out.extend_from_slice(&16u16.to_le_bytes());
-    out.extend_from_slice(&4u16.to_le_bytes());
-    out.extend_from_slice(&2u16.to_le_bytes());
-    for v in [0u32, 80, 0, 40] {
-        out.extend_from_slice(&v.to_le_bytes());
-    }
-    out.extend_from_slice(&[0, 1]);
-    let mut z = ZlibEncoder::new(Vec::new(), Compression::default());
-    z.write_all(&argb).unwrap();
-    let packed = z.finish().unwrap();
-    out.extend_from_slice(&u16::try_from(packed.len()).unwrap().to_le_bytes());
-    out.extend_from_slice(&packed);
-    out.extend_from_slice(&[0, 0]);
-    out
-}
 
 fn fixture_zip(dom: &str) -> Vec<u8> {
     let mut writer = ZipWriter::in_memory();
-    for (name, data) in [
-        ("DOMDocument.xml", dom.as_bytes().to_vec()),
-        ("LIBRARY/Ball.xml", BALL.as_bytes().to_vec()),
-        ("LIBRARY/shapes/&#060Weird&#062.xml", WEIRD.as_bytes().to_vec()),
-        ("PublishSettings.xml", PUBLISH.as_bytes().to_vec()),
-        ("META-INF/metadata.xml", METADATA.as_bytes().to_vec()),
-        ("basic.xfl", MARKER.as_bytes().to_vec()),
-        ("bin/M 1 1700000001.dat", bitmap_dat()),
-        ("bin/M 2 1700000002.dat", vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9]),
-        ("LIBRARY/click.wav", vec![7; 100]),
-    ] {
+    let click = ("LIBRARY/click.wav", vec![7; 100]);
+    for (name, data) in entries(dom).into_iter().chain([click]) {
         writer.add_file(name, &data).unwrap();
     }
     writer.finish().unwrap()
