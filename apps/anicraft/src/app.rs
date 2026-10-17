@@ -267,6 +267,16 @@ impl AniApp {
                     anicraft_tools::Selection::one(anicraft_tools::ElementRef::top_level(*layer, u32::try_from(*keyframe).unwrap_or(0), *index));
             }
         }
+        // `--show click-selection` presses and releases the active tool on the middle of the selection, the way a
+        // click would, so the tool's own overlay (a text field's handle, a subselection's points) is on the stage.
+        if plan.show.as_deref().is_some_and(|s| s.split(',').any(|w| w.trim() == "click-selection")) {
+            #[expect(clippy::redundant_closure_for_method_calls, reason = "the method path is not general enough over the lifetime of the context")]
+            let middle = self.host.session().doc().editor.with_context(|ctx| ctx.selection_bounds()).map(|b| b.center());
+            if let Some(at) = middle {
+                self.tool_event(&anicraft_tools::ToolEvent::Pointer(anicraft_tools::PointerEvent::down(at.x, at.y)));
+                self.tool_event(&anicraft_tools::ToolEvent::Pointer(anicraft_tools::PointerEvent::up(at.x, at.y)));
+            }
+        }
     }
 
     /// Opens the dialogs and panels `--show` names, so a screenshot can capture them.

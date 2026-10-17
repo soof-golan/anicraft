@@ -49,7 +49,8 @@ struct Args {
     /// history, output, errors, actions, testmovie, tabs, properties, save-changes, revert, motion, motion-curve,
     /// optimize-dialog, expand-dialog, soften-dialog, scale-dialog, trace-dialog, paste-dialog, and for the layout
     /// tools: layout (three objects, guides and grid), align, hide-transform, grid-dialog, guides-dialog,
-    /// snap-dialog, context-menu, no-pasteboard, show-all.
+    /// snap-dialog, context-menu, no-pasteboard, show-all. `click-selection` clicks the active tool on the middle of
+    /// the selection, to show the tool's own overlay.
     #[arg(long, value_name = "LIST")]
     show: Option<String>,
 
