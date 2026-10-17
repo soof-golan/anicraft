@@ -46,7 +46,8 @@ struct Args {
     #[arg(long)]
     library_play: bool,
     /// With --screenshot: open dialogs and panels first (comma separated): new-document, templates, settings, find,
-    /// history, output, errors, actions, testmovie, tabs, properties, save-changes, revert, motion, motion-curve.
+    /// history, output, errors, actions, testmovie, tabs, properties, save-changes, revert, motion, motion-curve,
+    /// optimize-dialog, expand-dialog, soften-dialog, scale-dialog, trace-dialog, paste-dialog.
     #[arg(long, value_name = "LIST")]
     show: Option<String>,
 

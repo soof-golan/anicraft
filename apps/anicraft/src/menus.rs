@@ -404,14 +404,16 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             push(item(ui, "Group", "Ctrl+G", view.has_selection), command("modify.group"));
             push(item(ui, "Ungroup", "Ctrl+Shift+G", view.has_selection), command("modify.ungroup"));
             ui.separator();
+            // Arrange stays open without a selection: Unlock All is how a locked object is reached again.
+            ui.menu_button("Arrange", |ui| {
+                for (label, mode) in [("Bring to Front", "front"), ("Bring Forward", "forward"), ("Send Backward", "backward"), ("Send to Back", "back")] {
+                    push(item(ui, label, "", view.has_selection), MenuAction::Command { id: "modify.arrange", params: json!({ "mode": mode }) });
+                }
+                ui.separator();
+                push(item(ui, "Lock", "Ctrl+Alt+L", view.has_selection), command("modify.lock"));
+                push(item(ui, "Unlock All", "Ctrl+Alt+Shift+L", true), command("modify.unlock_all"));
+            });
             ui.add_enabled_ui(view.has_selection, |ui| {
-                ui.menu_button("Arrange", |ui| {
-                    for (label, mode) in [("Bring to Front", "front"), ("Bring Forward", "forward"), ("Send Backward", "backward"), ("Send to Back", "back")] {
-                        push(item(ui, label, "", true), MenuAction::Command { id: "modify.arrange", params: json!({ "mode": mode }) });
-                    }
-                    ui.separator();
-                    push(item(ui, "Lock", "Ctrl+Alt+L", true), command("modify.lock"));
-                });
                 ui.menu_button("Transform", |ui| {
                     push(item(ui, "Scale and Rotate...", "Ctrl+Alt+S", true), MenuAction::Dialog(Dialog::Shape(ShapeDialog::scale_rotate())));
                     ui.separator();
@@ -442,7 +444,6 @@ pub fn menu_bar(ui: &mut Ui, view: &MenuView) -> Vec<MenuAction> {
             for action in crate::layout_ui::align_items(ui, &view.layout, view.align_to_stage) {
                 push(true, action);
             }
-            push(item(ui, "Unlock All", "Ctrl+Alt+Shift+L", true), command("modify.unlock_all"));
             ui.separator();
             ui.menu_button("Shape", |ui| {
                 ui.add_enabled_ui(view.has_selection, |ui| {
