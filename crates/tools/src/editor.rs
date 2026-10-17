@@ -10,7 +10,9 @@ use crate::command::ToolCommand;
 use crate::context::{LibraryBounds, ToolContext};
 use crate::event::ToolEvent;
 use crate::overlay::{Cursor, Overlay};
+use crate::selection::ElementRef;
 use crate::state::EditorState;
+use crate::textfit::TextMeter;
 use crate::tool::{ToolId, ToolSet};
 
 /// Undo steps kept.
@@ -35,6 +37,8 @@ pub struct Editor {
     /// Whether the editor keeps its own undo stack. Turn it off when something else snapshots the editor (the
     /// session framework does), so that snapshots do not carry the whole history.
     pub keep_history: bool,
+    /// Lays text out to size the boxes of the text fields that are typed into.
+    meter: TextMeter,
     undo: Vec<Document>,
     redo: Vec<Document>,
 }
@@ -45,7 +49,7 @@ impl Editor {
         let mut state = EditorState::new();
         // Open on the scene the document was saved on.
         state.timeline = anim_scene::TimelineId::Scene(document.current_timeline.min(document.scenes.len().saturating_sub(1)));
-        Self { document, state, tools: ToolSet::default(), keep_history: true, undo: Vec::new(), redo: Vec::new() }
+        Self { document, state, tools: ToolSet::default(), keep_history: true, meter: TextMeter::default(), undo: Vec::new(), redo: Vec::new() }
     }
 
     /// Makes `tool` the active tool.
@@ -93,6 +97,7 @@ impl Editor {
                 return Err(e);
             }
         }
+        self.fit_text_boxes(commands);
         if let Some((document, _)) = snapshot
             && self.keep_history
         {
@@ -103,6 +108,32 @@ impl Editor {
             self.redo.clear();
         }
         Ok(())
+    }
+
+    /// Sizes the boxes of the text fields `commands` typed into, created or resized to what they hold.
+    fn fit_text_boxes(&mut self, commands: &[ToolCommand]) {
+        let mut fields: Vec<ElementRef> = Vec::new();
+        for command in commands {
+            match command {
+                ToolCommand::InsertText { target, .. } | ToolCommand::DeleteText { target, .. } | ToolCommand::SetTextBox { target, .. } => {
+                    if !fields.contains(target) {
+                        fields.push(target.clone());
+                    }
+                }
+                // A new field is the selection once it has been added.
+                ToolCommand::AddElement { element: anim_scene::Element::Text(_), .. } => {
+                    for item in &self.state.selection.items {
+                        if !fields.contains(item) {
+                            fields.push(item.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        for target in &fields {
+            self.meter.fit(&mut self.document, &self.state, target);
+        }
     }
 
     /// Feeds one event to the active tool and applies the commands it returns. When a command fails, the commands

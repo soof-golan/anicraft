@@ -72,6 +72,47 @@ fn dragging_makes_a_fixed_width_field() {
     assert!((t.width - 120.0).abs() < 1.0e-9);
 }
 
+fn box_of(e: &anicraft_tools::Editor, index: usize) -> (f64, f64) {
+    let Element::Text(t) = elements(e)[index] else { panic!("text") };
+    (t.width, t.height)
+}
+
+#[test]
+fn the_box_of_a_field_follows_the_text_typed_into_it() {
+    let mut e = editor();
+    new_field(&mut e, (50.0, 50.0));
+    let (empty_width, empty_height) = box_of(&e, 0);
+    type_text(&mut e, "Hello");
+    let (short_width, _) = box_of(&e, 0);
+    if short_width <= empty_width {
+        // No font is installed on this machine, so nothing can be measured.
+        return;
+    }
+    type_text(&mut e, ", and a good deal more text on one line");
+    let (long_width, one_line) = box_of(&e, 0);
+    assert!(long_width > short_width, "an auto-growing box widens with its text: {short_width} then {long_width}");
+    assert!(one_line >= empty_height - 1.0e-9 && one_line < empty_height * 2.0, "one line stays one line tall: {one_line}");
+    key(&mut e, Key::Enter);
+    type_text(&mut e, "second line");
+    let (width, two_lines) = box_of(&e, 0);
+    assert!((width - long_width).abs() < 1.0e-6, "the widest line decides the width");
+    assert!(two_lines > one_line * 1.5, "a second line makes the box taller: {one_line} then {two_lines}");
+    for _ in 0.."second line".len() {
+        key(&mut e, Key::Backspace);
+    }
+    key(&mut e, Key::Backspace);
+    assert!((box_of(&e, 0).1 - one_line).abs() < 1.0e-6, "deleting the line makes the box shorter again");
+
+    // A box of fixed width keeps its width and grows downwards as text wraps.
+    let mut e = editor();
+    e.select_tool(ToolId::Text);
+    send_all(&mut e, vec![down(300.0, 50.0), mv(350.0, 60.0), up(360.0, 70.0)]);
+    type_text(&mut e, "This sentence is much too long for a box of sixty pixels");
+    let (width, height) = box_of(&e, 0);
+    assert!((width - 60.0).abs() < 1.0e-9, "the fixed width stays: {width}");
+    assert!(height > empty_height * 2.0, "the lines wrap inside the box and make it tall: {height}");
+}
+
 fn box_handle(e: &anicraft_tools::Editor) -> Option<(anim_core::Point, anicraft_tools::Marker)> {
     e.overlay().iter().find_map(|o| match o {
         Overlay::Marker { pos, marker, role: anicraft_tools::Role::Handle, .. } => Some((*pos, *marker)),

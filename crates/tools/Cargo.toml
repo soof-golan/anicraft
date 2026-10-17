@@ -19,6 +19,8 @@ anim-timeline = { workspace = true }
 # The command registry the MCP tools are registered in (see `mcp`).
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
+# Laying text out to size the box of a text field (see `textfit`).
+anim-text = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 roxmltree = { workspace = true }
@@ -31,6 +33,5 @@ vectorcraft-pathops = { workspace = true }
 [dev-dependencies]
 # The demo example renders tool results to a PNG.
 anim-render = { workspace = true }
-anim-text = { workspace = true }
 anim-testkit = { workspace = true }
 proptest = { workspace = true }

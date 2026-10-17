@@ -56,7 +56,7 @@ fn container_mut<'a>(doc: &'a mut Document, timeline: &TimelineId, r: &ElementRe
     Ok(elements)
 }
 
-fn element_mut<'a>(doc: &'a mut Document, timeline: &TimelineId, r: &ElementRef) -> Result<&'a mut Element, ApplyError> {
+pub(crate) fn element_mut<'a>(doc: &'a mut Document, timeline: &TimelineId, r: &ElementRef) -> Result<&'a mut Element, ApplyError> {
     let (last, parents) = r.path.split_last().ok_or_else(|| no_element(r))?;
     container_mut(doc, timeline, r, parents)?.get_mut(*last).ok_or_else(|| no_element(r))
 }

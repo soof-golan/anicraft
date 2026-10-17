@@ -61,6 +61,7 @@ pub mod shapeops;
 pub mod snap;
 pub mod state;
 pub mod swatches;
+pub mod textfit;
 pub mod tool;
 pub mod tools;
 pub mod widthline;
