@@ -21,7 +21,9 @@ pub enum ToolId {
     Subselection,
     FreeTransform,
     GradientTransform,
+    #[serde(rename = "rotation_3d")]
     Rotation3D,
+    #[serde(rename = "translation_3d")]
     Translation3D,
     Line,
     Rectangle,
@@ -41,6 +43,7 @@ pub enum ToolId {
     AddAnchor,
     DeleteAnchor,
     ConvertAnchor,
+    #[serde(rename = "polystar")]
     PolyStar,
     RectanglePrimitive,
     OvalPrimitive,

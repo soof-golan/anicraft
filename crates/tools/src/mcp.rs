@@ -52,7 +52,7 @@ use crate::script::{ScriptReport, ToolScript, catalog, run_script};
 use crate::selection::{ElementRef, Selection};
 use crate::settings::{EraserMode, GapSize, ToolSettings};
 use crate::tool::ToolId;
-use anim_scene::{Element, TimelineId};
+use anim_scene::{Element, TextKind, TimelineId};
 
 /// Gives the command bodies their editor.
 pub trait ToolHost {
@@ -617,6 +617,18 @@ struct TextParams {
     color: Option<String>,
     bold: Option<bool>,
     italic: Option<bool>,
+    /// `static`, `dynamic` or `input`; static when absent.
+    kind: Option<String>,
+}
+
+/// The text field kind named by an MCP caller, in any letter case.
+fn parse_text_kind(name: &str) -> Result<TextKind, CommandError> {
+    match name.to_ascii_lowercase().as_str() {
+        "static" => Ok(TextKind::Static),
+        "dynamic" => Ok(TextKind::Dynamic),
+        "input" => Ok(TextKind::Input),
+        other => Err(CommandError::invalid_params(format!("unknown text kind {other:?}: use static, dynamic or input"))),
+    }
 }
 
 fn draw_text<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, CommandError> {
@@ -625,6 +637,7 @@ fn draw_text<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Command
     if p.text.is_empty() {
         return Err(CommandError::invalid_params("text must not be empty"));
     }
+    let kind = p.kind.as_deref().map(parse_text_kind).transpose()?;
     let color = p.color.as_deref().map(parse_color).transpose()?;
     atomic(host.editor_mut(), |ed| {
         let saved = ed.state.settings.clone();
@@ -644,6 +657,9 @@ fn draw_text<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Command
             }
             if let Some(i) = p.italic {
                 s.italic = i;
+            }
+            if let Some(k) = kind {
+                s.kind = k;
             }
         }
         let mut events = vec![down(p.x, p.y)];
@@ -1191,10 +1207,10 @@ fn swatches_use<D: ToolHost>(host: &mut D, params: &Value) -> Result<Value, Comm
 
 const SCHEMA_NONE: &str = r#"{"type":"object","properties":{},"additionalProperties":false}"#;
 
-const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","rotation_3d","translation_3d","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
+const SCHEMA_TOOLS_USE: &str = r##"{"type":"object","required":["events"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","rotation_3d","translation_3d","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom","lasso","add_anchor","delete_anchor","convert_anchor","polystar","rectangle_primitive","oval_primitive","width","paint_brush"]},"events":{"type":"array","description":"Pointer, key and text events in order. Positions are stage pixels.","items":{"oneOf":[{"type":"object","required":["type","kind","pos"],"properties":{"type":{"const":"pointer"},"kind":{"enum":["down","move","up","hover"]},"pos":{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"}}},"modifiers":{"type":"object","properties":{"shift":{"type":"boolean"},"ctrl":{"type":"boolean"},"alt":{"type":"boolean"}}},"pressure":{"type":"number","minimum":0,"maximum":1},"click_count":{"type":"integer","minimum":1}}},{"type":"object","required":["type","key"],"properties":{"type":{"const":"key"},"key":{"description":"escape, enter, backspace, delete, tab, space, left, right, up, down, home, end, or {\"char\":\"a\"}"},"modifiers":{"type":"object"},"pressed":{"type":"boolean"}}},{"type":"object","required":["type","text"],"properties":{"type":{"const":"text"},"text":{"type":"string"}}},{"type":"object","required":["type","offset","anchor"],"properties":{"type":{"const":"set_caret"},"offset":{"type":"integer","minimum":0},"anchor":{"type":"integer","minimum":0}}},{"type":"object","required":["type"],"properties":{"type":{"const":"cancel"}}}]}}}}"##;
 
-const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string"}},"additionalProperties":false}"#;
 const SCHEMA_OPTIONS: &str = r#"{"type":"object","description":"A JSON merge patch of the tool options (fill, stroke, object_drawing, corner_radius, pencil_mode, brush_size, brush_pressure, eraser_mode, eraser_size, eraser_shape, eraser_faucet, bucket_gap, bucket_lock_fill, brush_mode, brush_shape, brush_smoothing, corner_radii, corner_lock, oval {start_angle, end_angle, inner_radius, close_path}, polystar {style: polygon|star, sides, star_point_size}, lasso {mode: freeform|polygon|magic_wand, threshold}, paint_brush {style, size, spacing, smoothing}, pen_preview, snap {objects, pixels, grid, guides, smart_guides, align, edge_margin [h, v], object_spacing [h, v], center_align, accuracy close|normal|distant; guides and the grid itself are set with guides.set and grid.set}, text {face, size, color, bold, italic, kind: Static|Dynamic|Input}, hit_tolerance, drag_threshold). Call with no arguments to read them."}"#;
+const SCHEMA_TOOLS_SELECT: &str = r#"{"type":"object","required":["tool"],"properties":{"tool":{"type":"string","enum":["selection","subselection","free_transform","gradient_transform","rotation_3d","translation_3d","line","rectangle","oval","pen","pencil","brush","bone","paint_bucket","ink_bottle","eraser","eyedropper","text","hand","zoom","lasso","add_anchor","delete_anchor","convert_anchor","polystar","rectangle_primitive","oval_primitive","width","paint_brush"]}},"additionalProperties":false}"#;
 const SCHEMA_ELEMENTS: &str = r#"{"type":"object","properties":{"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based; the playhead by default"}},"additionalProperties":false}"#;
 const SCHEMA_GOTO: &str = r#"{"type":"object","properties":{"scene":{"type":"integer","minimum":0},"symbol":{"type":"string","description":"Library name of a symbol to edit"},"layer":{"type":"integer","minimum":0},"frame":{"type":"integer","minimum":1,"description":"1-based playhead position"}},"additionalProperties":false}"#;
 
@@ -1205,7 +1221,7 @@ const fn schema_box() -> &'static str {
 const SCHEMA_LINE: &str = r##"{"type":"object","required":["x1","y1","x2","y2"],"properties":{"x1":{"type":"number"},"y1":{"type":"number"},"x2":{"type":"number"},"y2":{"type":"number"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_PATH: &str = r##"{"type":"object","properties":{"d":{"type":"string","description":"SVG path data"},"points":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"closed":{"type":"boolean"},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object","properties":{"color":{"type":"string"},"width":{"type":"number","minimum":0}},"additionalProperties":false}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
 const SCHEMA_FREEHAND: &str = r##"{"type":"object","required":["points"],"properties":{"points":{"type":"array","minItems":2,"items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"tool":{"enum":["pencil","brush"]},"pressure":{"type":"array","items":{"type":"number","minimum":0,"maximum":1}},"fill":{"type":"string"},"stroke":{"oneOf":[{"type":"string"},{"type":"object"}]},"object_drawing":{"type":"boolean"}},"additionalProperties":false}"##;
-const SCHEMA_TEXT: &str = r##"{"type":"object","required":["x","y","text"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"text":{"type":"string","description":"Any Unicode, including right-to-left scripts, in typing order"},"width":{"type":"number","exclusiveMinimum":0},"size":{"type":"number"},"face":{"type":"string"},"color":{"type":"string"},"bold":{"type":"boolean"},"italic":{"type":"boolean"}},"additionalProperties":false}"##;
+const SCHEMA_TEXT: &str = r##"{"type":"object","required":["x","y","text"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"text":{"type":"string","description":"Any Unicode, including right-to-left scripts, in typing order"},"width":{"type":"number","exclusiveMinimum":0,"description":"Makes a fixed-width box; the field grows with its text when absent"},"size":{"type":"number"},"face":{"type":"string"},"color":{"type":"string"},"bold":{"type":"boolean"},"italic":{"type":"boolean"},"kind":{"enum":["static","dynamic","input"],"description":"The kind of text field (static by default)"}},"additionalProperties":false}"##;
 const SCHEMA_SELECT_AT: &str = r#"{"type":"object","required":["x","y"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"add":{"type":"boolean","description":"Add to (or toggle in) the selection"}},"additionalProperties":false}"#;
 const SCHEMA_SELECT_RECT: &str = r#"{"type":"object","required":["x","y","width","height"],"properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"add":{"type":"boolean"}},"additionalProperties":false}"#;
 const SCHEMA_MOVE: &str =

@@ -133,6 +133,41 @@ fn the_tools_are_listed_with_schemas_and_read_only_hints() {
 }
 
 #[test]
+fn every_tool_can_be_named_in_the_tool_schemas() {
+    let mut c = Client::new();
+    let reply = c.rpc("tools/list", json!({}));
+    let tools = reply["result"]["tools"].as_array().unwrap();
+    for command in ["tools_use", "tools_select"] {
+        let schema = &tools.iter().find(|t| t["name"] == command).unwrap()["inputSchema"]["properties"]["tool"]["enum"];
+        let names: Vec<&str> = schema.as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        for tool in anicraft_tools::ToolId::ALL {
+            let name = serde_json::to_value(tool).unwrap();
+            assert!(names.contains(&name.as_str().unwrap()), "{command} does not list {name}");
+            c.ok("tools_select", json!({ "tool": name }));
+            assert_eq!(c.editor().state.active_tool, tool);
+        }
+    }
+}
+
+#[test]
+fn text_kind_and_box_come_from_the_command() {
+    let mut c = Client::new();
+    c.ok("draw_text", json!({ "x": 20, "y": 20, "text": "plain" }));
+    c.ok("draw_text", json!({ "x": 20, "y": 80, "text": "live", "kind": "dynamic", "width": 140 }));
+    c.ok("draw_text", json!({ "x": 20, "y": 140, "text": "typed", "kind": "Input" }));
+    assert!(c.err("draw_text", json!({ "x": 0, "y": 0, "text": "x", "kind": "fancy" })).contains("unknown text kind"));
+    let kinds: Vec<anim_scene::TextKind> = elements(c.editor())
+        .iter()
+        .filter_map(|e| match e {
+            anim_scene::Element::Text(t) => Some(t.kind),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(kinds, vec![anim_scene::TextKind::Static, anim_scene::TextKind::Dynamic, anim_scene::TextKind::Input]);
+    assert_eq!(c.editor().state.settings.text.kind, anim_scene::TextKind::Static, "the options were restored");
+}
+
+#[test]
 fn draw_a_rectangle_and_undo_it() {
     let mut c = Client::new();
     let result = c.ok("draw_rectangle", json!({ "x": 50, "y": 40, "width": 200, "height": 100, "fill": "#00ff00", "stroke": { "color": "#000", "width": 3 } }));
