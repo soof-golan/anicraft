@@ -191,6 +191,38 @@ fn the_anchor_tools_add_delete_and_convert() {
     assert!(e.undo());
 }
 
+/// True when every segment of a stroke edge has a twin, on the same curve, in an edge that carries a fill.
+fn strokes_follow_the_fills(e: &anicraft_tools::Editor) -> bool {
+    let shape = &shape_at(e, 0).shape;
+    let fills: Vec<anim_shape::Segment> = shape.edges.iter().filter(|x| x.fill_style0 != 0 || x.fill_style1 != 0).flat_map(|x| x.segments.clone()).collect();
+    shape.edges.iter().filter(|x| x.stroke_style != 0).flat_map(|x| x.segments.iter()).all(|s| fills.iter().any(|f| f == s || *f == s.reversed()))
+}
+
+#[test]
+fn anchor_edits_keep_the_fill_and_the_stroke_on_the_same_curve() {
+    let mut e = editor();
+    e.state.settings.object_drawing = false;
+    drag(&mut e, ToolId::Rectangle, (40.0, 40.0), (140.0, 120.0));
+    drag(&mut e, ToolId::Rectangle, (240.0, 40.0), (340.0, 120.0));
+    assert_eq!(elements(&e).len(), 1, "both rectangles merged into one shape");
+    select(&mut e, 0);
+    assert!(strokes_follow_the_fills(&e), "a freshly drawn outline has fill and stroke edges on the same curves");
+    let before = segment_count(&e);
+    click(&mut e, ToolId::AddAnchor, (290.0, 40.0));
+    assert!(segment_count(&e) > before, "an anchor was added");
+    assert!(strokes_follow_the_fills(&e), "the stroke edge was split where the fill edge was");
+    drag(&mut e, ToolId::ConvertAnchor, (340.0, 40.0), (360.0, 20.0));
+    let cubic = |edge: &anim_shape::Edge| edge.segments.iter().any(|s| matches!(s, anim_shape::Segment::Cubic { .. }));
+    let shape = &shape_at(&e, 0).shape;
+    assert!(shape.edges.iter().filter(|x| x.stroke_style != 0).any(cubic), "the stroke curves too");
+    assert!(shape.edges.iter().filter(|x| x.fill_style1 != 0).any(cubic), "the fill curves");
+    assert!(strokes_follow_the_fills(&e), "the stroke edge follows the fill edge through the conversion");
+    let again = segment_count(&e);
+    click(&mut e, ToolId::DeleteAnchor, (290.0, 40.0));
+    assert!(segment_count(&e) < again, "deleting the added anchor joins its neighbours");
+    assert!(strokes_follow_the_fills(&e));
+}
+
 #[test]
 fn the_pen_modifies_a_selected_path_instead_of_starting_a_new_one() {
     let mut e = editor();

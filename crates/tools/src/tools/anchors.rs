@@ -84,9 +84,7 @@ pub fn add_anchor(shape: &EdgeShape, p: Point, tolerance: f64) -> Option<EdgeSha
         }
     }
     let (_, ei, si, t) = best?;
-    let mut out = shape.clone();
-    let edge = out.edges.get_mut(ei)?;
-    let segment = *edge.segments.get(si)?;
+    let segment = *shape.edges.get(ei)?.segments.get(si)?;
     let seg = segment.to_path_seg(1.0);
     let split_at = seg.eval(t);
     if split_at.distance(segment.start()) < SAME_TWIPS || split_at.distance(segment.end()) < SAME_TWIPS {
@@ -94,8 +92,29 @@ pub fn add_anchor(shape: &EdgeShape, p: Point, tolerance: f64) -> Option<EdgeSha
     }
     let first = segment_of(seg.subsegment(0.0..t));
     let second = segment_of(seg.subsegment(t..1.0));
-    edge.segments.splice(si..=si, [first, second]);
-    edge.forget_original();
+    // The fill edge and the stroke edge of a drawn outline run along the same curve: split both.
+    let mut out = shape.clone();
+    for edge in &mut out.edges {
+        let mut rebuilt: Vec<Segment> = Vec::with_capacity(edge.segments.len().saturating_add(1));
+        let mut touched = false;
+        for &current in &edge.segments {
+            match coincident(current, segment) {
+                Some(false) => {
+                    rebuilt.extend([first, second]);
+                    touched = true;
+                }
+                Some(true) => {
+                    rebuilt.extend([second.reversed(), first.reversed()]);
+                    touched = true;
+                }
+                None => rebuilt.push(current),
+            }
+        }
+        if touched {
+            edge.segments = rebuilt;
+            edge.forget_original();
+        }
+    }
     Some(out)
 }
 
@@ -138,12 +157,36 @@ fn segment_at(shape: &EdgeShape, t: Touch) -> Option<Segment> {
     shape.edges.get(t.edge)?.segments.get(t.segment).copied()
 }
 
-fn put(shape: &mut EdgeShape, t: Touch, segment: Segment) {
-    if let Some(edge) = shape.edges.get_mut(t.edge) {
-        if let Some(slot) = edge.segments.get_mut(t.segment) {
-            *slot = segment;
+/// Whether two segments lie on the same curve: `Some(false)` when they run the same way, `Some(true)` when one runs
+/// the other way, `None` when they are different curves.
+fn coincident(a: Segment, b: Segment) -> Option<bool> {
+    let near = |x: [Point; 4], y: [Point; 4]| x.iter().zip(y.iter()).all(|(p, q)| p.distance(*q) < SAME_TWIPS);
+    let (pa, pb) = (cubic_points(a), cubic_points(b));
+    if near(pa, pb) {
+        Some(false)
+    } else if near(pa, cubic_points(b.reversed())) {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// Replaces every segment that lies on the curve of an `(old, new)` pair by `new`, turned around when the segment
+/// runs the other way. The fill edge and the stroke edge of a drawn outline are separate edges on the same curve, and
+/// an edit to the anchor must move both.
+fn replace_everywhere(shape: &mut EdgeShape, changes: &[(Segment, Segment)]) {
+    for edge in &mut shape.edges {
+        let mut touched = false;
+        for slot in &mut edge.segments {
+            let current = *slot;
+            if let Some((new, reversed)) = changes.iter().find_map(|(old, new)| coincident(current, *old).map(|r| (*new, r))) {
+                *slot = if reversed { new.reversed() } else { new };
+                touched = true;
+            }
         }
-        edge.forget_original();
+        if touched {
+            edge.forget_original();
+        }
     }
 }
 
@@ -169,19 +212,23 @@ pub fn convert_anchor(shape: &EdgeShape, anchor: Point, pull: Option<Vec2>) -> O
     }
     let to_corner = pull.is_none() && is_smooth(shape, anchor);
     let mut result = shape.clone();
+    // Every change is made to the segment as it was, and then to each segment lying on the same curve (the fill
+    // edge and the stroke edge of a drawn outline are separate edges on the same curve).
+    let mut changes: Vec<(Segment, Segment)> = Vec::new();
     if to_corner {
-        if let (Some(t), Some(s)) = (incoming, inc)
+        if let Some(s) = inc
             && has_handle(s, anchor)
         {
             let [a, b, _, d] = cubic_points(s);
-            put(&mut result, t, Segment::Cubic { from: a, ctrl1: b, ctrl2: anchor, to: d });
+            changes.push((s, Segment::Cubic { from: a, ctrl1: b, ctrl2: anchor, to: d }));
         }
-        if let (Some(t), Some(s)) = (outgoing, out)
+        if let Some(s) = out
             && has_handle(s, anchor)
         {
             let [a, _, c, d] = cubic_points(s);
-            put(&mut result, t, Segment::Cubic { from: a, ctrl1: anchor, ctrl2: c, to: d });
+            changes.push((s, Segment::Cubic { from: a, ctrl1: anchor, ctrl2: c, to: d }));
         }
+        replace_everywhere(&mut result, &changes);
         return (result != *shape).then_some(result);
     }
     // Smooth: handles along `pull`, or along the line between the neighbours' far points.
@@ -208,14 +255,15 @@ pub fn convert_anchor(shape: &EdgeShape, anchor: Point, pull: Option<Vec2>) -> O
         let l_out = out.map_or(0.0, |s| s.end().distance(anchor) / 3.0);
         (toward / len, l_in, l_out)
     };
-    if let (Some(t), Some(s)) = (incoming, inc) {
+    if let Some(s) = inc {
         let [a, b, _, d] = cubic_points(s);
-        put(&mut result, t, Segment::Cubic { from: a, ctrl1: b, ctrl2: anchor - dir * len_in, to: d });
+        changes.push((s, Segment::Cubic { from: a, ctrl1: b, ctrl2: anchor - dir * len_in, to: d }));
     }
-    if let (Some(t), Some(s)) = (outgoing, out) {
+    if let Some(s) = out {
         let [a, _, c, d] = cubic_points(s);
-        put(&mut result, t, Segment::Cubic { from: a, ctrl1: anchor + dir * len_out, ctrl2: c, to: d });
+        changes.push((s, Segment::Cubic { from: a, ctrl1: anchor + dir * len_out, ctrl2: c, to: d }));
     }
+    replace_everywhere(&mut result, &changes);
     (result != *shape).then_some(result)
 }
 
