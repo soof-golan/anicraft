@@ -28,14 +28,13 @@ name = "swf"
 harness = false
 
 [dev-dependencies]
-# The benchmarks evaluate frames of the sample files into display lists.
+# The benchmarks evaluate frames of the sample files into display lists, and the sample-gated tests (tests/samples.rs)
+# take their shapes from the same reader.
 anicraft-xfl = { workspace = true }
 anim-scene = { workspace = true }
 anim-timeline = { workspace = true }
 criterion = { version = "0.8", default-features = false }
 anim-testkit = { workspace = true }
 proptest = { workspace = true }
-# The sample-gated tests (tests/samples.rs) read library XML out of the FLA zips.
-roxmltree = { workspace = true }
 serde_json = { workspace = true }
 swf = { workspace = true }

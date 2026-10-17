@@ -7,11 +7,12 @@
 use anim_core::kurbo::{BezPath, CubicBez, ParamCurveExtrema, PathEl, Point, QuadBez, Shape};
 use anim_core::num;
 use anim_display::{Cap, FillRule, Join};
+use anim_shape::TWIPS_PER_PX;
 
 use crate::bits::{BitWriter, PutBytes, sb_bits, sb_bits_all, ub_bits};
 use crate::error::SwfError;
 use crate::style::{FillStyle, LineStyle};
-use crate::types::{MAX_TWIPS, Rect, TWIPS_PER_PX, to_twips};
+use crate::types::{MAX_TWIPS, Rect, to_twips};
 
 /// Largest style index a shape record can address (15 bits).
 pub const MAX_STYLES: usize = 32_767;

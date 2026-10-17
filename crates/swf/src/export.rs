@@ -678,7 +678,7 @@ impl DisplayListExporter {
 
 /// The `LINESTYLE2` for a display-list stroke.
 pub(crate) fn line_style(style: &StrokeStyle, paint: LinePaint) -> LineStyle {
-    let width = u16::try_from(num::round_f64_to_i32(style.width.max(0.0) * crate::types::TWIPS_PER_PX).clamp(0, i32::from(u16::MAX))).unwrap_or(u16::MAX);
+    let width = u16::try_from(num::round_f64_to_i32(style.width.max(0.0) * anim_shape::TWIPS_PER_PX).clamp(0, i32::from(u16::MAX))).unwrap_or(u16::MAX);
     // (NoHScale, NoVScale): the thickness does not follow horizontal / vertical scaling. `Horizontal` is
     // `LineScaleMode.HORIZONTAL` ("do not scale the thickness if only horizontal scaling is applied"), which is the
     // `NoHScale` bit, as anim-render also reads it.

@@ -22,9 +22,10 @@ use anicraft_swf::edge::{NoBitmaps, shape_from_edges};
 use anicraft_swf::movie::{Compression, Frame, FrameItem, Movie, MovieSettings};
 use anicraft_swf::place::Placement;
 use anicraft_swf::types::Matrix;
+use anicraft_xfl::ReadOptions;
 use anim_core::{Affine, Rgba8};
-use anim_display::{Cap, Join, Spread};
-use anim_shape::{BitmapFill, EdgeShape, FillStyle, GradientFill, GradientStop, OtherStroke, SolidStroke, StrokeKind, StrokeStyle, XflEdge, XflName};
+use anim_scene::Element;
+use anim_shape::EdgeShape;
 
 use crate::common;
 
@@ -37,120 +38,27 @@ fn sample_files() -> Vec<PathBuf> {
     ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"].into_iter().map(|n| dir.join(n)).filter(|p| p.exists()).collect()
 }
 
-/// The library XML documents of an FLA (the central directory of Animate's zips is 54 bytes short; anim-archive
-/// copes).
-fn library_xml(path: &Path) -> Vec<(String, String)> {
-    anim_testkit::archive_texts(path, |name| Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case("xml")) && name.starts_with("LIBRARY/"))
-        .unwrap()
-}
-
-fn child<'a, 'i>(node: roxmltree::Node<'a, 'i>, name: &str) -> Option<roxmltree::Node<'a, 'i>> {
-    node.children().find(|c| c.is_element() && c.tag_name().name() == name)
-}
-
-fn first_element<'a, 'i>(node: roxmltree::Node<'a, 'i>) -> Option<roxmltree::Node<'a, 'i>> {
-    node.children().find(roxmltree::Node::is_element)
-}
-
-fn number(node: roxmltree::Node<'_, '_>, name: &str, default: f64) -> f64 {
-    node.attribute(name).and_then(|v| v.parse().ok()).unwrap_or(default)
-}
-
-fn color(node: roxmltree::Node<'_, '_>) -> Rgba8 {
-    let base = Rgba8::from_hex(node.attribute("color").unwrap_or("#000000")).unwrap_or(Rgba8::BLACK);
-    base.with_alpha_f32(anim_core::num::f64_to_f32(number(node, "alpha", 1.0)))
-}
-
-fn matrix(node: roxmltree::Node<'_, '_>) -> Affine {
-    let Some(m) = child(node, "matrix").and_then(|m| child(m, "Matrix")) else { return Affine::IDENTITY };
-    Affine::new([number(m, "a", 1.0), number(m, "b", 0.0), number(m, "c", 0.0), number(m, "d", 1.0), number(m, "tx", 0.0), number(m, "ty", 0.0)])
-}
-
-fn fill_style(node: roxmltree::Node<'_, '_>) -> FillStyle {
-    match node.tag_name().name() {
-        "LinearGradient" | "RadialGradient" => {
-            let gradient = GradientFill {
-                matrix: matrix(node),
-                stops: node
-                    .children()
-                    .filter(|c| c.is_element() && c.tag_name().name() == "GradientEntry")
-                    .map(|e| GradientStop { offset: anim_core::num::f64_to_f32(number(e, "ratio", 0.0)), color: color(e) })
-                    .collect(),
-                spread: node.attribute("spreadMethod").and_then(Spread::from_xfl).unwrap_or(Spread::Pad),
-                interpolation: node.attribute("interpolationMethod").and_then(anim_shape::Interpolation::from_xfl).unwrap_or_default(),
-                focal: number(node, "focalPointRatio", 0.0),
-            };
-            if node.tag_name().name() == "LinearGradient" { FillStyle::LinearGradient(gradient) } else { FillStyle::RadialGradient(gradient) }
-        }
-        "BitmapFill" => FillStyle::Bitmap(BitmapFill {
-            path: node.attribute("bitmapPath").unwrap_or_default().to_owned(),
-            matrix: matrix(node),
-            clipped: node.attribute("bitmapIsClipped") == Some("true"),
-            smoothing: true,
-        }),
-        _ => FillStyle::Solid(color(node)),
-    }
-}
-
-fn stroke_style(node: roxmltree::Node<'_, '_>) -> StrokeStyle {
-    let base = SolidStroke {
-        weight: number(node, "weight", 1.0),
-        fill: child(node, "fill").and_then(first_element).map_or_else(FillStyle::default, fill_style),
-        caps: node.attribute("caps").and_then(Cap::from_xfl).unwrap_or(Cap::Round),
-        joints: node.attribute("joints").and_then(Join::from_xfl).unwrap_or(Join::Round),
-        miter_limit: number(node, "miterLimit", 3.0),
-        scale_mode: node.attribute("scaleMode").and_then(anim_shape::StrokeScale::from_xfl).unwrap_or_default(),
-        pixel_hinting: node.attribute("pixelHinting") == Some("true"),
-    };
-    match StrokeKind::from_element(node.tag_name().name()) {
-        Some(kind) => StrokeStyle::Other(OtherStroke { kind, base, attrs: node.attributes().map(|a| (a.name().to_owned(), a.value().to_owned())).collect() }),
-        None => StrokeStyle::Solid(base),
-    }
-}
-
-/// All `DOMShape`s of one XML document (damaged edges are kept without geometry).
-fn shapes(xml: &str) -> Vec<EdgeShape> {
-    let doc = roxmltree::Document::parse(xml).unwrap();
-    doc.descendants()
-        .filter(|n| n.is_element() && n.tag_name().name() == "DOMShape")
-        .map(|shape| {
-            let indexed = |container: &str, item: &str| -> Vec<roxmltree::Node<'_, '_>> {
-                let mut found: Vec<(usize, roxmltree::Node<'_, '_>)> = child(shape, container)
-                    .map(|c| {
-                        c.children()
-                            .filter(|n| n.is_element() && n.tag_name().name() == item)
-                            .filter_map(|n| Some((n.attribute("index")?.parse().ok()?, n)))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                found.sort_by_key(|(i, _)| *i);
-                found.into_iter().map(|(_, n)| n).collect()
-            };
-            let fills: Vec<FillStyle> =
-                indexed("fills", "FillStyle").into_iter().map(|f| first_element(f).map_or_else(FillStyle::default, fill_style)).collect();
-            let strokes: Vec<StrokeStyle> =
-                indexed("strokes", "StrokeStyle").into_iter().map(|s| first_element(s).map_or_else(StrokeStyle::default, stroke_style)).collect();
-            let edges: Vec<XflEdge> = child(shape, "edges")
-                .map(|e| {
-                    e.children()
-                        .filter(|n| n.is_element() && n.tag_name().name() == "Edge")
-                        .map(|n| XflEdge {
-                            fill_style0: n.attribute("fillStyle0").and_then(|v| v.parse().ok()).unwrap_or(0),
-                            fill_style1: n.attribute("fillStyle1").and_then(|v| v.parse().ok()).unwrap_or(0),
-                            stroke_style: n.attribute("strokeStyle").and_then(|v| v.parse().ok()).unwrap_or(0),
-                            edges: n.attribute("edges").map(str::to_owned),
-                            cubics: n.attribute("cubics").map(str::to_owned),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            EdgeShape::from_xfl_lenient(fills, strokes, &edges).0
-        })
-        .collect()
-}
-
+/// Every shape of every library symbol, groups opened up (damaged edges are kept without geometry).
 fn all_shapes(path: &Path) -> Vec<EdgeShape> {
-    library_xml(path).iter().flat_map(|(_, xml)| shapes(xml)).collect()
+    fn collect(elements: &[Element], out: &mut Vec<EdgeShape>) {
+        for element in elements {
+            match element {
+                Element::Shape(shape) => out.push(shape.shape.clone()),
+                Element::Group(group) => collect(&group.members, out),
+                _ => {}
+            }
+        }
+    }
+    let loaded = anicraft_xfl::read_with(path, &ReadOptions { load_media: false, ..ReadOptions::default() }).unwrap();
+    let mut shapes = Vec::new();
+    for symbol in loaded.document.library.symbols() {
+        for layer in &symbol.timeline.layers {
+            for frame in &layer.frames {
+                collect(&frame.elements, &mut shapes);
+            }
+        }
+    }
+    shapes
 }
 
 #[test]

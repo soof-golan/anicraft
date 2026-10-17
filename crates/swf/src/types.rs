@@ -5,11 +5,9 @@
 //! [`anim_core`] live here and saturate instead of overflowing.
 
 use anim_core::{Affine, ColorTransform, Rgba8, num};
+use anim_shape::TWIPS_PER_PX;
 
 use crate::bits::{BitWriter, PutBytes, sb_bits, sb_bits_all};
-
-/// Twips per pixel.
-pub const TWIPS_PER_PX: f64 = 20.0;
 
 /// Largest coordinate magnitude we write, in twips (about 3.3 million pixels). Keeps every delta between two
 /// coordinates inside 28 bits and bounds the work of splitting long edges.

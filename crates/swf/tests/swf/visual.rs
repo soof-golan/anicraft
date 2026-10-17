@@ -3,7 +3,7 @@
 //! The predictions live next to the fixtures in `tests/fixtures/visual/<name>.expect.md` and were written before the
 //! first render. Every display-list fixture is exported to SWF and rendered twice: by `anim-render` straight from the
 //! display list, and (when `ANICRAFT_RUFFLE_EXPORTER` names a built Ruffle `exporter`) by Ruffle from the SWF. Both are
-//! checked against the same probes. PNGs go to `ANICRAFT_VISUAL_OUT` (default `/mnt/data/anim/scratch/visual/swf`).
+//! checked against the same probes. PNGs go to `$ANICRAFT_VISUAL_OUT/swf` when that is set.
 
 #![allow(
     clippy::unwrap_used,
@@ -52,15 +52,9 @@ use common::Rendered;
 // ---------------------------------------------------------------------------------------------------------------
 // harness
 
-fn out_dir() -> PathBuf {
-    let dir = std::env::var_os("ANICRAFT_VISUAL_OUT").map_or_else(|| PathBuf::from("/mnt/data/anim/scratch/visual/swf"), PathBuf::from);
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
-
 fn save(name: &str, image: &Rendered) {
-    let path = out_dir().join(format!("{name}.png"));
-    let _ = anim_testkit::write_png(&path, u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap(), &image.pixels);
+    let Some(dir) = anim_testkit::out_dir("swf") else { return };
+    let _ = anim_testkit::write_png(&dir.join(format!("{name}.png")), u32::try_from(image.width).unwrap(), u32::try_from(image.height).unwrap(), &image.pixels);
 }
 
 /// Compares an `anim-render` picture with the checked-in golden `tests/fixtures/visual/golden/<name>.png` (a few
@@ -84,16 +78,9 @@ fn golden(name: &str, image: &Rendered) {
 
 /// A crop of `image` scaled up with nearest neighbour, for the Read tool.
 fn zoom(image: &Rendered, x: usize, y: usize, w: usize, h: usize, scale: usize) -> Rendered {
-    let mut pixels = Vec::with_capacity(w * h * scale * scale * 4);
-    for oy in 0..h * scale {
-        for ox in 0..w * scale {
-            let sx = (x + ox / scale).min(image.width - 1);
-            let sy = (y + oy / scale).min(image.height - 1);
-            let i = (sy * image.width + sx) * 4;
-            pixels.extend_from_slice(&image.pixels[i..i + 4]);
-        }
-    }
-    Rendered { width: w * scale, height: h * scale, pixels }
+    let at = |v: usize| u32::try_from(v).unwrap();
+    let crop = anim_testkit::crop_zoom(&image.pixels, at(image.width), at(x), at(y), at(w), at(h), at(scale));
+    Rendered { width: crop.width as usize, height: crop.height as usize, pixels: crop.rgba }
 }
 
 /// Both renderings of one display list.
