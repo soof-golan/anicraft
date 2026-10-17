@@ -94,27 +94,7 @@ pub fn convert_fill(fill: &FillStyle, to: FillKind, bitmap: Option<&str>) -> Opt
 /// The colour of a gradient at `t` (0 to 1).
 #[must_use]
 pub fn sample(stops: &[GradientStop], t: f32) -> Rgba8 {
-    let Some(first) = stops.first() else { return Rgba8::BLACK };
-    let Some(last) = stops.last() else { return first.color };
-    if t <= first.offset {
-        return first.color;
-    }
-    if t >= last.offset {
-        return last.color;
-    }
-    for pair in stops.windows(2) {
-        let [a, b] = pair else { continue };
-        if t >= a.offset && t <= b.offset {
-            let span = (b.offset - a.offset).max(f32::EPSILON);
-            return mix(a.color, b.color, (t - a.offset) / span);
-        }
-    }
-    last.color
-}
-
-fn mix(a: Rgba8, b: Rgba8, t: f32) -> Rgba8 {
-    let lerp = |x: u8, y: u8| anim_core::num::unit_f32_to_u8((f32::from(y) - f32::from(x)).mul_add(t, f32::from(x)) / 255.0);
-    Rgba8::new(lerp(a.r, b.r), lerp(a.g, b.g), lerp(a.b, b.b), lerp(a.a, b.a))
+    if stops.is_empty() { Rgba8::BLACK } else { GradientStop::color_at(stops, t) }
 }
 
 /// What the fill editor wants done.
