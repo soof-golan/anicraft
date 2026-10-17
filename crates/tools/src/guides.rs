@@ -13,8 +13,7 @@ pub const MAX_GUIDES: usize = 256;
 pub const MIN_GRID: f64 = 1.0;
 pub const MAX_GRID: f64 = 1000.0;
 
-const ATTRS: [&str; 9] =
-    ["guidesX", "guidesY", "guidesLocked", "guidesVisible", "guideColor", "gridVisible", "gridSpacingX", "gridSpacingY", "gridColor"];
+const ATTRS: [&str; 9] = ["guidesX", "guidesY", "guidesLocked", "guidesVisible", "guideColor", "gridVisible", "gridSpacingX", "gridSpacingY", "gridColor"];
 
 /// The guides and the grid of a document.
 #[derive(Debug, Clone, PartialEq)]

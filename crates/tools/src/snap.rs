@@ -204,7 +204,12 @@ pub fn snap_move(ctx: &ToolContext<'_>, bounds: Rect, delta: Vec2) -> MoveSnap {
     let moved = bounds + delta;
     let layout = guides::read(ctx.document);
     let others: Vec<Rect> = if snap.objects || snap.smart_guides || snap.align {
-        candidates(ctx).into_iter().take(MAX_SHAPES).filter(|c| !is_inside_selection(ctx, &c.element_ref)).filter_map(|c| ctx.stage_bounds(&c.element_ref)).collect()
+        candidates(ctx)
+            .into_iter()
+            .take(MAX_SHAPES)
+            .filter(|c| !is_inside_selection(ctx, &c.element_ref))
+            .filter_map(|c| ctx.stage_bounds(&c.element_ref))
+            .collect()
     } else {
         Vec::new()
     };

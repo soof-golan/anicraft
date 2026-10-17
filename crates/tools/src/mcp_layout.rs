@@ -409,7 +409,9 @@ mod tests {
 
     #[test]
     fn schemas_are_json_objects() {
-        for s in [SCHEMA_EDGE, SCHEMA_SPACE, SCHEMA_MATCH, SCHEMA_APPLY, SCHEMA_GUIDE_ADD, SCHEMA_GUIDE_MOVE, SCHEMA_GUIDE_REMOVE, SCHEMA_GUIDE_SET, SCHEMA_GRID] {
+        for s in
+            [SCHEMA_EDGE, SCHEMA_SPACE, SCHEMA_MATCH, SCHEMA_APPLY, SCHEMA_GUIDE_ADD, SCHEMA_GUIDE_MOVE, SCHEMA_GUIDE_REMOVE, SCHEMA_GUIDE_SET, SCHEMA_GRID]
+        {
             let v: Value = serde_json::from_str(s).unwrap();
             assert_eq!(v["type"], "object");
         }

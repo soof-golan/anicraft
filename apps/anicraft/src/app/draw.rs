@@ -216,6 +216,7 @@ impl AniApp {
         let bg = doc.document().background_color;
         let selection = state.selection.items.clone();
         let selected_count = selection.len();
+        let can_3d = doc.editor.with_context(anicraft_tools::tools::gizmo_centre).is_some();
         let zoom_percent = self.ui.stage.view.zoom * 100.0;
         let rects = view::selection_rects(doc.document(), &state.timeline, &selection);
         let accent = self.ui.theme.palette().accent;
@@ -329,7 +330,7 @@ impl AniApp {
                     }
                 }
                 PanelId::Custom(crate::layout_ui::TRANSFORM_PANEL) => {
-                    for e in crate::layout_ui::transform_panel(ui, &mut st.arrange.transform, selected_count) {
+                    for e in crate::layout_ui::transform_panel(ui, &mut st.arrange.transform, selected_count, can_3d) {
                         events.push(UiEvent::Menu(MenuAction::Layout(e)));
                     }
                 }

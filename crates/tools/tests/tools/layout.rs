@@ -1,6 +1,15 @@
 //! The Align and Transform panels and the guides and grid, through the MCP commands the panels use.
 
-#![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::too_many_lines, clippy::float_cmp, reason = "test code")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::too_many_lines,
+    clippy::float_cmp,
+    clippy::needless_pass_by_value,
+    clippy::arithmetic_side_effects,
+    reason = "test code"
+)]
 
 use crate::common;
 
@@ -42,9 +51,7 @@ impl Client {
 
     fn bounds(&self) -> Vec<Rect> {
         let e = self.session.doc();
-        (0..elements(e).len())
-            .map(|i| e.with_context(|ctx| ctx.stage_bounds(&anicraft_tools::ElementRef::top_level(0, 0, i)).unwrap()))
-            .collect()
+        (0..elements(e).len()).map(|i| e.with_context(|ctx| ctx.stage_bounds(&anicraft_tools::ElementRef::top_level(0, 0, i)).unwrap())).collect()
     }
 }
 
@@ -172,7 +179,8 @@ fn dragging_the_selection_snaps_to_a_guide_and_shows_smart_guides() {
     e.send(&down(120.0, 120.0)).unwrap();
     e.send(&mv(150.0, 121.0)).unwrap();
     let mid = e.send(&mv(193.0, 121.0)).unwrap();
-    let ghost = mid.overlay.iter().any(|o| matches!(o, anicraft_tools::Overlay::Rect { rect, role: anicraft_tools::Role::Preview } if (rect.x1 - 215.0).abs() < 0.01));
+    let ghost =
+        mid.overlay.iter().any(|o| matches!(o, anicraft_tools::Overlay::Rect { rect, role: anicraft_tools::Role::Preview } if (rect.x1 - 215.0).abs() < 0.01));
     assert!(ghost, "the preview box locks on to the guide: {:?}", mid.overlay);
     e.send(&up(193.0, 121.0)).unwrap();
     let r = e.with_context(|ctx| ctx.stage_bounds(&anicraft_tools::ElementRef::top_level(0, 0, 0)).unwrap());

@@ -10,8 +10,8 @@ use anicraft_tools::layout::{Axis, Edge};
 use anicraft_tools::settings::SnapAccuracy;
 use anicraft_tools::{SnapSettings, ToolSettings};
 use anim_core::Rgba8;
-use anim_ui::stage::{Axis as GuideAxis, Guide, StageViewState};
 use anim_ui::PanelId;
+use anim_ui::stage::{Axis as GuideAxis, Guide, StageViewState};
 use egui::{Color32, Context, DragValue, Pos2, Ui};
 use serde_json::{Value, json};
 
@@ -139,11 +139,15 @@ pub struct TransformFields {
     pub rotate: f64,
     /// Skew angles in degrees (horizontal, vertical).
     pub skew: [f64; 2],
+    /// 3D rotation about the x, y and z axes in degrees, applied to movie clips.
+    pub rotate_3d: [f64; 3],
+    /// 3D translation along x, y and z in pixels.
+    pub move_3d: [f64; 3],
 }
 
 impl Default for TransformFields {
     fn default() -> Self {
-        Self { scale: [100.0, 100.0], constrain: true, rotate: 0.0, skew: [0.0, 0.0] }
+        Self { scale: [100.0, 100.0], constrain: true, rotate: 0.0, skew: [0.0, 0.0], rotate_3d: [0.0; 3], move_3d: [0.0; 3] }
     }
 }
 
@@ -182,7 +186,7 @@ impl LayoutDialog {
 }
 
 /// An open stage context menu.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContextMenu {
     /// Where the menu opens on screen; set when it is first drawn.
     pub at: Option<Pos2>,
@@ -299,8 +303,14 @@ pub fn view_items(ui: &mut Ui, state: &MenuState) -> Vec<MenuAction> {
         push(entry(ui, "Edit Grid...", "Ctrl+Alt+G", true), LayoutEvent::Open(DialogKind::Grid));
     });
     ui.menu_button("Guides", |ui| {
-        push(tick(ui, "Show Guides", "Ctrl+;", state.aids.guides_visible), LayoutEvent::command("guides.set", json!({ "visible": !state.aids.guides_visible })));
-        push(tick(ui, "Lock Guides", "Ctrl+Alt+;", state.aids.guides_locked), LayoutEvent::command("guides.set", json!({ "locked": !state.aids.guides_locked })));
+        push(
+            tick(ui, "Show Guides", "Ctrl+;", state.aids.guides_visible),
+            LayoutEvent::command("guides.set", json!({ "visible": !state.aids.guides_visible })),
+        );
+        push(
+            tick(ui, "Lock Guides", "Ctrl+Alt+;", state.aids.guides_locked),
+            LayoutEvent::command("guides.set", json!({ "locked": !state.aids.guides_locked })),
+        );
         push(tick(ui, "Snap to Guides", "Ctrl+Shift+;", state.snap.guides), LayoutEvent::options(json!({ "snap": { "guides": !state.snap.guides } })));
         ui.separator();
         push(entry(ui, "Edit Guides...", "Ctrl+Alt+Shift+G", true), LayoutEvent::Open(DialogKind::Guides));
@@ -436,9 +446,10 @@ fn field(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, suf
     ui.add(DragValue::new(value).range(range).speed(0.5).suffix(suffix)).changed()
 }
 
-/// The Transform panel's reply: events plus the edited fields.
+/// The Transform panel: edits `fields` and returns the commands its buttons ask for. `can_3d` says whether the
+/// selection holds a symbol instance that can be turned in 3D.
 #[must_use]
-pub fn transform_panel(ui: &mut Ui, fields: &mut TransformFields, selected: usize) -> Vec<LayoutEvent> {
+pub fn transform_panel(ui: &mut Ui, fields: &mut TransformFields, selected: usize, can_3d: bool) -> Vec<LayoutEvent> {
     let mut out = Vec::new();
     let enabled = selected > 0;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
@@ -482,21 +493,52 @@ pub fn transform_panel(ui: &mut Ui, fields: &mut TransformFields, selected: usiz
         });
         ui.add_space(8.0);
         ui.separator();
-        ui.add_enabled_ui(false, |ui| {
-            ui.label("3D Rotation");
-            egui::Grid::new("transform-3d").num_columns(4).show(ui, |ui| {
-                for axis in ["X", "Y", "Z"] {
+        ui.add_enabled_ui(can_3d, |ui| {
+            ui.strong("3D Rotation");
+            egui::Grid::new("transform-3d").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+                for (axis, value) in ["X", "Y", "Z"].into_iter().zip(fields.rotate_3d.iter_mut()) {
                     ui.label(axis);
-                    ui.add(DragValue::new(&mut 0.0_f64).suffix(" deg"));
+                    field(ui, value, -3600.0..=3600.0, " deg");
                     ui.end_row();
                 }
             });
+            ui.add_space(4.0);
+            ui.strong("3D Translation");
+            egui::Grid::new("transform-3d-move").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+                for (axis, value) in ["X", "Y", "Z"].into_iter().zip(fields.move_3d.iter_mut()) {
+                    ui.label(axis);
+                    field(ui, value, -100_000.0..=100_000.0, " px");
+                    ui.end_row();
+                }
+            });
+            ui.add_space(4.0);
+            if ui.button("Apply 3D").on_hover_text("Turn and move the selected movie clips in 3D about their centre points").clicked() {
+                out.extend(apply_3d_events(fields));
+                fields.rotate_3d = [0.0; 3];
+                fields.move_3d = [0.0; 3];
+            }
         });
-        ui.weak("Turn movie clips in 3D with the 3D Rotation tool.");
+        if !can_3d {
+            ui.weak("Select a movie clip to turn it in 3D.");
+        }
         if !enabled {
             ui.weak("Select an object on the stage.");
         }
     });
+    out
+}
+
+/// The 3D commands for the non-zero 3D fields: the rotation first, then the translation.
+fn apply_3d_events(fields: &TransformFields) -> Vec<LayoutEvent> {
+    let mut out = Vec::new();
+    let [rx, ry, rz] = fields.rotate_3d;
+    if rx != 0.0 || ry != 0.0 || rz != 0.0 {
+        out.push(LayoutEvent::command("transform.rotate_3d", json!({ "x_degrees": rx, "y_degrees": ry, "z_degrees": rz })));
+    }
+    let [x, y, z] = fields.move_3d;
+    if x != 0.0 || y != 0.0 || z != 0.0 {
+        out.push(LayoutEvent::command("transform.translate_3d", json!({ "x": x, "y": y, "z": z })));
+    }
     out
 }
 
@@ -701,15 +743,13 @@ pub fn stage_context_menu(ctx: &Context, ui_state: &mut LayoutUi, state: &MenuSt
     let mut out = Vec::new();
     let Some(menu) = ui_state.context.as_mut() else { return out };
     let at = *menu.at.get_or_insert_with(|| ctx.input(|i| i.pointer.latest_pos()).unwrap_or(Pos2::new(200.0, 200.0)));
-    let mut close = false;
-    let area = egui::Area::new(egui::Id::new("stage-context")).order(egui::Order::Foreground).fixed_pos(at).show(ctx, |ui| {
+    egui::Area::new(egui::Id::new("stage-context")).order(egui::Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::menu(ui.style()).show(ui, |ui| {
             ui.set_min_width(190.0);
             let sel = state.has_selection;
-            let mut pick = |ui: &mut Ui, label: &str, shortcut: &str, enabled: bool, a: MenuAction, out: &mut Vec<MenuAction>| {
+            let pick = |ui: &mut Ui, label: &str, shortcut: &str, enabled: bool, a: MenuAction, out: &mut Vec<MenuAction>| {
                 if ui.add_enabled(enabled, egui::Button::new(crate::text(label)).shortcut_text(shortcut)).clicked() {
                     out.push(a);
-                    close = true;
                 }
             };
             let cmd = |id: &'static str, params: Value| MenuAction::Command { id, params };
@@ -732,7 +772,6 @@ pub fn stage_context_menu(ctx: &Context, ui_state: &mut LayoutUi, state: &MenuSt
                     for (label, mode) in [("Bring to Front", "front"), ("Bring Forward", "forward"), ("Send Backward", "backward"), ("Send to Back", "back")] {
                         if ui.button(label).clicked() {
                             out.push(cmd("modify.arrange", json!({ "mode": mode })));
-                            close = true;
                             ui.close();
                         }
                     }
@@ -741,7 +780,6 @@ pub fn stage_context_menu(ctx: &Context, ui_state: &mut LayoutUi, state: &MenuSt
                     for (label, edge) in EDGES {
                         if ui.button(label).clicked() {
                             out.push(action(LayoutEvent::command("layout.align", json!({ "edge": edge_name(edge), "to_stage": to_stage }))));
-                            close = true;
                             ui.close();
                         }
                     }
@@ -753,8 +791,10 @@ pub fn stage_context_menu(ctx: &Context, ui_state: &mut LayoutUi, state: &MenuSt
             pick(ui, "Lock Guides", "", true, action(LayoutEvent::command("guides.set", json!({ "locked": !state.aids.guides_locked }))), &mut out);
         });
     });
-    let clicked_outside = ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer();
-    if close || clicked_outside || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    // A press on the menu or on one of its submenu popups (all foreground layers) keeps it; a press elsewhere closes it.
+    let over_menu = ctx.pointer_latest_pos().and_then(|p| ctx.layer_id_at(p)).is_some_and(|layer| layer.order == egui::Order::Foreground);
+    let clicked_outside = ctx.input(|i| i.pointer.any_pressed()) && !over_menu;
+    if !out.is_empty() || clicked_outside || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         ui_state.context = None;
     }
     out
@@ -777,12 +817,30 @@ mod tests {
 
     #[test]
     fn the_transform_panel_sends_factors_not_percentages() {
-        let fields = TransformFields { scale: [150.0, 50.0], rotate: 30.0, skew: [10.0, 0.0], constrain: false };
+        let fields = TransformFields { scale: [150.0, 50.0], rotate: 30.0, skew: [10.0, 0.0], constrain: false, ..TransformFields::default() };
         let LayoutEvent::Command { id, params } = apply_event(&fields, true) else { panic!("a command") };
         assert_eq!(id, "transform.apply");
         assert_eq!(params["sx"], 1.5);
         assert_eq!(params["sy"], 0.5);
         assert_eq!(params["copy"], true);
+    }
+
+    #[test]
+    fn the_3d_fields_send_only_what_was_changed() {
+        let mut fields = TransformFields::default();
+        assert!(apply_3d_events(&fields).is_empty());
+        fields.rotate_3d = [0.0, 45.0, 0.0];
+        let events = apply_3d_events(&fields);
+        assert_eq!(events.len(), 1);
+        let LayoutEvent::Command { id, params } = &events[0] else { panic!("a command") };
+        assert_eq!(*id, "transform.rotate_3d");
+        assert_eq!(params["y_degrees"], 45.0);
+        fields.move_3d = [0.0, 0.0, -20.0];
+        let events = apply_3d_events(&fields);
+        assert_eq!(events.len(), 2);
+        let LayoutEvent::Command { id, params } = &events[1] else { panic!("a command") };
+        assert_eq!(*id, "transform.translate_3d");
+        assert_eq!(params["z"], -20.0);
     }
 
     #[test]

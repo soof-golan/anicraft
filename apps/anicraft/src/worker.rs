@@ -173,8 +173,9 @@ pub fn render_job(ev: &mut Evaluator<'_>, job: &RenderJob) -> Result<Image, Stri
     ev.set_options(EvalOptions { advance_movie_clips: job.playing, ..*ev.options() });
     // The image covers the stage grown by `margin` of its size on every side (the pasteboard).
     let margin = f64::from(job.margin.max(0.0));
-    let span = 1.0 + 2.0 * margin;
-    let view = Affine::scale_non_uniform(f64::from(width) / (doc_w * span), f64::from(height) / (doc_h * span)) * Affine::translate((margin * doc_w, margin * doc_h));
+    let span = 2.0_f64.mul_add(margin, 1.0);
+    let view =
+        Affine::scale_non_uniform(f64::from(width) / (doc_w * span), f64::from(height) / (doc_h * span)) * Affine::translate((margin * doc_w, margin * doc_h));
     let background = if job.transparent { Background::Transparent } else { Background::FromDisplayList };
     let options = RenderOptions::new(width, height).with_view(view).with_background(background);
     let list = target_list(ev, &job.target, job.frame);

@@ -161,10 +161,8 @@ pub fn space(items: &[Rect], axis: Axis, gap: Option<f64>, reference: Option<Rec
 /// `reference` when given.
 #[must_use]
 pub fn match_size(items: &[Rect], width: bool, height: bool, reference: Option<Rect>) -> Vec<Affine> {
-    let (target_w, target_h) = reference.map_or_else(
-        || (items.iter().map(Rect::width).fold(0.0, f64::max), items.iter().map(Rect::height).fold(0.0, f64::max)),
-        |r| (r.width(), r.height()),
-    );
+    let (target_w, target_h) = reference
+        .map_or_else(|| (items.iter().map(Rect::width).fold(0.0, f64::max), items.iter().map(Rect::height).fold(0.0, f64::max)), |r| (r.width(), r.height()));
     items
         .iter()
         .map(|r| {
