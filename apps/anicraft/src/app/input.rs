@@ -269,6 +269,11 @@ impl AniApp {
             self.handle(ctx, super::actions::UiEvent::Menu(action));
             return;
         }
+        // Grid, guides, snapping and magnification chords of the View menu.
+        if let Some(event) = crate::layout_ui::chord(key, modifiers, &self.layout_menu_state()) {
+            self.handle(ctx, super::actions::UiEvent::Menu(MenuAction::Layout(event)));
+            return;
+        }
         // Application-level chords first.
         let action = match (modifiers.command, modifiers.shift, key) {
             (false, false, K::Escape) if self.ui.test_movie.is_some() => Some(MenuAction::Doc(DocAction::TestMovie)),

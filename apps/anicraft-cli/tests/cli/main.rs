@@ -5,6 +5,7 @@ mod common;
 
 mod bridge;
 mod cli;
+mod layout;
 mod mcp;
 mod samples;
 mod shape_ops;

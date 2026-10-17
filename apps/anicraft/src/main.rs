@@ -47,7 +47,9 @@ struct Args {
     library_play: bool,
     /// With --screenshot: open dialogs and panels first (comma separated): new-document, templates, settings, find,
     /// history, output, errors, actions, testmovie, tabs, properties, save-changes, revert, motion, motion-curve,
-    /// optimize-dialog, expand-dialog, soften-dialog, scale-dialog, trace-dialog, paste-dialog.
+    /// optimize-dialog, expand-dialog, soften-dialog, scale-dialog, trace-dialog, paste-dialog, and for the layout
+    /// tools: layout (three objects, guides and grid), align, hide-transform, grid-dialog, guides-dialog,
+    /// snap-dialog, context-menu, no-pasteboard, show-all.
     #[arg(long, value_name = "LIST")]
     show: Option<String>,
 

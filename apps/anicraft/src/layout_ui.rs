@@ -306,6 +306,28 @@ pub fn view_items(ui: &mut Ui, state: &MenuState) -> Vec<MenuAction> {
     out
 }
 
+/// The View-menu action the chord `key` with `modifiers` stands for (grid, guides, snapping and magnification).
+#[must_use]
+pub fn chord(key: egui::Key, modifiers: egui::Modifiers, state: &MenuState) -> Option<LayoutEvent> {
+    use egui::Key as K;
+    if !modifiers.command {
+        return None;
+    }
+    let snap = |name: &str, on: bool| Some(LayoutEvent::options(json!({ "snap": { name: !on } })));
+    match (modifiers.shift, modifiers.alt, key) {
+        (false, false, K::Quote) => Some(LayoutEvent::command("grid.set", json!({ "visible": !state.aids.grid_visible }))),
+        (true, false, K::Quote) => snap("grid", state.snap.grid),
+        (false, false, K::Semicolon) => Some(LayoutEvent::command("guides.set", json!({ "visible": !state.aids.guides_visible }))),
+        (false, true, K::Semicolon) => Some(LayoutEvent::command("guides.set", json!({ "locked": !state.aids.guides_locked }))),
+        (true, false, K::Semicolon) => snap("guides", state.snap.guides),
+        (true, false, K::Slash) => snap("objects", state.snap.objects),
+        (false, true, K::Num0) => Some(LayoutEvent::ShowAll),
+        (false, true, K::G) => Some(LayoutEvent::Open(DialogKind::Grid)),
+        (true, true, K::G) => Some(LayoutEvent::Open(DialogKind::Guides)),
+        _ => None,
+    }
+}
+
 /// Modify > Align: the Align panel's buttons as menu items.
 #[must_use]
 pub fn align_items(ui: &mut Ui, state: &MenuState, to_stage: bool) -> Vec<MenuAction> {
@@ -799,6 +821,22 @@ mod tests {
         assert_eq!(params["sx"], 1.5);
         assert_eq!(params["sy"], 0.5);
         assert_eq!(params["copy"], true);
+    }
+
+    #[test]
+    fn view_chords_flip_the_switches_they_name() {
+        let state = MenuState::default();
+        let ctrl = egui::Modifiers { command: true, ..egui::Modifiers::default() };
+        let with = |shift: bool, alt: bool| egui::Modifiers { command: true, shift, alt, ..egui::Modifiers::default() };
+        let Some(LayoutEvent::Command { id, params }) = chord(egui::Key::Quote, ctrl, &state) else { panic!("grid chord") };
+        assert_eq!((id, &params["visible"]), ("grid.set", &json!(true)));
+        let Some(LayoutEvent::Command { id, params }) = chord(egui::Key::Quote, with(true, false), &state) else { panic!("snap chord") };
+        assert_eq!((id, &params["snap"]["grid"]), ("tools.options", &json!(true)));
+        let Some(LayoutEvent::Command { params, .. }) = chord(egui::Key::Semicolon, with(false, true), &state) else { panic!("lock chord") };
+        assert_eq!(params["locked"], true);
+        assert_eq!(chord(egui::Key::Num0, with(false, true), &state), Some(LayoutEvent::ShowAll));
+        assert_eq!(chord(egui::Key::G, with(true, true), &state), Some(LayoutEvent::Open(DialogKind::Guides)));
+        assert_eq!(chord(egui::Key::Quote, egui::Modifiers::default(), &state), None, "a plain key is a tool key");
     }
 
     #[test]

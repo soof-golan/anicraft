@@ -104,6 +104,7 @@ impl AniApp {
                 self.run("layout.align", &json!({ "edge": "bottom" }));
                 self.run("layout.space", &json!({ "axis": "horizontal" }));
             }
+            "hide-transform" => self.toggle_layout_panel(crate::layout_ui::TRANSFORM_PANEL),
             "grid-dialog" => self.open_layout_dialog(DialogKind::Grid),
             "guides-dialog" => self.open_layout_dialog(DialogKind::Guides),
             "snap-dialog" => self.open_layout_dialog(DialogKind::Snapping),
