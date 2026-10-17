@@ -321,14 +321,6 @@ fn run_position(runs: &[TextRun], offset: usize) -> Option<(usize, usize)> {
     runs.len().checked_sub(1).map(|i| (i, runs.get(i).map_or(0, |r| r.characters.len())))
 }
 
-fn floor_boundary(s: &str, mut i: usize) -> usize {
-    i = i.min(s.len());
-    while i > 0 && !s.is_char_boundary(i) {
-        i = i.saturating_sub(1);
-    }
-    i
-}
-
 fn insert_text(doc: &mut Document, state: &EditorState, target: &ElementRef, offset: usize, text: &str) -> Result<(), ApplyError> {
     let Element::Text(field) = element_mut(doc, &state.timeline, target)? else { return Err(ApplyError::WrongKind { expected: "text field" }) };
     if field.text_runs.is_empty() {
@@ -337,7 +329,7 @@ fn insert_text(doc: &mut Document, state: &EditorState, target: &ElementRef, off
     }
     let Some((run_index, inner)) = run_position(&field.text_runs, offset) else { return Ok(()) };
     if let Some(run) = field.text_runs.get_mut(run_index) {
-        let at = floor_boundary(&run.characters, inner);
+        let at = run.characters.floor_char_boundary(inner);
         run.characters.insert_str(at, text);
     }
     Ok(())
@@ -348,8 +340,8 @@ fn delete_text(doc: &mut Document, state: &EditorState, target: &ElementRef, sta
     let mut run_start = 0_usize;
     for run in &mut field.text_runs {
         let run_end = run_start.saturating_add(run.characters.len());
-        let from = floor_boundary(&run.characters, start.max(run_start).saturating_sub(run_start));
-        let to = floor_boundary(&run.characters, end.min(run_end).saturating_sub(run_start));
+        let from = run.characters.floor_char_boundary(start.max(run_start).saturating_sub(run_start));
+        let to = run.characters.floor_char_boundary(end.min(run_end).saturating_sub(run_start));
         if end > run_start && start < run_end && from < to {
             run.characters.replace_range(from..to, "");
         }

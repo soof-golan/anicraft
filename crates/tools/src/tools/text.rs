@@ -57,14 +57,6 @@ fn next_boundary(text: &str, offset: usize) -> usize {
     text.grapheme_indices(true).map(|(i, g)| i.saturating_add(g.len())).find(|&end| end > offset).unwrap_or(text.len())
 }
 
-fn clamp_to_boundary(text: &str, mut offset: usize) -> usize {
-    offset = offset.min(text.len());
-    while offset > 0 && !text.is_char_boundary(offset) {
-        offset = offset.saturating_sub(1);
-    }
-    offset
-}
-
 const fn motion_for(key: Key, modifiers: Modifiers) -> Option<CaretMotion> {
     Some(match (key, modifiers.ctrl) {
         (Key::Left, false) => CaretMotion::Left,
@@ -96,8 +88,8 @@ impl TextTool {
             && let Element::Text(t) = resolved.element
         {
             edit.text = t.plain_text();
-            edit.caret = clamp_to_boundary(&edit.text, edit.caret);
-            edit.anchor = clamp_to_boundary(&edit.text, edit.anchor);
+            edit.caret = edit.text.floor_char_boundary(edit.caret);
+            edit.anchor = edit.text.floor_char_boundary(edit.anchor);
         }
     }
 
@@ -259,8 +251,8 @@ impl Tool for TextTool {
             }
             ToolEvent::SetCaret { offset, anchor } => {
                 if let Some(edit) = self.editing_mut() {
-                    edit.caret = clamp_to_boundary(&edit.text, *offset);
-                    edit.anchor = clamp_to_boundary(&edit.text, *anchor);
+                    edit.caret = edit.text.floor_char_boundary(*offset);
+                    edit.anchor = edit.text.floor_char_boundary(*anchor);
                 }
                 ToolOutput::cursor(Cursor::Text)
             }
@@ -335,13 +327,5 @@ mod tests {
         let text = "\u{5E9}\u{5C1}\u{5DC}";
         assert_eq!(next_boundary(text, 0), 4);
         assert_eq!(previous_boundary(text, text.len()), 4);
-    }
-
-    #[test]
-    fn clamping_lands_on_character_boundaries() {
-        let text = "\u{5D0}\u{5D1}";
-        assert_eq!(clamp_to_boundary(text, 1), 0);
-        assert_eq!(clamp_to_boundary(text, 3), 2);
-        assert_eq!(clamp_to_boundary(text, 99), 4);
     }
 }
