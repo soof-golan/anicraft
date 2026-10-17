@@ -104,6 +104,14 @@ impl AniApp {
                 self.run("layout.align", &json!({ "edge": "bottom" }));
                 self.run("layout.space", &json!({ "axis": "horizontal" }));
             }
+            "smart-drag" => {
+                // Drag the red box (in the middle of a press and release) until its top lines up with the green one's.
+                self.run("tools.options", &json!({ "snap": { "smart_guides": true, "objects": true } }));
+                self.run("select.none", &json!({}));
+                for event in [anicraft_tools::PointerEvent::down(95.0, 70.0), anicraft_tools::PointerEvent::drag(150.0, 91.0)] {
+                    self.tool_event(&anicraft_tools::ToolEvent::Pointer(event));
+                }
+            }
             "hide-transform" => self.toggle_layout_panel(crate::layout_ui::TRANSFORM_PANEL),
             "grid-dialog" => self.open_layout_dialog(DialogKind::Grid),
             "guides-dialog" => self.open_layout_dialog(DialogKind::Guides),
