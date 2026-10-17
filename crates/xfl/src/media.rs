@@ -24,6 +24,7 @@
 use std::io::{Cursor, Read};
 
 use anim_archive::bytes::le_u16 as le16;
+use anim_core::num::{mul255, unmul255};
 use anim_display::Image;
 use anim_scene::{MediaId, MediaStore, SoundItem};
 use flate2::read::ZlibDecoder;
@@ -152,13 +153,8 @@ fn decode_lossless(bytes: &[u8]) -> Result<Image, XflError> {
 }
 
 /// Premultiplies straight-alpha `rgb` by `alpha`.
-fn premultiply(rgb: [u8; 3], alpha: u8) -> [u8; 4] {
-    let scale = |channel: u8| -> u8 {
-        let v = (u16::from(channel).saturating_mul(u16::from(alpha)).saturating_add(127)) / 255;
-        u8::try_from(v.min(255)).unwrap_or(255)
-    };
-    let [red, green, blue] = rgb;
-    [scale(red), scale(green), scale(blue), alpha]
+fn premultiply([red, green, blue]: [u8; 3], alpha: u8) -> [u8; 4] {
+    [mul255(red, alpha), mul255(green, alpha), mul255(blue, alpha), alpha]
 }
 
 fn decode_with_image_crate(bytes: &[u8]) -> Result<Image, XflError> {
@@ -209,14 +205,7 @@ pub fn encode_lossless_bitmap(image: &Image) -> Result<Vec<u8>, XflError> {
     let (pixels, _) = image.premultiplied_rgba.as_chunks::<4>();
     for &[red, green, blue, alpha] in pixels {
         transparent |= alpha != 255;
-        let straight = |c: u8| -> u8 {
-            if alpha == 0 {
-                return 0;
-            }
-            let v = u32::from(c).saturating_mul(255).saturating_add(u32::from(alpha) / 2).checked_div(u32::from(alpha)).unwrap_or(0);
-            u8::try_from(v.min(255)).unwrap_or(255)
-        };
-        argb.extend_from_slice(&[alpha, straight(red), straight(green), straight(blue)]);
+        argb.extend_from_slice(&[alpha, unmul255(red, alpha), unmul255(green, alpha), unmul255(blue, alpha)]);
     }
     let mut out = Vec::with_capacity(LOSSLESS_HEADER.saturating_add(argb.len() / 2));
     out.extend_from_slice(&[0x03, 0x05]);
