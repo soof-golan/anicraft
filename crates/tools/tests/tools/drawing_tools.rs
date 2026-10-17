@@ -210,6 +210,27 @@ fn the_pen_modifies_a_selected_path_instead_of_starting_a_new_one() {
     );
 }
 
+fn pen_preview_segments(e: &anicraft_tools::Editor) -> usize {
+    e.overlay()
+        .iter()
+        .filter_map(|o| match o {
+            anicraft_tools::Overlay::Path { path, role: anicraft_tools::Role::Preview, .. } => Some(path.elements().len()),
+            _ => None,
+        })
+        .sum()
+}
+
+#[test]
+fn the_pen_preview_preference_hides_the_rubber_band() {
+    let mut e = editor();
+    e.select_tool(ToolId::Pen);
+    send_all(&mut e, vec![down(50.0, 50.0), up(50.0, 50.0), hover(120.0, 90.0)]);
+    let with_band = pen_preview_segments(&e);
+    e.state.settings.pen_preview = false;
+    let without_band = pen_preview_segments(&e);
+    assert!(with_band > without_band, "the rubber band adds a segment from the last anchor to the pointer");
+}
+
 #[test]
 fn the_subselection_tool_converts_an_anchor_with_alt() {
     let mut e = editor();

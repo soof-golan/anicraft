@@ -406,6 +406,9 @@ pub struct ToolSettings {
     /// The Paint Brush tool's brush.
     #[serde(default)]
     pub paint_brush: PaintBrushSettings,
+    /// Pen preferences: show the rubber band from the last point to the pointer.
+    #[serde(default = "default_true")]
+    pub pen_preview: bool,
     /// Snapping switches.
     #[serde(default)]
     pub snap: SnapSettings,
@@ -443,6 +446,7 @@ impl Default for ToolSettings {
             polystar: PolyStarSettings::default(),
             lasso: LassoSettings::default(),
             paint_brush: PaintBrushSettings::default(),
+            pen_preview: true,
             snap: SnapSettings::default(),
             text: TextSettings::default(),
             hit_tolerance: 4.0,

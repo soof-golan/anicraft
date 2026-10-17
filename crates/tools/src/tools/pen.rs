@@ -168,6 +168,7 @@ impl Tool for PenTool {
         let mut out = Vec::new();
         let mut preview = self.anchors.clone();
         if !self.dragging
+            && ctx.settings.pen_preview
             && let Some(h) = self.hover
         {
             preview.push(Anchor::corner(h));

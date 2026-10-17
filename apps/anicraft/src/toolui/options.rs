@@ -108,6 +108,17 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
             ui.end_row();
         }
         match tool {
+            ToolId::Pen => {
+                ui.label("Preview");
+                let mut preview = s.pen_preview;
+                if ui.checkbox(&mut preview, "Show pen preview").changed() {
+                    set(json!({ "pen_preview": preview }));
+                }
+                ui.end_row();
+                ui.label("");
+                ui.weak("With a path selected, click a segment to add a point, a point to delete it, alt-click a point to convert it.");
+                ui.end_row();
+            }
             ToolId::Rectangle | ToolId::RectanglePrimitive => {
                 ui.label("Corner radius");
                 ui.vertical(|ui| {
