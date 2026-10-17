@@ -64,6 +64,15 @@ fn number(ui: &mut Ui, value: f64, range: std::ops::RangeInclusive<f64>, suffix:
     r.changed().then_some(v)
 }
 
+/// A weak note that wraps inside the options grid instead of running past the edge of the panel.
+fn hint(ui: &mut Ui, text: &str) {
+    let room = (ui.clip_rect().right() - ui.next_widget_position().x - 8.0).max(120.0);
+    ui.scope(|ui| {
+        ui.set_max_width(room);
+        ui.add(egui::Label::new(egui::RichText::new(text).weak()).wrap());
+    });
+}
+
 const fn pencil_label(m: PencilMode) -> &'static str {
     match m {
         PencilMode::Straighten => "Straighten",
@@ -116,7 +125,7 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 }
                 ui.end_row();
                 ui.label("");
-                ui.weak("With a path selected, click a segment to add a point, a point to delete it, alt-click a point to convert it.");
+                hint(ui, "With a path selected, click a segment to add a point, a point to delete it, alt-click a point to convert it.");
                 ui.end_row();
             }
             ToolId::Rectangle | ToolId::RectanglePrimitive => {
@@ -193,12 +202,12 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 }
                 ui.end_row();
                 ui.label("");
-                ui.weak("Paints with the stroke colour.");
+                hint(ui, "Paints with the stroke colour.");
                 ui.end_row();
             }
             ToolId::Width => {
                 ui.label("");
-                ui.weak("Select a shape, drag out from its stroke to widen it there. The Properties panel offers ready-made width profiles.");
+                hint(ui, "Select a shape, drag out from its stroke to widen it there. The Properties panel offers ready-made width profiles.");
                 ui.end_row();
             }
             ToolId::Lasso => {
@@ -215,7 +224,7 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                     ui.end_row();
                 }
                 ui.label("");
-                ui.weak("Hold Alt and click to place polygon corners; Enter closes the polygon.");
+                hint(ui, "Hold Alt and click to place polygon corners; Enter closes the polygon.");
                 ui.end_row();
             }
             ToolId::Text => {
@@ -226,7 +235,7 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
                 }
                 ui.end_row();
                 ui.label("");
-                ui.weak("Click for a text field that grows as you type; drag for a box of a fixed width.");
+                hint(ui, "Click for a text field that grows as you type; drag for a box of a fixed width. Drag the round handle of a field to fix its width; double-click the square one to let it grow again.");
                 ui.end_row();
             }
             ToolId::Oval | ToolId::OvalPrimitive => {
@@ -332,12 +341,12 @@ pub fn tool_options(ui: &mut Ui, tool: ToolId, s: &ToolSettings) -> Vec<ToolUiEv
             }
             ToolId::Rotation3D | ToolId::Translation3D => {
                 ui.label("");
-                ui.weak("Select a movie clip first. Set the perspective angle and vanishing point in the document properties.");
+                hint(ui, "Select a movie clip first. Set the perspective angle and vanishing point in the document properties.");
                 ui.end_row();
             }
             ToolId::GradientTransform => {
                 ui.label("");
-                ui.weak("Click a gradient or bitmap fill, then drag its handles.");
+                hint(ui, "Click a gradient or bitmap fill, then drag its handles.");
                 ui.end_row();
             }
             _ => {}
