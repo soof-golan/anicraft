@@ -8,7 +8,7 @@
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::hint::black_box;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anicraft_cli::export::{RenderSpec, render_frame};
 use anicraft_cli::project::Project;
@@ -49,13 +49,12 @@ fn fixtures(c: &mut Criterion) {
 }
 
 fn samples(c: &mut Criterion) {
-    let Some(root) = std::env::var_os("ANICRAFT_SAMPLES").map(PathBuf::from) else {
+    if anim_testkit::samples_dir().is_none() {
         println!("skipping the samples: ANICRAFT_SAMPLES is unset");
         return;
-    };
+    }
     for (name, file, frame) in [("unicorn_1200", "unicorn_4AE.fla", 1199), ("derwood_1", "derwood_green_choreo_short.fla", 0)] {
-        let path = root.join(file);
-        if path.exists() {
+        if let Some(path) = anim_testkit::sample(file) {
             bench_case(c, name, &path, frame);
         }
     }

@@ -10,16 +10,9 @@
     reason = "test code"
 )]
 
-use std::path::PathBuf;
-
 use anicraft_xfl::{Loaded, ReadOptions, decode_bitmap, read_with, sound_payload};
 use anim_scene::{Document, Element, LibraryItem, Timeline};
-
-fn sample(name: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("ANICRAFT_SAMPLES")?;
-    let path = PathBuf::from(root).join(name);
-    path.exists().then_some(path)
-}
+use anim_testkit::sample;
 
 fn all_timelines(doc: &Document) -> Vec<&Timeline> {
     let mut out: Vec<&Timeline> = doc.scenes.iter().collect();

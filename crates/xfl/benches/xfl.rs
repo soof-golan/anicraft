@@ -16,16 +16,10 @@
 use std::fmt::Write as _;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::hint::black_box;
-use std::path::PathBuf;
 
 use anicraft_xfl::{Loaded, ReadOptions, WriteOptions, read_bytes, read_with, write_fla_bytes};
+use anim_testkit::sample;
 use criterion::{Criterion, criterion_group, criterion_main};
-
-fn sample(name: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("ANICRAFT_SAMPLES")?;
-    let path = PathBuf::from(root).join(name);
-    path.exists().then_some(path)
-}
 
 /// A polygon with `n` line segments and a few quadratic curves, in XFL edge syntax.
 fn edge_text(n: usize, seed: usize) -> String {

@@ -22,7 +22,6 @@
 use std::f64::consts::TAU;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::hint::black_box;
-use std::path::PathBuf;
 
 use anicraft_swf::{ExportOptions, ExportOutput, export_display_lists};
 use anicraft_xfl::{ReadOptions, read_with};
@@ -32,14 +31,9 @@ use anim_display::{
     Cap, DisplayList, Fill, FillRule, Filter, Gradient, GradientStop, Group, ImageStore, Interpolation, Join, Node, Paint, Spread, Stroke, StrokeScale,
     StrokeStyle,
 };
+use anim_testkit::sample;
 use anim_timeline::{EvalOptions, Evaluator};
 use criterion::{Criterion, criterion_group, criterion_main};
-
-fn sample(name: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("ANICRAFT_SAMPLES")?;
-    let path = PathBuf::from(root).join(name);
-    path.exists().then_some(path)
-}
 
 fn checksum(output: &ExportOutput) -> u64 {
     let mut hasher = DefaultHasher::new();

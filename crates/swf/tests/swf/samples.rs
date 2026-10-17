@@ -29,13 +29,8 @@ use anim_shape::EdgeShape;
 
 use crate::common;
 
-fn samples_dir() -> Option<PathBuf> {
-    std::env::var_os("ANICRAFT_SAMPLES").map(PathBuf::from)
-}
-
 fn sample_files() -> Vec<PathBuf> {
-    let Some(dir) = samples_dir() else { return Vec::new() };
-    ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"].into_iter().map(|n| dir.join(n)).filter(|p| p.exists()).collect()
+    ["unicorn_4AE.fla", "derwood_green_choreo_short.fla"].into_iter().filter_map(anim_testkit::sample).collect()
 }
 
 /// Every shape of every library symbol, groups opened up (damaged edges are kept without geometry).

@@ -2,17 +2,10 @@
 //! then compare the written archive with the original semantically. Passes trivially when `ANICRAFT_SAMPLES` is unset.
 #![allow(clippy::expect_used, clippy::unwrap_used, reason = "test code")]
 
-use std::path::PathBuf;
-
 use anicraft_xfl::diff::{DiffOptions, compare_archives};
 use anicraft_xfl::{ReadOptions, WriteOptions, read_with, write_fla, write_xfl_folder};
 use anim_archive::{Container, IndexSource};
-
-fn sample(name: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("ANICRAFT_SAMPLES")?;
-    let path = PathBuf::from(root).join(name);
-    path.exists().then_some(path)
-}
+use anim_testkit::sample;
 
 /// Entries of the original that the writer does not copy on purpose.
 const NOT_WRITTEN: [&str; 1] = ["bin/SymDepend.cache"];

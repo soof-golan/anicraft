@@ -7,13 +7,8 @@ use crate::common;
 
 use std::path::{Path, PathBuf};
 
+use anim_testkit::sample;
 use common::{cli_ok, read_png};
-
-fn sample(name: &str) -> Option<PathBuf> {
-    let dir = std::env::var_os("ANICRAFT_SAMPLES")?;
-    let path = Path::new(&dir).join(name);
-    path.exists().then_some(path)
-}
 
 /// Where renders go: `$ANICRAFT_VISUAL_OUT/anicraft-cli` when set, else a folder under the target directory (the tests
 /// read the files back, so they need somewhere to write).
