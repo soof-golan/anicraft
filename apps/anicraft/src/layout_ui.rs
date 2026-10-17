@@ -15,7 +15,7 @@ use anim_ui::stage::{Axis as GuideAxis, Guide, StageViewState};
 use egui::{Color32, Context, DragValue, Pos2, Ui};
 use serde_json::{Value, json};
 
-use crate::menus::MenuAction;
+use crate::menus::{MenuAction, check as tick, item as entry};
 use crate::state::Dialog;
 
 /// How far the stage texture reaches beyond the stage when the pasteboard is shown, as a fraction of the stage size
@@ -251,30 +251,6 @@ fn axis_word(axis: Axis) -> &'static str {
         Axis::Horizontal => "horizontal",
         Axis::Vertical => "vertical",
     }
-}
-
-fn entry(ui: &mut Ui, label: &str, shortcut: &str, enabled: bool) -> bool {
-    let mut button = egui::Button::new(crate::text(label));
-    if !shortcut.is_empty() {
-        button = button.shortcut_text(shortcut);
-    }
-    let clicked = ui.add_enabled(enabled, button).clicked();
-    if clicked {
-        ui.close();
-    }
-    clicked
-}
-
-fn tick(ui: &mut Ui, label: &str, shortcut: &str, checked: bool) -> bool {
-    let mut button = egui::Button::selectable(checked, crate::text(label));
-    if !shortcut.is_empty() {
-        button = button.shortcut_text(shortcut);
-    }
-    let clicked = ui.add(button).clicked();
-    if clicked {
-        ui.close();
-    }
-    clicked
 }
 
 /// View > Magnification, Pasteboard, Grid, Guides and Snapping.

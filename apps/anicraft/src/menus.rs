@@ -172,7 +172,8 @@ pub const fn menu_commands() -> &'static [&'static str] {
     &ALL_COMMANDS
 }
 
-fn item(ui: &mut Ui, label: &str, shortcut: &str, enabled: bool) -> bool {
+/// A menu entry that closes the menu when clicked; true when it was.
+pub(crate) fn item(ui: &mut Ui, label: &str, shortcut: &str, enabled: bool) -> bool {
     let mut button = egui::Button::new(crate::text(label));
     if !shortcut.is_empty() {
         button = button.shortcut_text(shortcut);
@@ -184,7 +185,8 @@ fn item(ui: &mut Ui, label: &str, shortcut: &str, enabled: bool) -> bool {
     clicked
 }
 
-fn check(ui: &mut Ui, label: &str, shortcut: &str, checked: bool) -> bool {
+/// A checkable menu entry that closes the menu when clicked; true when it was.
+pub(crate) fn check(ui: &mut Ui, label: &str, shortcut: &str, checked: bool) -> bool {
     let mut button = egui::Button::selectable(checked, crate::text(label));
     if !shortcut.is_empty() {
         button = button.shortcut_text(shortcut);
