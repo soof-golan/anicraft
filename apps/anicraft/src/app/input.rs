@@ -159,6 +159,10 @@ impl AniApp {
         let text_editing = doc.editor.state.text_editing.is_some();
         let tool = doc.editor.tools.active();
         let overlay = doc.editor.overlay();
+        // What the layout of the field being edited decides (caret motion, placing the caret with the pointer) is
+        // answered with events of its own once this one is done.
+        let follow_ups = self.ui.text_edit.follow_up(&doc.editor, event, &out.commands, &overlay, zoom);
+        let overlay = self.ui.text_edit.cursor_overlays(&doc.editor, overlay);
         let mut finished_text = false;
         for command in &out.commands {
             match command {
@@ -203,6 +207,9 @@ impl AniApp {
         let _ = tool;
         if let Some(message) = failure {
             self.status(message);
+        }
+        for follow_up in &follow_ups {
+            self.tool_event(follow_up);
         }
     }
 

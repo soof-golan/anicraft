@@ -32,6 +32,8 @@ anim-scene = { workspace = true }
 anim-script = { workspace = true }
 anim-session = { workspace = true }
 anim-shape = { workspace = true }
+# Lays out the text of the field being edited for the caret (see `text_edit`).
+anim-text = { workspace = true }
 anim-timeline = { workspace = true }
 anim-ui = { workspace = true }
 clap = { workspace = true }

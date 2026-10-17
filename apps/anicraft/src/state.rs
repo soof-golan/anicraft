@@ -147,6 +147,8 @@ pub struct UiState {
     pub show_output: bool,
     pub tool_cursor: Option<egui::CursorIcon>,
     pub tool_overlay: Vec<anim_ui::stage::Overlay>,
+    /// Text layout for the caret of the field being edited.
+    pub text_edit: crate::text_edit::TextEdit,
     /// Toolbox groups, flyouts and the Colour panel's selection.
     pub toolui: crate::toolui::ToolUi,
     /// Dialogs, panels and logs of the document features (tabs, History, Output, Find).
@@ -195,6 +197,7 @@ impl UiState {
             show_output: false,
             tool_cursor: None,
             tool_overlay: Vec::new(),
+            text_edit: crate::text_edit::TextEdit::default(),
             toolui: crate::toolui::ToolUi::default(),
             docs: crate::docs::DocsUi::default(),
         }
