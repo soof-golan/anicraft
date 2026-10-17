@@ -327,6 +327,9 @@ impl AniApp {
                     self.open_tab(AniDoc::default(), None);
                     self.open_tab(AniDoc::default(), None);
                 }
+                "properties" => {
+                    anim_ui::dock::apply_actions(&mut self.ui.layout, vec![anim_ui::dock::docking::Action::Activate { panel: anim_ui::PanelId::Properties }]);
+                }
                 "save-changes" => {
                     self.run("layer.add", &serde_json::json!({}));
                     let id = self.docs.tabs.active;
